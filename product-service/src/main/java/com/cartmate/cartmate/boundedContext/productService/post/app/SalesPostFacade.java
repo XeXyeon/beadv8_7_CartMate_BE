@@ -7,6 +7,7 @@ import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostMem
 import com.cartmate.cartmate.boundedContext.productService.code.SalesPostErrorCode;
 import com.cartmate.cartmate.global.exception.ServiceException;
 import com.cartmate.cartmate.global.security.SecurityUser;
+import com.cartmate.cartmate.shared.delivery.PurchaseType;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostApiClient.ProductRequestRejectedException;
 import com.cartmate.cartmate.global.page.PageResponse;
 import com.cartmate.cartmate.global.rsData.RsData;
@@ -31,6 +32,7 @@ import com.cartmate.cartmate.boundedContext.productService.post.dto.admin.AdminS
 import com.cartmate.cartmate.boundedContext.productService.post.dto.admin.AdminSalesPostDetailResponse;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.admin.AdminSalesPostSummaryResponse;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -58,6 +60,12 @@ public class SalesPostFacade {
     private final SalesPostCommentSelectUseCase salesPostCommentSelectUseCase;
     private final SalesPostCommentUpdateUseCase salesPostCommentUpdateUseCase;
     private final SalesPostCommentDeleteUseCase salesPostCommentDeleteUseCase;
+    private final SalesPostReviewCreateUseCase salesPostReviewCreateUseCase;
+    private final SalesPostReviewSelectUseCase salesPostReviewSelectUseCase;
+    private final SalesPostReviewUpdateUseCase salesPostReviewUpdateUseCase;
+    private final SalesPostReviewDeleteUseCase salesPostReviewDeleteUseCase;
+    private final SalesPostReviewSellerReplyUseCase salesPostReviewSellerReplyUseCase;
+    private final SalesPostPurchaseRecordUseCase salesPostPurchaseRecordUseCase;
     private final SalesPostMemberClient salesPostMemberClient;
 
     @Transactional
@@ -344,6 +352,68 @@ public class SalesPostFacade {
     public void deleteComment(Long postId, Long commentId, Long memberId) {
         requireLogin(memberId);
         salesPostCommentDeleteUseCase.delete(postId, commentId, memberId);
+    }
+
+    // 리뷰 작성. 닉네임은 회원 서버 호출이라 트랜잭션 밖에서 먼저 받는다 (응답 없으면 503으로 작성 실패)
+    public CreateSalesPostReviewResponse createReview(Long memberId, CreateSalesPostReviewRequest request) {
+        requireLogin(memberId);
+        String nickname = salesPostMemberClient.findNickname(memberId);
+        return salesPostReviewCreateUseCase.create(memberId, nickname, request.purchaseId(), request.rating(),
+                request.content(), LocalDateTime.now());
+    }
+
+    // 로그인한 회원이 리뷰를 쓸 수 있는 상품 목록 (기한이 가까운 순)
+    public List<WritableSalesPostReviewResponse> selectWritableReviews(Long memberId) {
+        requireLogin(memberId);
+        return salesPostReviewCreateUseCase.selectWritable(memberId, LocalDateTime.now());
+    }
+
+    // 판매글 리뷰 목록. 로그인하지 않아도 볼 수 있다 (memberId는 내 리뷰 표시용)
+    public PageResponse<SalesPostReviewResponse> selectReviews(Long postId, int page, Long memberId) {
+        return salesPostReviewSelectUseCase.selectReviews(postId, page, memberId);
+    }
+
+    // 리뷰 수정 (작성자 본인만, 구매확정 후 30일 안)
+    public void updateReview(Long reviewId, Long memberId, UpdateSalesPostReviewRequest request) {
+        requireLogin(memberId);
+        salesPostReviewUpdateUseCase.update(reviewId, memberId, request.rating(), request.content(),
+                LocalDateTime.now());
+    }
+
+    // 리뷰 삭제 (작성자 본인만, 언제든, soft delete)
+    public void deleteReview(Long reviewId, Long memberId) {
+        requireLogin(memberId);
+        salesPostReviewDeleteUseCase.delete(reviewId, memberId);
+    }
+
+    // 판매자 답글 작성 · 수정 · 삭제 (그 판매글의 판매자만). sellerId는 로그인 정보의 판매자 id (구매자는 null)
+    public void writeReviewSellerReply(Long reviewId, Long memberId, Long sellerId,
+                                       SalesPostReviewSellerReplyRequest request) {
+        requireLogin(memberId);
+        salesPostReviewSellerReplyUseCase.write(reviewId, sellerId, request.content(), LocalDateTime.now());
+    }
+
+    public void editReviewSellerReply(Long reviewId, Long memberId, Long sellerId,
+                                      SalesPostReviewSellerReplyRequest request) {
+        requireLogin(memberId);
+        salesPostReviewSellerReplyUseCase.edit(reviewId, sellerId, request.content());
+    }
+
+    public void deleteReviewSellerReply(Long reviewId, Long memberId, Long sellerId) {
+        requireLogin(memberId);
+        salesPostReviewSellerReplyUseCase.delete(reviewId, sellerId);
+    }
+
+    // 리뷰 자격용 구매 기록: 결제 완료 · 공동 주문 확정 → 구매 정보 저장 (별도 트랜잭션)
+    public void recordPurchases(PurchaseType purchaseType, Long orderId, Long buyerMemberId,
+                                List<SalesPostPurchaseRecordUseCase.PurchasedItem> items) {
+        salesPostPurchaseRecordUseCase.recordPurchases(purchaseType, orderId, buyerMemberId, items);
+    }
+
+    // 리뷰 자격용 구매 기록: 구매확정 → 확정 시각 (별도 트랜잭션)
+    public void confirmPurchases(PurchaseType purchaseType, Long orderId, List<Long> orderItemIds,
+                                 LocalDateTime confirmedAt) {
+        salesPostPurchaseRecordUseCase.confirmPurchases(purchaseType, orderId, orderItemIds, confirmedAt);
     }
 
     private void requireLogin(Long memberId) {

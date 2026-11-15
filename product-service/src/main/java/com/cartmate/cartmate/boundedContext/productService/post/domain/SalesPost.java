@@ -55,6 +55,23 @@ public class SalesPost extends BaseIdAndTime {
     // 판매 중지·숨김·삭제된 시각. 진행 중 거래 정리 대사(재처리) 대상을 찾는 데 쓴다.
     private LocalDateTime hiddenAt;
 
+    // 리뷰 집계 (삭제된 리뷰 제외). 평균 별점 = reviewRatingSum / reviewCount.
+    // 리뷰 작성 · 수정 · 삭제 때 SalesPostRepository의 조건부 UPDATE로 바꾼다 (동시에 여러 리뷰가 쓰여도 어긋나지 않게).
+    // 기존 판매글 행은 ddl-auto로 칸이 추가될 때 DB 기본값 0으로 채워진다
+    @Column(nullable = false, columnDefinition = "BIGINT DEFAULT 0")
+    private long reviewCount = 0L;
+
+    @Column(nullable = false, columnDefinition = "BIGINT DEFAULT 0")
+    private long reviewRatingSum = 0L;
+
+    // 평균 별점, 소수 첫째 자리까지 반올림. 리뷰가 없으면 0
+    public double getAverageRating() {
+        if (reviewCount == 0) {
+            return 0.0;
+        }
+        return Math.round((double) reviewRatingSum / reviewCount * 10) / 10.0;
+    }
+
     public SalesPost(Long sellerId, String title, String content, SalesPostSaleStatus status, Long viewCount,
                      SalesPostUpdateStatus updateStatus, LocalDateTime updateStatusChangedAt) {
         this.sellerId = sellerId;

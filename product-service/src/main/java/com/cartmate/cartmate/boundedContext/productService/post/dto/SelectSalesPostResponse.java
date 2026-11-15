@@ -26,4 +26,6 @@ public class SelectSalesPostResponse {
     private List<SelectSalesPostProduct> productList;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private long reviewCount;      // 리뷰 수 (삭제된 리뷰 제외)
+    private double averageRating;  // 평균 별점, 소수 첫째 자리까지. 리뷰가 없으면 0
 }

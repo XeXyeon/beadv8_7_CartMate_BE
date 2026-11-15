@@ -11,6 +11,7 @@ import com.cartmate.cartmate.shared.order.event.OrderCanceledEvent;
 import com.cartmate.cartmate.shared.order.event.OrderCreatedEvent;
 import com.cartmate.cartmate.shared.order.event.OrderPaidEvent;
 import com.cartmate.cartmate.shared.order.event.OrderSellerItemsCanceledEvent;
+import com.cartmate.cartmate.shared.order.event.SharedGroupOrderConfirmedEvent;
 import com.cartmate.cartmate.shared.wallet.event.PaybackDepositFailedEvent;
 import com.cartmate.cartmate.shared.wallet.event.PaybackDepositedEvent;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -59,6 +60,12 @@ public class ProductServiceKafkaConfig {
     @Bean
     public InboundEventBinding deliveryConfirmedBinding() {
         return binding(DeliveryConfirmedEvent.class);
+    }
+
+    // 공동 주문 확정 → 리뷰 자격용 구매 기록 (SalesPostEventListener)
+    @Bean
+    public InboundEventBinding sharedGroupOrderConfirmedBinding() {
+        return binding(SharedGroupOrderConfirmedEvent.class);
     }
 
     @Bean

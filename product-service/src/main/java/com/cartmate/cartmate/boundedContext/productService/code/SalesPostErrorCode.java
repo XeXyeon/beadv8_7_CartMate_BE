@@ -34,7 +34,24 @@ public enum SalesPostErrorCode implements ErrorCode {
     COMMENT_REPLY_DENIED(HttpStatus.FORBIDDEN, "COMMENT_REPLY_DENIED", "판매자와 댓글 작성자만 답글을 달 수 있습니다."),
     COMMENT_EDIT_DENIED(HttpStatus.FORBIDDEN, "COMMENT_EDIT_DENIED", "본인 댓글만 수정할 수 있습니다."),
     COMMENT_DELETE_DENIED(HttpStatus.FORBIDDEN, "COMMENT_DELETE_DENIED", "본인 댓글만 삭제할 수 있습니다."),
-    COMMENT_WRITER_NOT_FOUND(HttpStatus.NOT_FOUND, "COMMENT_WRITER_NOT_FOUND", "회원 정보를 찾을 수 없습니다.");
+    COMMENT_WRITER_NOT_FOUND(HttpStatus.NOT_FOUND, "COMMENT_WRITER_NOT_FOUND", "회원 정보를 찾을 수 없습니다."),
+
+    // 리뷰
+    REVIEW_INVALID_RATING(HttpStatus.BAD_REQUEST, "REVIEW_INVALID_RATING", "별점은 1~5점으로 입력해 주세요."),
+    REVIEW_INVALID_CONTENT(HttpStatus.BAD_REQUEST, "REVIEW_INVALID_CONTENT", "리뷰 내용을 10~1000자로 입력해 주세요."),
+    // 구매 기록이 없거나 본인 것이 아님 (다른 사람의 구매 여부가 드러나지 않게 같은 응답)
+    REVIEW_PURCHASE_NOT_FOUND(HttpStatus.NOT_FOUND, "REVIEW_PURCHASE_NOT_FOUND", "리뷰를 쓸 수 있는 구매 내역을 찾을 수 없습니다."),
+    REVIEW_NOT_CONFIRMED(HttpStatus.CONFLICT, "REVIEW_NOT_CONFIRMED", "구매확정 후에 리뷰를 쓸 수 있습니다."),
+    REVIEW_PERIOD_EXPIRED(HttpStatus.CONFLICT, "REVIEW_PERIOD_EXPIRED", "리뷰 작성 기한(구매확정 후 30일)이 지났습니다."),
+    REVIEW_ALREADY_WRITTEN(HttpStatus.CONFLICT, "REVIEW_ALREADY_WRITTEN", "이미 리뷰를 쓴 상품입니다."),
+    REVIEW_NOT_FOUND(HttpStatus.NOT_FOUND, "REVIEW_NOT_FOUND", "리뷰를 찾을 수 없습니다."),
+    REVIEW_EDIT_DENIED(HttpStatus.FORBIDDEN, "REVIEW_EDIT_DENIED", "본인 리뷰만 수정할 수 있습니다."),
+    REVIEW_DELETE_DENIED(HttpStatus.FORBIDDEN, "REVIEW_DELETE_DENIED", "본인 리뷰만 삭제할 수 있습니다."),
+    REVIEW_EDIT_PERIOD_EXPIRED(HttpStatus.CONFLICT, "REVIEW_EDIT_PERIOD_EXPIRED", "리뷰 수정 기한(구매확정 후 30일)이 지났습니다."),
+    REVIEW_SELLER_REPLY_DENIED(HttpStatus.FORBIDDEN, "REVIEW_SELLER_REPLY_DENIED", "이 판매글의 판매자만 리뷰에 답글을 달 수 있습니다."),
+    REVIEW_SELLER_REPLY_ALREADY_EXISTS(HttpStatus.CONFLICT, "REVIEW_SELLER_REPLY_ALREADY_EXISTS", "이미 답글을 단 리뷰입니다."),
+    REVIEW_SELLER_REPLY_NOT_FOUND(HttpStatus.NOT_FOUND, "REVIEW_SELLER_REPLY_NOT_FOUND", "판매자 답글을 찾을 수 없습니다."),
+    REVIEW_SELLER_REPLY_INVALID_CONTENT(HttpStatus.BAD_REQUEST, "REVIEW_SELLER_REPLY_INVALID_CONTENT", "답글 내용을 1~1000자로 입력해 주세요.");
 
     private final HttpStatus status;
     private final String code;
