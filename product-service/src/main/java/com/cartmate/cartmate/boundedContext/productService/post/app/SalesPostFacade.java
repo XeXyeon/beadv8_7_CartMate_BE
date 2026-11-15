@@ -3,6 +3,10 @@ package com.cartmate.cartmate.boundedContext.productService.post.app;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.*;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.*;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostApiClient;
+import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostMemberClient;
+import com.cartmate.cartmate.boundedContext.productService.code.SalesPostErrorCode;
+import com.cartmate.cartmate.global.exception.ServiceException;
+import com.cartmate.cartmate.global.security.SecurityUser;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostApiClient.ProductRequestRejectedException;
 import com.cartmate.cartmate.global.page.PageResponse;
 import com.cartmate.cartmate.global.rsData.RsData;
@@ -50,6 +54,11 @@ public class SalesPostFacade {
     private final SalesPostHideUseCase salesPostHideUseCase;
     private final SalesPostSyncSellerTrustUseCase salesPostSyncSellerTrustUseCase;
     private final SalesPostDetailInventoryLoader salesPostDetailInventoryLoader;
+    private final SalesPostCommentCreateUseCase salesPostCommentCreateUseCase;
+    private final SalesPostCommentSelectUseCase salesPostCommentSelectUseCase;
+    private final SalesPostCommentUpdateUseCase salesPostCommentUpdateUseCase;
+    private final SalesPostCommentDeleteUseCase salesPostCommentDeleteUseCase;
+    private final SalesPostMemberClient salesPostMemberClient;
 
     @Transactional
     public SalesPostSeller syncSeller(SellerRegisteredEvent seller) {
@@ -298,6 +307,49 @@ public class SalesPostFacade {
     @Transactional(readOnly = true)
     public List<Long> findOnSalePostIdsOfSeller(Long sellerId) {
         return salesPostHideUseCase.findOnSalePostIdsOfSeller(sellerId);
+    }
+
+    // 원댓글 작성. 닉네임은 회원 서버 호출이라 트랜잭션 밖에서 먼저 받는다 (응답 없으면 503으로 작성 실패)
+    public CreateSalesPostCommentResponse createComment(Long postId, Long memberId, CreateSalesPostCommentRequest request) {
+        requireLogin(memberId);
+        String nickname = salesPostMemberClient.findNickname(memberId);
+        Long commentId = salesPostCommentCreateUseCase.createRoot(
+                postId, memberId, nickname, request.content(), request.isSecret());
+        return new CreateSalesPostCommentResponse(commentId);
+    }
+
+    // 답글 작성. 판매자 판정에 로그인 정보의 sellerId(구매자는 null)를 쓴다
+    public CreateSalesPostCommentResponse createReply(Long postId, Long parentId, Long memberId, Long sellerId,
+                                                      CreateSalesPostReplyRequest request) {
+        requireLogin(memberId);
+        String nickname = salesPostMemberClient.findNickname(memberId);
+        Long commentId = salesPostCommentCreateUseCase.createReply(
+                postId, parentId, memberId, sellerId, nickname, request.content());
+        return new CreateSalesPostCommentResponse(commentId);
+    }
+
+    // 댓글 목록. 로그인하지 않아도 볼 수 있다 (viewer가 null이면 비밀 댓글은 모두 가려진다)
+    public PageResponse<SalesPostCommentResponse> selectComments(Long postId, int page,
+                                                                 SecurityUser viewer) {
+        return salesPostCommentSelectUseCase.selectComments(postId, page, viewer);
+    }
+
+    // 댓글 · 답글 수정 (작성자 본인만)
+    public void updateComment(Long postId, Long commentId, Long memberId, UpdateSalesPostCommentRequest request) {
+        requireLogin(memberId);
+        salesPostCommentUpdateUseCase.update(postId, commentId, memberId, request.content());
+    }
+
+    // 댓글 · 답글 삭제 (작성자 본인만, soft delete)
+    public void deleteComment(Long postId, Long commentId, Long memberId) {
+        requireLogin(memberId);
+        salesPostCommentDeleteUseCase.delete(postId, commentId, memberId);
+    }
+
+    private void requireLogin(Long memberId) {
+        if (memberId == null) {
+            throw new ServiceException(SalesPostErrorCode.COMMENT_LOGIN_REQUIRED);
+        }
     }
 
 }
