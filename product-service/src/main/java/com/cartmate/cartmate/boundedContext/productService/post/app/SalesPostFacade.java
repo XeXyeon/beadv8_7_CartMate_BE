@@ -1,10 +1,9 @@
 package com.cartmate.cartmate.boundedContext.productService.post.app;
 
-import com.cartmate.cartmate.boundedContext.productService.code.ProductErrorCode;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.*;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.*;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostApiClient;
-import com.cartmate.cartmate.global.exception.ServiceException;
+import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostApiClient.ProductRequestRejectedException;
 import com.cartmate.cartmate.global.page.PageResponse;
 import com.cartmate.cartmate.global.rsData.RsData;
 import com.cartmate.cartmate.shared.member.event.SellerRegisteredEvent;
@@ -194,16 +193,12 @@ public class SalesPostFacade {
         List<SyncProduct> updatedProducts;
         try {
             updatedProducts = salesPostApiClient.updateProducts(request, images);
-        } catch (ServiceException e) {
-            if (e.getResultCode().equals(ProductErrorCode.PRODUCT_UPDATE_INVALID.resultCode())) {
-                // 명확한 실패(상품 쪽 rollback 완료)
-                transactionTemplate.executeWithoutResult(s -> {
-                    salesPostRecoveryUseCase.delete(postId);
-                    salesPostUpdateUseCase.revertTo(postId, previousUpdatedStatus);
-                });
-            } else {
-                salesPostRecoverUseCase.recover(postId);
-            }
+        } catch (ProductRequestRejectedException e) {
+            // 명확한 실패: product가 4xx로 거절하고 자기 쪽을 되돌렸다(오류 코드는 product가 보낸 그대로)
+            transactionTemplate.executeWithoutResult(s -> {
+                salesPostRecoveryUseCase.delete(postId);
+                salesPostUpdateUseCase.revertTo(postId, previousUpdatedStatus);
+            });
             throw e;
         } catch (RuntimeException e) {
             salesPostRecoverUseCase.recover(postId);
