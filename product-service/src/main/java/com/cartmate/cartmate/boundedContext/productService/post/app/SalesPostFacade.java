@@ -64,6 +64,7 @@ public class SalesPostFacade {
     private final SalesPostReviewSelectUseCase salesPostReviewSelectUseCase;
     private final SalesPostReviewUpdateUseCase salesPostReviewUpdateUseCase;
     private final SalesPostReviewDeleteUseCase salesPostReviewDeleteUseCase;
+    private final SalesPostReviewSellerReplyUseCase salesPostReviewSellerReplyUseCase;
     private final SalesPostPurchaseRecordUseCase salesPostPurchaseRecordUseCase;
     private final SalesPostMemberClient salesPostMemberClient;
 
@@ -383,6 +384,24 @@ public class SalesPostFacade {
     public void deleteReview(Long reviewId, Long memberId) {
         requireLogin(memberId);
         salesPostReviewDeleteUseCase.delete(reviewId, memberId);
+    }
+
+    // 판매자 답글 작성 · 수정 · 삭제 (그 판매글의 판매자만). sellerId는 로그인 정보의 판매자 id (구매자는 null)
+    public void writeReviewSellerReply(Long reviewId, Long memberId, Long sellerId,
+                                       SalesPostReviewSellerReplyRequest request) {
+        requireLogin(memberId);
+        salesPostReviewSellerReplyUseCase.write(reviewId, sellerId, request.content(), LocalDateTime.now());
+    }
+
+    public void editReviewSellerReply(Long reviewId, Long memberId, Long sellerId,
+                                      SalesPostReviewSellerReplyRequest request) {
+        requireLogin(memberId);
+        salesPostReviewSellerReplyUseCase.edit(reviewId, sellerId, request.content());
+    }
+
+    public void deleteReviewSellerReply(Long reviewId, Long memberId, Long sellerId) {
+        requireLogin(memberId);
+        salesPostReviewSellerReplyUseCase.delete(reviewId, sellerId);
     }
 
     // 리뷰 자격용 구매 기록: 결제 완료 · 공동 주문 확정 → 구매 정보 저장 (별도 트랜잭션)

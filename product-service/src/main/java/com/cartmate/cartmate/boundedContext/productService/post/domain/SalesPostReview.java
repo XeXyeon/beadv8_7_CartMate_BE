@@ -146,6 +146,59 @@ public class SalesPostReview extends BaseIdAndTime {
         this.isDeleted = true;
     }
 
+    // 판매자 답글 작성 (리뷰마다 1개). 그 판매글의 판매자인지는 UseCase가 확인한다
+    public void writeSellerReply(String replyContent, LocalDateTime now) {
+        requireNotDeleted();
+        if (hasSellerReply()) {
+            throw new ServiceException(SalesPostErrorCode.REVIEW_SELLER_REPLY_ALREADY_EXISTS);
+        }
+        validateSellerReply(replyContent);
+        this.sellerReplyContent = replyContent;
+        this.sellerRepliedAt = now;
+        this.isSellerReplyEdited = false;
+    }
+
+    // 판매자 답글 수정. 언제든, 이력 없이 "(수정됨)"만 표시한다. 내용이 그대로면 아무것도 바꾸지 않는다
+    public void editSellerReply(String replyContent) {
+        requireNotDeleted();
+        if (!hasSellerReply()) {
+            throw new ServiceException(SalesPostErrorCode.REVIEW_SELLER_REPLY_NOT_FOUND);
+        }
+        validateSellerReply(replyContent);
+        if (replyContent.equals(sellerReplyContent)) {
+            return;
+        }
+        this.sellerReplyContent = replyContent;
+        this.isSellerReplyEdited = true;
+    }
+
+    // 판매자 답글 삭제. 칸을 비워서 다시 쓸 수 있다
+    public void deleteSellerReply() {
+        requireNotDeleted();
+        if (!hasSellerReply()) {
+            throw new ServiceException(SalesPostErrorCode.REVIEW_SELLER_REPLY_NOT_FOUND);
+        }
+        this.sellerReplyContent = null;
+        this.sellerRepliedAt = null;
+        this.isSellerReplyEdited = false;
+    }
+
+    public boolean hasSellerReply() {
+        return sellerReplyContent != null;
+    }
+
+    private void requireNotDeleted() {
+        if (isDeleted) {
+            throw new ServiceException(SalesPostErrorCode.REVIEW_NOT_FOUND);
+        }
+    }
+
+    private static void validateSellerReply(String replyContent) {
+        if (replyContent == null || replyContent.isBlank() || replyContent.length() > MAX_SELLER_REPLY_LENGTH) {
+            throw new ServiceException(SalesPostErrorCode.REVIEW_SELLER_REPLY_INVALID_CONTENT);
+        }
+    }
+
     public boolean isWrittenBy(Long memberId) {
         return memberId != null && memberId.equals(writerMemberId);
     }

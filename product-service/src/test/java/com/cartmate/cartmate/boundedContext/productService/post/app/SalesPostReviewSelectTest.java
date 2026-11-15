@@ -5,11 +5,11 @@ import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPost
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostProduct;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostProductStatus;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostPurchase;
-import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostReview;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostSaleStatus;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostUpdateStatus;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.CreateSalesPostReviewRequest;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.SalesPostReviewResponse;
+import com.cartmate.cartmate.boundedContext.productService.post.dto.SalesPostReviewSellerReplyRequest;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.SelectSalesPostResponse;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostMemberClient;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductImageRepository;
@@ -30,7 +30,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -46,7 +45,7 @@ import static org.mockito.BDDMockito.given;
 /**
  * 판매글 리뷰 목록(최신순 10개씩, 삭제된 리뷰 제외, isMine, 판매자 답글)과
  * 판매글 응답의 리뷰 요약(리뷰 수 · 평균 별점 소수 첫째 자리).
- * 판매자 답글 API는 7단계에서 만들어서, 답글이 달린 리뷰는 테스트 데이터로 직접 만든다.
+ * 삭제 · 판매자 답글은 실제 API로 만든다.
  */
 @SpringBootTest(properties = "cartmate.scheduling.enabled=false")
 @ActiveProfiles("test")
@@ -123,11 +122,8 @@ class SalesPostReviewSelectTest {
     void containsReviewAndSellerReply() {
         Long withoutReply = write(BUYER_ID, 4);
         Long withReply = write(OTHER_BUYER_ID, 2);
-        SalesPostReview review = salesPostReviewRepository.findById(withReply).orElseThrow();
-        LocalDateTime repliedAt = LocalDateTime.of(2026, 11, 10, 9, 0);
-        ReflectionTestUtils.setField(review, "sellerReplyContent", "불편을 드려 죄송합니다.");
-        ReflectionTestUtils.setField(review, "sellerRepliedAt", repliedAt);
-        salesPostReviewRepository.save(review);
+        salesPostFacade.writeReviewSellerReply(withReply, 70L, SELLER_ID,
+                new SalesPostReviewSellerReplyRequest("불편을 드려 죄송합니다."));
 
         List<SalesPostReviewResponse> list = salesPostFacade.selectReviews(postId, 0, null).content();
 
@@ -139,7 +135,7 @@ class SalesPostReviewSelectTest {
         assertThat(replied.rating()).isEqualTo(2);
         assertThat(replied.sellerReply()).isNotNull();
         assertThat(replied.sellerReply().content()).isEqualTo("불편을 드려 죄송합니다.");
-        assertThat(replied.sellerReply().repliedAt()).isEqualTo(repliedAt);
+        assertThat(replied.sellerReply().repliedAt()).isNotNull();
         assertThat(replied.sellerReply().isEdited()).isFalse();
 
         assertThat(list.get(1).reviewId()).isEqualTo(withoutReply);

@@ -47,7 +47,11 @@ public enum SalesPostErrorCode implements ErrorCode {
     REVIEW_NOT_FOUND(HttpStatus.NOT_FOUND, "REVIEW_NOT_FOUND", "리뷰를 찾을 수 없습니다."),
     REVIEW_EDIT_DENIED(HttpStatus.FORBIDDEN, "REVIEW_EDIT_DENIED", "본인 리뷰만 수정할 수 있습니다."),
     REVIEW_DELETE_DENIED(HttpStatus.FORBIDDEN, "REVIEW_DELETE_DENIED", "본인 리뷰만 삭제할 수 있습니다."),
-    REVIEW_EDIT_PERIOD_EXPIRED(HttpStatus.CONFLICT, "REVIEW_EDIT_PERIOD_EXPIRED", "리뷰 수정 기한(구매확정 후 30일)이 지났습니다.");
+    REVIEW_EDIT_PERIOD_EXPIRED(HttpStatus.CONFLICT, "REVIEW_EDIT_PERIOD_EXPIRED", "리뷰 수정 기한(구매확정 후 30일)이 지났습니다."),
+    REVIEW_SELLER_REPLY_DENIED(HttpStatus.FORBIDDEN, "REVIEW_SELLER_REPLY_DENIED", "이 판매글의 판매자만 리뷰에 답글을 달 수 있습니다."),
+    REVIEW_SELLER_REPLY_ALREADY_EXISTS(HttpStatus.CONFLICT, "REVIEW_SELLER_REPLY_ALREADY_EXISTS", "이미 답글을 단 리뷰입니다."),
+    REVIEW_SELLER_REPLY_NOT_FOUND(HttpStatus.NOT_FOUND, "REVIEW_SELLER_REPLY_NOT_FOUND", "판매자 답글을 찾을 수 없습니다."),
+    REVIEW_SELLER_REPLY_INVALID_CONTENT(HttpStatus.BAD_REQUEST, "REVIEW_SELLER_REPLY_INVALID_CONTENT", "답글 내용을 1~1000자로 입력해 주세요.");
 
     private final HttpStatus status;
     private final String code;

@@ -9,6 +9,7 @@ import com.cartmate.cartmate.boundedContext.productService.post.dto.CreateSalesP
 import com.cartmate.cartmate.boundedContext.productService.post.dto.CreateSalesPostReviewResponse;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.SalesPostCommentResponse;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.SalesPostReviewResponse;
+import com.cartmate.cartmate.boundedContext.productService.post.dto.SalesPostReviewSellerReplyRequest;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.SelectSalesPostRequest;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.SelectSalesPostResponse;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.UpdateSalesPostCommentRequest;
@@ -213,6 +214,40 @@ public class SalesPostController {
             @AuthenticationPrincipal SecurityUser user) {
         salesPostFacade.deleteReview(reviewId, memberIdOf(user));
         return new RsData<>("200-1", "리뷰를 삭제했습니다.");
+    }
+
+    // 판매자 답글 (리뷰마다 1개, 그 판매글의 판매자만). 답글 id 없이 리뷰 id로 다룬다
+    @PostMapping("/reviews/{reviewId}/seller-reply")
+    @Operation(operationId = "writeSalesPostReviewSellerReply", summary = "리뷰에 판매자 답글 작성")
+    public ResponseEntity<RsData<Void>> writeReviewSellerReply(
+            @PathVariable Long reviewId,
+            @RequestBody SalesPostReviewSellerReplyRequest request,
+            @AuthenticationPrincipal SecurityUser user) {
+        salesPostFacade.writeReviewSellerReply(reviewId, memberIdOf(user), sellerIdOf(user), request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(new RsData<>("201-1", "답글을 작성했습니다."));
+    }
+
+    @PatchMapping("/reviews/{reviewId}/seller-reply")
+    @Operation(operationId = "editSalesPostReviewSellerReply", summary = "리뷰의 판매자 답글 수정")
+    public RsData<Void> editReviewSellerReply(
+            @PathVariable Long reviewId,
+            @RequestBody SalesPostReviewSellerReplyRequest request,
+            @AuthenticationPrincipal SecurityUser user) {
+        salesPostFacade.editReviewSellerReply(reviewId, memberIdOf(user), sellerIdOf(user), request);
+        return new RsData<>("200-1", "답글을 수정했습니다.");
+    }
+
+    @DeleteMapping("/reviews/{reviewId}/seller-reply")
+    @Operation(operationId = "deleteSalesPostReviewSellerReply", summary = "리뷰의 판매자 답글 삭제")
+    public RsData<Void> deleteReviewSellerReply(
+            @PathVariable Long reviewId,
+            @AuthenticationPrincipal SecurityUser user) {
+        salesPostFacade.deleteReviewSellerReply(reviewId, memberIdOf(user), sellerIdOf(user));
+        return new RsData<>("200-1", "답글을 삭제했습니다.");
+    }
+
+    private Long sellerIdOf(SecurityUser user) {
+        return user == null ? null : user.sellerId();
     }
 
     private Long memberIdOf(SecurityUser user) {
