@@ -13,6 +13,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.Optional;
 
 /**
  * 판매글 리뷰. 구매확정된 주문항목(구매 기록) 하나에 리뷰 하나.
@@ -108,6 +109,45 @@ public class SalesPostReview extends BaseIdAndTime {
         return new SalesPostReview(salesPostId, purchase.getId(), purchase.getBuyerMemberId(), writerNickname,
                 purchase.getProductName(), purchase.getOptionName(), rating, content,
                 writableUntil(purchase.getConfirmedAt()));
+    }
+
+    // 작성자 본인이 수정 기한(구매확정 + 30일) 안에서만 별점 · 내용을 고친다.
+    // 둘 다 그대로면 아무것도 바꾸지 않고, 바뀌면 수정 전 별점 · 내용을 담은 이력을 돌려준다 (저장은 호출한 쪽에서)
+    public Optional<SalesPostReviewHistory> edit(Long memberId, int newRating, String newContent, LocalDateTime now) {
+        if (isDeleted) {
+            throw new ServiceException(SalesPostErrorCode.REVIEW_NOT_FOUND);
+        }
+        if (!isWrittenBy(memberId)) {
+            throw new ServiceException(SalesPostErrorCode.REVIEW_EDIT_DENIED);
+        }
+        if (now.isAfter(editableUntil)) {
+            throw new ServiceException(SalesPostErrorCode.REVIEW_EDIT_PERIOD_EXPIRED);
+        }
+        validateRating(newRating);
+        validateContent(newContent);
+        if (newRating == rating && newContent.equals(content)) {
+            return Optional.empty();
+        }
+        SalesPostReviewHistory history = new SalesPostReviewHistory(getId(), rating, content);
+        this.rating = newRating;
+        this.content = newContent;
+        this.isEdited = true;
+        return Optional.of(history);
+    }
+
+    // 작성자 본인이 언제든 삭제한다. 줄은 남아서 같은 주문항목으로 다시 쓸 수 없다
+    public void delete(Long memberId) {
+        if (isDeleted) {
+            throw new ServiceException(SalesPostErrorCode.REVIEW_NOT_FOUND);
+        }
+        if (!isWrittenBy(memberId)) {
+            throw new ServiceException(SalesPostErrorCode.REVIEW_DELETE_DENIED);
+        }
+        this.isDeleted = true;
+    }
+
+    public boolean isWrittenBy(Long memberId) {
+        return memberId != null && memberId.equals(writerMemberId);
     }
 
     // 구매확정 시각으로 작성 · 수정 기한을 계산한다

@@ -43,7 +43,11 @@ public enum SalesPostErrorCode implements ErrorCode {
     REVIEW_PURCHASE_NOT_FOUND(HttpStatus.NOT_FOUND, "REVIEW_PURCHASE_NOT_FOUND", "리뷰를 쓸 수 있는 구매 내역을 찾을 수 없습니다."),
     REVIEW_NOT_CONFIRMED(HttpStatus.CONFLICT, "REVIEW_NOT_CONFIRMED", "구매확정 후에 리뷰를 쓸 수 있습니다."),
     REVIEW_PERIOD_EXPIRED(HttpStatus.CONFLICT, "REVIEW_PERIOD_EXPIRED", "리뷰 작성 기한(구매확정 후 30일)이 지났습니다."),
-    REVIEW_ALREADY_WRITTEN(HttpStatus.CONFLICT, "REVIEW_ALREADY_WRITTEN", "이미 리뷰를 쓴 상품입니다.");
+    REVIEW_ALREADY_WRITTEN(HttpStatus.CONFLICT, "REVIEW_ALREADY_WRITTEN", "이미 리뷰를 쓴 상품입니다."),
+    REVIEW_NOT_FOUND(HttpStatus.NOT_FOUND, "REVIEW_NOT_FOUND", "리뷰를 찾을 수 없습니다."),
+    REVIEW_EDIT_DENIED(HttpStatus.FORBIDDEN, "REVIEW_EDIT_DENIED", "본인 리뷰만 수정할 수 있습니다."),
+    REVIEW_DELETE_DENIED(HttpStatus.FORBIDDEN, "REVIEW_DELETE_DENIED", "본인 리뷰만 삭제할 수 있습니다."),
+    REVIEW_EDIT_PERIOD_EXPIRED(HttpStatus.CONFLICT, "REVIEW_EDIT_PERIOD_EXPIRED", "리뷰 수정 기한(구매확정 후 30일)이 지났습니다.");
 
     private final HttpStatus status;
     private final String code;

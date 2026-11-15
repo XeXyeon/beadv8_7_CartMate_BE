@@ -62,6 +62,8 @@ public class SalesPostFacade {
     private final SalesPostCommentDeleteUseCase salesPostCommentDeleteUseCase;
     private final SalesPostReviewCreateUseCase salesPostReviewCreateUseCase;
     private final SalesPostReviewSelectUseCase salesPostReviewSelectUseCase;
+    private final SalesPostReviewUpdateUseCase salesPostReviewUpdateUseCase;
+    private final SalesPostReviewDeleteUseCase salesPostReviewDeleteUseCase;
     private final SalesPostPurchaseRecordUseCase salesPostPurchaseRecordUseCase;
     private final SalesPostMemberClient salesPostMemberClient;
 
@@ -368,6 +370,19 @@ public class SalesPostFacade {
     // 판매글 리뷰 목록. 로그인하지 않아도 볼 수 있다 (memberId는 내 리뷰 표시용)
     public PageResponse<SalesPostReviewResponse> selectReviews(Long postId, int page, Long memberId) {
         return salesPostReviewSelectUseCase.selectReviews(postId, page, memberId);
+    }
+
+    // 리뷰 수정 (작성자 본인만, 구매확정 후 30일 안)
+    public void updateReview(Long reviewId, Long memberId, UpdateSalesPostReviewRequest request) {
+        requireLogin(memberId);
+        salesPostReviewUpdateUseCase.update(reviewId, memberId, request.rating(), request.content(),
+                LocalDateTime.now());
+    }
+
+    // 리뷰 삭제 (작성자 본인만, 언제든, soft delete)
+    public void deleteReview(Long reviewId, Long memberId) {
+        requireLogin(memberId);
+        salesPostReviewDeleteUseCase.delete(reviewId, memberId);
     }
 
     // 리뷰 자격용 구매 기록: 결제 완료 · 공동 주문 확정 → 구매 정보 저장 (별도 트랜잭션)

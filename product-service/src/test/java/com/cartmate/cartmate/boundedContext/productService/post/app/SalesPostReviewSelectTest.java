@@ -46,7 +46,7 @@ import static org.mockito.BDDMockito.given;
 /**
  * 판매글 리뷰 목록(최신순 10개씩, 삭제된 리뷰 제외, isMine, 판매자 답글)과
  * 판매글 응답의 리뷰 요약(리뷰 수 · 평균 별점 소수 첫째 자리).
- * 삭제 · 판매자 답글 API는 6 · 7단계에서 만들어서, 여기서는 그 상태를 테스트 데이터로 직접 만든다.
+ * 판매자 답글 API는 7단계에서 만들어서, 답글이 달린 리뷰는 테스트 데이터로 직접 만든다.
  */
 @SpringBootTest(properties = "cartmate.scheduling.enabled=false")
 @ActiveProfiles("test")
@@ -151,9 +151,7 @@ class SalesPostReviewSelectTest {
     void excludesDeleted() {
         Long alive = write(BUYER_ID, 5);
         Long deleted = write(OTHER_BUYER_ID, 1);
-        SalesPostReview review = salesPostReviewRepository.findById(deleted).orElseThrow();
-        ReflectionTestUtils.setField(review, "isDeleted", true);
-        salesPostReviewRepository.save(review);
+        salesPostFacade.deleteReview(deleted, OTHER_BUYER_ID);
 
         PageResponse<SalesPostReviewResponse> page = salesPostFacade.selectReviews(postId, 0, null);
 

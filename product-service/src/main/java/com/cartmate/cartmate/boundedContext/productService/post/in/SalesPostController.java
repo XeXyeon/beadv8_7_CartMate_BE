@@ -13,6 +13,7 @@ import com.cartmate.cartmate.boundedContext.productService.post.dto.SelectSalesP
 import com.cartmate.cartmate.boundedContext.productService.post.dto.SelectSalesPostResponse;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.UpdateSalesPostCommentRequest;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.UpdateSalesPostRequest;
+import com.cartmate.cartmate.boundedContext.productService.post.dto.UpdateSalesPostReviewRequest;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.WritableSalesPostReviewResponse;
 import com.cartmate.cartmate.global.page.PageResponse;
 import com.cartmate.cartmate.global.rsData.RsData;
@@ -191,6 +192,27 @@ public class SalesPostController {
             @AuthenticationPrincipal SecurityUser user) {
         return new RsData<>("200-1", "리뷰 목록을 조회했습니다.",
                 salesPostFacade.selectReviews(postId, page, memberIdOf(user)));
+    }
+
+    // 리뷰 수정 (작성자 본인만, 구매확정 후 30일 안). 별점 · 내용
+    @PatchMapping("/reviews/{reviewId}")
+    @Operation(operationId = "updateSalesPostReview", summary = "리뷰 수정")
+    public RsData<Void> updateReview(
+            @PathVariable Long reviewId,
+            @RequestBody UpdateSalesPostReviewRequest request,
+            @AuthenticationPrincipal SecurityUser user) {
+        salesPostFacade.updateReview(reviewId, memberIdOf(user), request);
+        return new RsData<>("200-1", "리뷰를 수정했습니다.");
+    }
+
+    // 리뷰 삭제 (작성자 본인만, 언제든, soft delete). 삭제한 리뷰는 다시 쓸 수 없다
+    @DeleteMapping("/reviews/{reviewId}")
+    @Operation(operationId = "deleteSalesPostReview", summary = "리뷰 삭제")
+    public RsData<Void> deleteReview(
+            @PathVariable Long reviewId,
+            @AuthenticationPrincipal SecurityUser user) {
+        salesPostFacade.deleteReview(reviewId, memberIdOf(user));
+        return new RsData<>("200-1", "리뷰를 삭제했습니다.");
     }
 
     private Long memberIdOf(SecurityUser user) {
