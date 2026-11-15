@@ -1,10 +1,9 @@
 package com.cartmate.cartmate.boundedContext.productService.post.app;
 
-import com.cartmate.cartmate.boundedContext.productService.code.ProductErrorCode;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.*;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.*;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostApiClient;
-import com.cartmate.cartmate.global.exception.ServiceException;
+import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostApiClient.ProductRequestRejectedException;
 import com.cartmate.cartmate.global.page.PageResponse;
 import com.cartmate.cartmate.global.rsData.RsData;
 import com.cartmate.cartmate.shared.member.event.SellerRegisteredEvent;
@@ -113,6 +112,15 @@ public class SalesPostFacade {
         );
     }
 
+    // 판매자 본인의 판매글 목록(판매글 관리 화면)
+    public RsData<PageResponse<SelectSalesPostResponse>> selectSalesPostsBySeller(Long sellerId, Pageable pageable) {
+        return new RsData<>(
+                "200-1",
+                "내 판매글 목록 조회에 성공했습니다.",
+                salesPostSelectUseCase.selectSalesPostsBySeller(sellerId, pageable)
+        );
+    }
+
     // 판매글 · 복제본은 DB(읽기 트랜잭션)에서, 상품별 선택 목록 · 재고는 상품 서버(2초 캐시)에서 가져와 붙인다.
     // 상품 서버 호출 동안 DB 연결을 잡고 있지 않도록 이 메서드에는 트랜잭션을 걸지 않는다
     public RsData<SelectSalesPostResponse> selectSalesPostDetail(Long postId) {
@@ -185,16 +193,12 @@ public class SalesPostFacade {
         List<SyncProduct> updatedProducts;
         try {
             updatedProducts = salesPostApiClient.updateProducts(request, images);
-        } catch (ServiceException e) {
-            if (e.getResultCode().equals(ProductErrorCode.PRODUCT_UPDATE_INVALID.resultCode())) {
-                // 명확한 실패(상품 쪽 rollback 완료)
-                transactionTemplate.executeWithoutResult(s -> {
-                    salesPostRecoveryUseCase.delete(postId);
-                    salesPostUpdateUseCase.revertTo(postId, previousUpdatedStatus);
-                });
-            } else {
-                salesPostRecoverUseCase.recover(postId);
-            }
+        } catch (ProductRequestRejectedException e) {
+            // 명확한 실패: product가 4xx로 거절하고 자기 쪽을 되돌렸다(오류 코드는 product가 보낸 그대로)
+            transactionTemplate.executeWithoutResult(s -> {
+                salesPostRecoveryUseCase.delete(postId);
+                salesPostUpdateUseCase.revertTo(postId, previousUpdatedStatus);
+            });
             throw e;
         } catch (RuntimeException e) {
             salesPostRecoverUseCase.recover(postId);

@@ -7,11 +7,14 @@ import org.springframework.http.HttpStatus;
 @Getter
 public enum SalesPostErrorCode implements ErrorCode {
     POST_UPDATE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "POST_UPDATE_FAILED", "게시글 수정에 실패했습니다."),
-    POST_ACCESS_DENIED(HttpStatus.FORBIDDEN, "POST_ACCESS_DENIED", "게시글 수정 권한이 없습니다."),
+    // 본인 판매글이 아님. 판매자가 무엇을 하려다 막혔는지 알 수 있게 동작별로 나눈다
+    POST_ACCESS_DENIED(HttpStatus.FORBIDDEN, "POST_ACCESS_DENIED", "본인 판매글만 수정할 수 있습니다."),
+    POST_DELETE_DENIED(HttpStatus.FORBIDDEN, "POST_DELETE_DENIED", "본인 판매글만 삭제할 수 있습니다."),
+    POST_SALE_CHANGE_DENIED(HttpStatus.FORBIDDEN, "POST_SALE_CHANGE_DENIED", "본인 판매글만 판매 중지 · 재개할 수 있습니다."),
     POST_NOT_FOUND(HttpStatus.NOT_FOUND, "POST_NOT_FOUND", "게시글을 찾을 수 없습니다."),
-    POST_INVALID_INPUT(HttpStatus.BAD_REQUEST, "POST_INVALID_INPUT", "유효성 검증 실패"),
-    POST_PENDING_STATUS(HttpStatus.NOT_ACCEPTABLE, "POST_PENDING_STATUS", "유효성 검증 실패"),
-    POST_RECOVERING_STATUS(HttpStatus.NOT_ACCEPTABLE, "POST_RECOVERING_STATUS", "유효성 검증 실패"),
+    POST_INVALID_INPUT(HttpStatus.BAD_REQUEST, "POST_INVALID_INPUT", "제목과 내용을 입력해 주세요."),
+    POST_PENDING_STATUS(HttpStatus.NOT_ACCEPTABLE, "POST_PENDING_STATUS", "이전 수정이 처리 중입니다. 잠시 후 다시 시도해 주세요."),
+    POST_RECOVERING_STATUS(HttpStatus.NOT_ACCEPTABLE, "POST_RECOVERING_STATUS", "이전 수정을 되돌리는 중입니다. 잠시 후 다시 시도해 주세요."),
     POST_SALE_PENDING_STATUS(HttpStatus.NOT_ACCEPTABLE, "POST_SALE_PENDING_STATUS", "등록 또는 삭제가 진행 중인 게시글입니다."),
     POST_NOT_RECOVERING_STATUS(HttpStatus.BAD_REQUEST, "POST_NOT_RECOVERING_STATUS", "복구중인 상태가 아닙니다."),
     POST_RECOVERY_NOT_FOUND(HttpStatus.NOT_FOUND, "POST_RECOVERY_NOT_FOUND", "복구 데이터가 존재하지 않습니다."),

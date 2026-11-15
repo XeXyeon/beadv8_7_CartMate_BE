@@ -36,7 +36,7 @@ public class SalesPostDeleteUseCase {
                 .orElseThrow(() -> new ServiceException(SalesPostErrorCode.POST_NOT_FOUND));
 
         if (!post.getSellerId().equals(sellerId)) {
-            throw new ServiceException(SalesPostErrorCode.POST_ACCESS_DENIED);
+            throw new ServiceException(SalesPostErrorCode.POST_DELETE_DENIED);
         }
 
         Long updated = salesPostRepository.startDelete(postId, SalesPostUpdateStatus.editableStatuses());

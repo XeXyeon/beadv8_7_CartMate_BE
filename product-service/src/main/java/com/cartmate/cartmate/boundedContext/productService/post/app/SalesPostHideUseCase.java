@@ -85,7 +85,7 @@ public class SalesPostHideUseCase {
                 .filter(p -> p.getStatus() != SalesPostSaleStatus.DELETED)
                 .orElseThrow(() -> new ServiceException(SalesPostErrorCode.POST_NOT_FOUND));
         if (!post.getSellerId().equals(sellerId)) {
-            throw new ServiceException(SalesPostErrorCode.POST_ACCESS_DENIED);
+            throw new ServiceException(SalesPostErrorCode.POST_SALE_CHANGE_DENIED);
         }
         return post;
     }

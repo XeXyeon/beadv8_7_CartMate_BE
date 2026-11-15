@@ -61,43 +61,27 @@ public class SalesPostApiClient {
             images.forEach(file -> body.part("images", file.getResource()));
         }
 
-        try {
-            InternalResponse<List<SyncProduct>> response = restClient.post()
-                    .uri("")
-                    .contentType(MediaType.MULTIPART_FORM_DATA)
-                    .body(body.build())
-                    .retrieve()
-                    .onStatus(HttpStatusCode::is4xxClientError, (req, res) -> {
-                        throw new ServiceException(ProductErrorCode.PRODUCT_CREATE_INVALID);
-                    })
-                    .onStatus(HttpStatusCode::is5xxServerError, (req, res) -> {
-                        throw new ServiceException(ProductErrorCode.PRODUCT_CREATE_FAILED);
-                    })
-                    .body(new ParameterizedTypeReference<>() {});
-            return response == null ? List.of() : response.data();
-        } catch (ResourceAccessException e) {   // 타임아웃, 연결 실패
-            throw new ServiceException(ProductErrorCode.PRODUCT_CONNECT_FAILED);
-        }
+        List<SyncProduct> saved = exchange(
+                restClient.post()
+                        .uri("")
+                        .contentType(MediaType.MULTIPART_FORM_DATA)
+                        .body(body.build()),
+                new ParameterizedTypeReference<>() {},
+                ProductErrorCode.PRODUCT_CREATE_INVALID,
+                ProductErrorCode.PRODUCT_CREATE_FAILED);
+        return saved == null ? List.of() : saved;
     }
 
     // 판매글 단위로 상품 판매 상태 변경 (판매자 내림·재개, 관리자 숨김·해제)
     public void changeProductStatus(Long postId, SalesPostProductStatus status) {
-        try {
-            restClient.patch()
-                    .uri("/{postId}/status", postId)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(new ProductStatusChangeRequest(status))
-                    .retrieve()
-                    .onStatus(HttpStatusCode::is4xxClientError, (req, res) -> {
-                        throw new ServiceException(ProductErrorCode.PRODUCT_UPDATE_INVALID);
-                    })
-                    .onStatus(HttpStatusCode::is5xxServerError, (req, res) -> {
-                        throw new ServiceException(ProductErrorCode.PRODUCT_UPDATE_FAILED);
-                    })
-                    .toBodilessEntity();
-        } catch (ResourceAccessException e) {   // 타임아웃, 연결 실패
-            throw new ServiceException(ProductErrorCode.PRODUCT_CONNECT_FAILED);
-        }
+        exchange(
+                restClient.patch()
+                        .uri("/{postId}/status", postId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(new ProductStatusChangeRequest(status)),
+                new ParameterizedTypeReference<InternalResponse<Object>>() {},
+                ProductErrorCode.PRODUCT_UPDATE_INVALID,
+                ProductErrorCode.PRODUCT_UPDATE_FAILED);
     }
 
     // product가 수정한 상품(사진 · 옵션 포함)을 돌려받는다. post는 이걸로 수정 마무리 트랜잭션에서 복제본을 갱신한다
@@ -109,22 +93,62 @@ public class SalesPostApiClient {
             images.forEach(file -> body.part("images", file.getResource()));
         }
 
+        List<SyncProduct> updated = exchange(
+                restClient.patch()
+                        .uri("")
+                        .contentType(MediaType.MULTIPART_FORM_DATA)
+                        .body(body.build()),
+                new ParameterizedTypeReference<>() {},
+                ProductErrorCode.PRODUCT_UPDATE_INVALID,
+                ProductErrorCode.PRODUCT_UPDATE_FAILED);
+        return updated == null ? List.of() : updated;
+    }
+
+    // product를 부르고 data를 돌려준다.
+    // - 4xx: product가 요청을 거절하고 자기 쪽을 되돌린 것. product가 보낸 오류 코드 · 메시지를 그대로 담아
+    //   ProductRequestRejectedException으로 던진다(판매자가 "재고를 선점 수량보다 적게" 같은 진짜 이유를 보게).
+    //   본문을 읽지 못하면 rejected 코드로 대신한다
+    // - 5xx: product 내부 오류. 내부 메시지를 판매자에게 보이지 않도록 failed 코드로 바꾼다
+    // - 연결 실패 · 타임아웃: PRODUCT_CONNECT_FAILED (product가 처리했는지 알 수 없음)
+    private <T> T exchange(RestClient.RequestHeadersSpec<?> spec, ParameterizedTypeReference<InternalResponse<T>> type,
+                           ProductErrorCode rejected, ProductErrorCode failed) {
         try {
-            InternalResponse<List<SyncProduct>> response = restClient.patch()
-                    .uri("")
-                    .contentType(MediaType.MULTIPART_FORM_DATA)
-                    .body(body.build())
-                    .retrieve()
-                    .onStatus(HttpStatusCode::is4xxClientError, (req, res) -> {
-                        throw new ServiceException(ProductErrorCode.PRODUCT_UPDATE_INVALID);
-                    })
-                    .onStatus(HttpStatusCode::is5xxServerError, (req, res) -> {
-                        throw new ServiceException(ProductErrorCode.PRODUCT_UPDATE_FAILED);
-                    })
-                    .body(new ParameterizedTypeReference<>() {});
-            return response == null ? List.of() : response.data();
+            return spec.exchange((request, response) -> {
+                if (response.getStatusCode().is2xxSuccessful()) {
+                    InternalResponse<T> body = response.bodyTo(type);
+                    return body == null ? null : body.data();
+                }
+                if (response.getStatusCode().is4xxClientError()) {
+                    InternalResponse<T> body = readErrorBody(response, type);
+                    if (body == null || body.resultCode() == null || body.msg() == null) {
+                        throw new ProductRequestRejectedException(rejected.resultCode(), rejected.getMsg());
+                    }
+                    throw new ProductRequestRejectedException(body.resultCode(), body.msg());
+                }
+                throw new ServiceException(failed);
+            });
         } catch (ResourceAccessException e) {   // 타임아웃, 연결 실패
             throw new ServiceException(ProductErrorCode.PRODUCT_CONNECT_FAILED);
+        }
+    }
+
+    // 오류 응답이 RsData 모양이 아닐 수 있다(보안 필터 · 게이트웨이 오류 페이지 등). 읽지 못하면 null
+    private static <T> InternalResponse<T> readErrorBody(RestClient.RequestHeadersSpec.ConvertibleClientHttpResponse response,
+                                                         ParameterizedTypeReference<InternalResponse<T>> type) {
+        try {
+            return response.bodyTo(type);
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    /**
+     * product가 4xx로 요청을 거절함. product는 자기 트랜잭션을 되돌린 뒤라 "확실한 실패"로 다룰 수 있다
+     * (판매글 수정은 이 예외면 복구 없이 상태만 되돌린다). 코드 · 메시지는 product가 보낸 그대로다.
+     */
+    public static class ProductRequestRejectedException extends ServiceException {
+        public ProductRequestRejectedException(String resultCode, String msg) {
+            super(resultCode, msg);
         }
     }
 

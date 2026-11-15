@@ -59,6 +59,26 @@ public class SalesPostQueryRepositoryImpl implements SalesPostQueryRepository {
         return total == null ? 0L : total;
     }
 
+    @Override
+    public Page<SalesPost> selectBySeller(Long sellerId, Pageable pageable) {
+        List<SalesPost> content = queryFactory
+                .selectFrom(salesPost)
+                .where(salesPost.sellerId.eq(sellerId), salesPost.status.ne(SalesPostSaleStatus.DELETED))
+                .orderBy(salesPost.id.desc())
+                .offset(pageable.getOffset())
+                .limit(pageable.getPageSize())
+                .fetch();
+
+        return PageableExecutionUtils.getPage(content, pageable, () -> {
+            Long total = queryFactory
+                    .select(salesPost.count())
+                    .from(salesPost)
+                    .where(salesPost.sellerId.eq(sellerId), salesPost.status.ne(SalesPostSaleStatus.DELETED))
+                    .fetchOne();
+            return total == null ? 0L : total;
+        });
+    }
+
     private BooleanExpression titleContains(String title) {
         return title == null || title.isBlank() ? null : salesPost.title.contains(title);
     }
