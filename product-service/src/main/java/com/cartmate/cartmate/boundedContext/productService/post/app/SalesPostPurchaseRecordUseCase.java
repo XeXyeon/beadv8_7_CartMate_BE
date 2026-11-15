@@ -19,7 +19,7 @@ import java.util.stream.Collectors;
  *
  * <p>이 이벤트들은 재고 판매 확정 · 페이백 반영과 같은 트랜잭션(Kafka 인박스 처리)에서 받는다.
  * 구매 기록 저장이 실패해도 그쪽이 롤백되지 않도록 별도 트랜잭션(REQUIRES_NEW)으로 처리하고,
- * 예외는 리스너(SalesPostPurchaseEventListener)가 로그만 남기고 삼킨다.
+ * 예외는 리스너(SalesPostEventListener)가 로그만 남기고 삼킨다.
  */
 @Service
 @RequiredArgsConstructor

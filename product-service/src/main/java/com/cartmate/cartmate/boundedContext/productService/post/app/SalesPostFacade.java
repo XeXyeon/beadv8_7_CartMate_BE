@@ -7,6 +7,7 @@ import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostMem
 import com.cartmate.cartmate.boundedContext.productService.code.SalesPostErrorCode;
 import com.cartmate.cartmate.global.exception.ServiceException;
 import com.cartmate.cartmate.global.security.SecurityUser;
+import com.cartmate.cartmate.shared.delivery.PurchaseType;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostApiClient.ProductRequestRejectedException;
 import com.cartmate.cartmate.global.page.PageResponse;
 import com.cartmate.cartmate.global.rsData.RsData;
@@ -61,6 +62,7 @@ public class SalesPostFacade {
     private final SalesPostCommentDeleteUseCase salesPostCommentDeleteUseCase;
     private final SalesPostReviewCreateUseCase salesPostReviewCreateUseCase;
     private final SalesPostReviewSelectUseCase salesPostReviewSelectUseCase;
+    private final SalesPostPurchaseRecordUseCase salesPostPurchaseRecordUseCase;
     private final SalesPostMemberClient salesPostMemberClient;
 
     @Transactional
@@ -366,6 +368,18 @@ public class SalesPostFacade {
     // 판매글 리뷰 목록. 로그인하지 않아도 볼 수 있다 (memberId는 내 리뷰 표시용)
     public PageResponse<SalesPostReviewResponse> selectReviews(Long postId, int page, Long memberId) {
         return salesPostReviewSelectUseCase.selectReviews(postId, page, memberId);
+    }
+
+    // 리뷰 자격용 구매 기록: 결제 완료 · 공동 주문 확정 → 구매 정보 저장 (별도 트랜잭션)
+    public void recordPurchases(PurchaseType purchaseType, Long orderId, Long buyerMemberId,
+                                List<SalesPostPurchaseRecordUseCase.PurchasedItem> items) {
+        salesPostPurchaseRecordUseCase.recordPurchases(purchaseType, orderId, buyerMemberId, items);
+    }
+
+    // 리뷰 자격용 구매 기록: 구매확정 → 확정 시각 (별도 트랜잭션)
+    public void confirmPurchases(PurchaseType purchaseType, Long orderId, List<Long> orderItemIds,
+                                 LocalDateTime confirmedAt) {
+        salesPostPurchaseRecordUseCase.confirmPurchases(purchaseType, orderId, orderItemIds, confirmedAt);
     }
 
     private void requireLogin(Long memberId) {

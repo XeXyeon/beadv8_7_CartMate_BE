@@ -1,7 +1,7 @@
 package com.cartmate.cartmate.boundedContext.productService.post.app;
 
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostPurchase;
-import com.cartmate.cartmate.boundedContext.productService.post.in.SalesPostPurchaseEventListener;
+import com.cartmate.cartmate.boundedContext.productService.post.in.SalesPostEventListener;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostPurchaseRepository;
 import com.cartmate.cartmate.shared.delivery.PurchaseType;
 import com.cartmate.cartmate.shared.delivery.event.DeliveryConfirmedEvent;
@@ -41,7 +41,7 @@ class SalesPostPurchaseRecordTest {
     private static final LocalDateTime CONFIRMED_AT = LocalDateTime.of(2026, 11, 8, 10, 0);
 
     @Autowired
-    SalesPostPurchaseEventListener listener;
+    SalesPostEventListener listener;
     @Autowired
     SalesPostPurchaseRepository salesPostPurchaseRepository;
 

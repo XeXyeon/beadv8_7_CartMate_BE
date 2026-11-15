@@ -62,7 +62,7 @@ public class ProductServiceKafkaConfig {
         return binding(DeliveryConfirmedEvent.class);
     }
 
-    // 공동 주문 확정 → 리뷰 자격용 구매 기록 (SalesPostPurchaseEventListener)
+    // 공동 주문 확정 → 리뷰 자격용 구매 기록 (SalesPostEventListener)
     @Bean
     public InboundEventBinding sharedGroupOrderConfirmedBinding() {
         return binding(SharedGroupOrderConfirmedEvent.class);
