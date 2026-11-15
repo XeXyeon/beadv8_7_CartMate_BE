@@ -196,6 +196,31 @@ class SalesPostUpdateFlowTest {
         assertThat(salesPostRecoveryRepository.findBySalesPostId(postId)).isEmpty();
     }
 
+    // product가 거절한 진짜 이유(오류 코드 · 메시지)가 판매자에게 그대로 가야 한다.
+    // 예전에는 4xx를 모두 PRODUCT_UPDATE_INVALID("잘못된 상품수정 요청입니다.")로 바꿔 이유가 사라졌다
+    @Test
+    @DisplayName("거절: product가 보낸 오류 코드 · 메시지(없는 재고 id)를 그대로 넘기고 상태만 수정 전으로 되돌린다")
+    void passProductRejectReasonThrough() {
+        // 이 상품에 없는 재고 id → product가 PRODUCT_INVENTORY_NOT_FOUND(404)로 거절한다
+        UpdateSalesPostProduct product = new UpdateSalesPostProduct(productId, 1L, "새이름", "설명", 30000L,
+                currentImages(), List.of(new UpdateSalesPostInventory(999_999L, null, 0L, 5)));
+        UpdateSalesPostRequest request = new UpdateSalesPostRequest(postId, SELLER_ID, "새 제목", "새 내용", List.of(product));
+
+        assertThatThrownBy(() -> salesPostFacade.updateSalesPostByUser(request, List.of()))
+                .isInstanceOf(SalesPostApiClient.ProductRequestRejectedException.class)
+                .satisfies(e -> {
+                    ServiceException se = (ServiceException) e;
+                    assertThat(se.getResultCode()).isEqualTo(ProductErrorCode.PRODUCT_INVENTORY_NOT_FOUND.resultCode());
+                    assertThat(se.getMsg()).isEqualTo(ProductErrorCode.PRODUCT_INVENTORY_NOT_FOUND.getMsg());
+                });
+
+        SalesPost post = salesPostRepository.findById(postId).orElseThrow();
+        assertThat(post.getTitle()).isEqualTo("아이폰 팝니다");
+        assertThat(post.getUpdateStatus()).isEqualTo(SalesPostUpdateStatus.NEW);
+        assertThat(productRepository.findById(productId).orElseThrow().getName()).isEqualTo("아이폰");
+        assertThat(salesPostRecoveryRepository.findBySalesPostId(postId)).isEmpty();
+    }
+
     // 상품은 수정됐는데 post가 응답으로 복제본을 맞추지 못한 경우. 복제본 갱신 실패도 수정 실패로 보고 상품을 복구한다
     // (복구할 때 복제본도 다시 맞추므로, 실패는 수정 때 한 번만 일으킨다)
     @Test

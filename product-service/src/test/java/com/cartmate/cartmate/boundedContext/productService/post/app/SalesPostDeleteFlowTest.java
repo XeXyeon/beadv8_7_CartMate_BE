@@ -287,7 +287,7 @@ class SalesPostDeleteFlowTest {
     void otherSellerCannotDeleteSalesPost() {
         assertThatThrownBy(() -> salesPostFacade.deleteSalesPostByUser(postId, OTHER_SELLER_ID))
                 .isInstanceOf(ServiceException.class)
-                .hasMessageContaining("POST_ACCESS_DENIED");
+                .hasMessageContaining("POST_DELETE_DENIED");
 
         assertThat(salesPostRepository.findById(postId).orElseThrow().getStatus()).isEqualTo(SalesPostSaleStatus.ON_SALE);
         assertThat(productRepository.findAll()).extracting(Product::getStatus).containsOnly(ProductStatus.ON_SALE);
