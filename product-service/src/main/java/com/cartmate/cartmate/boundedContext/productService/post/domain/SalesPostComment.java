@@ -1,0 +1,88 @@
+package com.cartmate.cartmate.boundedContext.productService.post.domain;
+
+import com.cartmate.cartmate.global.jpa.entity.BaseIdAndTime;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Index;
+import jakarta.persistence.Table;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+
+// 판매글 댓글. 원댓글과 답글을 한 테이블에 둔다.
+// parentId가 비어 있으면 원댓글, 값이 있으면 그 원댓글의 답글이다 (답글에 답글은 달 수 없다).
+@Entity
+@Table(name = "POST_SALES_POST_COMMENT",
+        indexes = {
+                @Index(name = "idx_sales_post_comment_post_parent", columnList = "salesPostId, parentId"),
+                @Index(name = "idx_sales_post_comment_parent", columnList = "parentId"),
+                @Index(name = "idx_sales_post_comment_writer", columnList = "writerMemberId")
+        })
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class SalesPostComment extends BaseIdAndTime {
+
+    public static final int MAX_CONTENT_LENGTH = 500;
+
+    @Column(nullable = false)
+    private Long salesPostId;
+
+    // 원댓글이면 null, 답글이면 원댓글 id
+    private Long parentId;
+
+    @Column(nullable = false)
+    private Long writerMemberId;
+
+    // 작성 당시 닉네임. 닉네임을 바꿔도 따라 바뀌지 않고, 탈퇴하면 "탈퇴한 회원"으로 바뀐다
+    @Column(nullable = false, length = 50)
+    private String writerNickname;
+
+    @Column(nullable = false, length = MAX_CONTENT_LENGTH)
+    private String content;
+
+    // 비밀 댓글. 답글은 원댓글의 값을 그대로 따른다
+    @Column(nullable = false)
+    private boolean isSecret;
+
+    // 판매글의 판매자가 쓴 답글인지 ("판매자" 표시)
+    @Column(nullable = false)
+    private boolean isSellerReply;
+
+    // 한 번이라도 수정됐는지 ("(수정됨)" 표시)
+    @Column(nullable = false)
+    private boolean isEdited;
+
+    // soft delete. 실제로 지우지 않고 표시만 한다
+    @Column(nullable = false)
+    private boolean isDeleted;
+
+    private SalesPostComment(Long salesPostId, Long parentId, Long writerMemberId, String writerNickname,
+                             String content, boolean isSecret, boolean isSellerReply) {
+        this.salesPostId = salesPostId;
+        this.parentId = parentId;
+        this.writerMemberId = writerMemberId;
+        this.writerNickname = writerNickname;
+        this.content = content;
+        this.isSecret = isSecret;
+        this.isSellerReply = isSellerReply;
+        this.isEdited = false;
+        this.isDeleted = false;
+    }
+
+    // 원댓글
+    public static SalesPostComment root(Long salesPostId, Long writerMemberId, String writerNickname,
+                                        String content, boolean isSecret) {
+        return new SalesPostComment(salesPostId, null, writerMemberId, writerNickname, content, isSecret, false);
+    }
+
+    // 답글. 판매글과 비밀 여부는 원댓글을 따른다
+    public static SalesPostComment reply(SalesPostComment parent, Long writerMemberId, String writerNickname,
+                                         String content, boolean isSellerReply) {
+        return new SalesPostComment(parent.getSalesPostId(), parent.getId(), writerMemberId, writerNickname,
+                content, parent.isSecret(), isSellerReply);
+    }
+
+    public boolean isRoot() {
+        return parentId == null;
+    }
+}
