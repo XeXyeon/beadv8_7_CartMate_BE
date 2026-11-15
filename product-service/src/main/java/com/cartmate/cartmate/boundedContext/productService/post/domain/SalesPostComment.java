@@ -27,6 +27,8 @@ import java.util.Optional;
 public class SalesPostComment extends BaseIdAndTime {
 
     public static final int MAX_CONTENT_LENGTH = 500;
+    // 작성자가 탈퇴하면 닉네임 대신 저장하는 이름 (SalesPostCommentRepository.anonymizeWriter)
+    public static final String WITHDRAWN_NICKNAME = "탈퇴한 회원";
 
     @Column(nullable = false)
     private Long salesPostId;

@@ -4,6 +4,7 @@ import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPost
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -31,4 +32,9 @@ public interface SalesPostCommentRepository extends JpaRepository<SalesPostComme
 
     // 원댓글들의 답글을 한 번에, 오래된 순으로
     List<SalesPostComment> findByParentIdInOrderByIdAsc(Collection<Long> parentIds);
+
+    // 탈퇴한 회원이 쓴 댓글 · 답글의 작성자 닉네임을 한 번에 바꾼다 (내용은 그대로 둔다). 바뀐 행 수를 돌려준다
+    @Modifying(clearAutomatically = true)
+    @Query("update SalesPostComment c set c.writerNickname = :nickname where c.writerMemberId = :memberId")
+    int anonymizeWriter(@Param("memberId") Long memberId, @Param("nickname") String nickname);
 }
