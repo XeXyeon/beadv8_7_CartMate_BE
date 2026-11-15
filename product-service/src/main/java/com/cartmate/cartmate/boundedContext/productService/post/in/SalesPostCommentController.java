@@ -4,6 +4,8 @@ import com.cartmate.cartmate.boundedContext.productService.post.app.SalesPostFac
 import com.cartmate.cartmate.boundedContext.productService.post.dto.CreateSalesPostCommentRequest;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.CreateSalesPostCommentResponse;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.CreateSalesPostReplyRequest;
+import com.cartmate.cartmate.boundedContext.productService.post.dto.SalesPostCommentResponse;
+import com.cartmate.cartmate.global.page.PageResponse;
 import com.cartmate.cartmate.global.rsData.RsData;
 import com.cartmate.cartmate.global.security.SecurityUser;
 import io.swagger.v3.oas.annotations.Operation;
@@ -19,6 +21,17 @@ import org.springframework.web.bind.annotation.*;
 public class SalesPostCommentController {
 
     private final SalesPostFacade salesPostFacade;
+
+    // 로그인 없이도 볼 수 있다. 로그인 정보는 비밀 댓글 열람 · 내 글(isMine) 표시에만 쓴다. 한 페이지에 원댓글 10개
+    @GetMapping
+    @Operation(operationId = "selectSalesPostComments", summary = "판매글 댓글 목록")
+    public ResponseEntity<RsData<PageResponse<SalesPostCommentResponse>>> selectComments(
+            @PathVariable Long postId,
+            @RequestParam(defaultValue = "0") int page,
+            @AuthenticationPrincipal SecurityUser user) {
+        PageResponse<SalesPostCommentResponse> response = salesPostFacade.selectComments(postId, page, user);
+        return ResponseEntity.ok(new RsData<>("200-1", "댓글 목록을 조회했습니다.", response));
+    }
 
     @PostMapping
     @Operation(operationId = "createSalesPostComment", summary = "판매글 댓글 작성")

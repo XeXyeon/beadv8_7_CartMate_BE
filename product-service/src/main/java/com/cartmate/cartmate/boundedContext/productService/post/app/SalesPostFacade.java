@@ -6,6 +6,7 @@ import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostApi
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostMemberClient;
 import com.cartmate.cartmate.boundedContext.productService.code.SalesPostErrorCode;
 import com.cartmate.cartmate.global.exception.ServiceException;
+import com.cartmate.cartmate.global.security.SecurityUser;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostApiClient.ProductRequestRejectedException;
 import com.cartmate.cartmate.global.page.PageResponse;
 import com.cartmate.cartmate.global.rsData.RsData;
@@ -54,6 +55,7 @@ public class SalesPostFacade {
     private final SalesPostSyncSellerTrustUseCase salesPostSyncSellerTrustUseCase;
     private final SalesPostDetailInventoryLoader salesPostDetailInventoryLoader;
     private final SalesPostCommentCreateUseCase salesPostCommentCreateUseCase;
+    private final SalesPostCommentSelectUseCase salesPostCommentSelectUseCase;
     private final SalesPostMemberClient salesPostMemberClient;
 
     @Transactional
@@ -322,6 +324,12 @@ public class SalesPostFacade {
         Long commentId = salesPostCommentCreateUseCase.createReply(
                 postId, parentId, memberId, sellerId, nickname, request.content());
         return new CreateSalesPostCommentResponse(commentId);
+    }
+
+    // 댓글 목록. 로그인하지 않아도 볼 수 있다 (viewer가 null이면 비밀 댓글은 모두 가려진다)
+    public PageResponse<SalesPostCommentResponse> selectComments(Long postId, int page,
+                                                                 SecurityUser viewer) {
+        return salesPostCommentSelectUseCase.selectComments(postId, page, viewer);
     }
 
     private void requireLogin(Long memberId) {
