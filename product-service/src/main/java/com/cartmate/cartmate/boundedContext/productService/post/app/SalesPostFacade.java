@@ -31,6 +31,7 @@ import com.cartmate.cartmate.boundedContext.productService.post.dto.admin.AdminS
 import com.cartmate.cartmate.boundedContext.productService.post.dto.admin.AdminSalesPostDetailResponse;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.admin.AdminSalesPostSummaryResponse;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -58,6 +59,7 @@ public class SalesPostFacade {
     private final SalesPostCommentSelectUseCase salesPostCommentSelectUseCase;
     private final SalesPostCommentUpdateUseCase salesPostCommentUpdateUseCase;
     private final SalesPostCommentDeleteUseCase salesPostCommentDeleteUseCase;
+    private final SalesPostReviewCreateUseCase salesPostReviewCreateUseCase;
     private final SalesPostMemberClient salesPostMemberClient;
 
     @Transactional
@@ -344,6 +346,20 @@ public class SalesPostFacade {
     public void deleteComment(Long postId, Long commentId, Long memberId) {
         requireLogin(memberId);
         salesPostCommentDeleteUseCase.delete(postId, commentId, memberId);
+    }
+
+    // 리뷰 작성. 닉네임은 회원 서버 호출이라 트랜잭션 밖에서 먼저 받는다 (응답 없으면 503으로 작성 실패)
+    public CreateSalesPostReviewResponse createReview(Long memberId, CreateSalesPostReviewRequest request) {
+        requireLogin(memberId);
+        String nickname = salesPostMemberClient.findNickname(memberId);
+        return salesPostReviewCreateUseCase.create(memberId, nickname, request.purchaseId(), request.rating(),
+                request.content(), LocalDateTime.now());
+    }
+
+    // 로그인한 회원이 리뷰를 쓸 수 있는 상품 목록 (기한이 가까운 순)
+    public List<WritableSalesPostReviewResponse> selectWritableReviews(Long memberId) {
+        requireLogin(memberId);
+        return salesPostReviewCreateUseCase.selectWritable(memberId, LocalDateTime.now());
     }
 
     private void requireLogin(Long memberId) {
