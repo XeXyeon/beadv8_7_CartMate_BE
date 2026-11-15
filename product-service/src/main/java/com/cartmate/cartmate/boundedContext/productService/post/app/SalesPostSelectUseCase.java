@@ -81,7 +81,9 @@ public class SalesPostSelectUseCase {
                 post.getUpdateStatus(),
                 resultList,
                 post.getCreateDate(),
-                post.getModifyDate()
+                post.getModifyDate(),
+                post.getReviewCount(),
+                post.getAverageRating()
         );
     }
 

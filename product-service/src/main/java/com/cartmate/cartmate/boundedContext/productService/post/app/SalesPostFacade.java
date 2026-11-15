@@ -60,6 +60,7 @@ public class SalesPostFacade {
     private final SalesPostCommentUpdateUseCase salesPostCommentUpdateUseCase;
     private final SalesPostCommentDeleteUseCase salesPostCommentDeleteUseCase;
     private final SalesPostReviewCreateUseCase salesPostReviewCreateUseCase;
+    private final SalesPostReviewSelectUseCase salesPostReviewSelectUseCase;
     private final SalesPostMemberClient salesPostMemberClient;
 
     @Transactional
@@ -360,6 +361,11 @@ public class SalesPostFacade {
     public List<WritableSalesPostReviewResponse> selectWritableReviews(Long memberId) {
         requireLogin(memberId);
         return salesPostReviewCreateUseCase.selectWritable(memberId, LocalDateTime.now());
+    }
+
+    // 판매글 리뷰 목록. 로그인하지 않아도 볼 수 있다 (memberId는 내 리뷰 표시용)
+    public PageResponse<SalesPostReviewResponse> selectReviews(Long postId, int page, Long memberId) {
+        return salesPostReviewSelectUseCase.selectReviews(postId, page, memberId);
     }
 
     private void requireLogin(Long memberId) {

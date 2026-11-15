@@ -64,6 +64,14 @@ public class SalesPost extends BaseIdAndTime {
     @Column(nullable = false, columnDefinition = "BIGINT DEFAULT 0")
     private long reviewRatingSum = 0L;
 
+    // 평균 별점, 소수 첫째 자리까지 반올림. 리뷰가 없으면 0
+    public double getAverageRating() {
+        if (reviewCount == 0) {
+            return 0.0;
+        }
+        return Math.round((double) reviewRatingSum / reviewCount * 10) / 10.0;
+    }
+
     public SalesPost(Long sellerId, String title, String content, SalesPostSaleStatus status, Long viewCount,
                      SalesPostUpdateStatus updateStatus, LocalDateTime updateStatusChangedAt) {
         this.sellerId = sellerId;
