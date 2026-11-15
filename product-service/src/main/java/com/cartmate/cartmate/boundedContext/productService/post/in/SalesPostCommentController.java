@@ -70,6 +70,17 @@ public class SalesPostCommentController {
         return new RsData<>("200-1", "댓글을 수정했습니다.");
     }
 
+    // 원댓글 · 답글 모두 이 API로 삭제한다 (soft delete)
+    @DeleteMapping("/{commentId}")
+    @Operation(operationId = "deleteSalesPostComment", summary = "판매글 댓글 · 답글 삭제")
+    public RsData<Void> deleteComment(
+            @PathVariable Long postId,
+            @PathVariable Long commentId,
+            @AuthenticationPrincipal SecurityUser user) {
+        salesPostFacade.deleteComment(postId, commentId, memberIdOf(user));
+        return new RsData<>("200-1", "댓글을 삭제했습니다.");
+    }
+
     private Long memberIdOf(SecurityUser user) {
         return user == null ? null : user.memberId();
     }

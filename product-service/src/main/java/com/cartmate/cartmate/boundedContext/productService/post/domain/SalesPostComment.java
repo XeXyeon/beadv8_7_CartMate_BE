@@ -113,6 +113,17 @@ public class SalesPostComment extends BaseIdAndTime {
         return Optional.of(history);
     }
 
+    // 작성자 본인만 삭제한다. 실제로 지우지 않고 표시만 한다 (답글은 그대로 남는다)
+    public void delete(Long memberId) {
+        if (isDeleted) {
+            throw new ServiceException(SalesPostErrorCode.COMMENT_NOT_FOUND);
+        }
+        if (!isWrittenBy(memberId)) {
+            throw new ServiceException(SalesPostErrorCode.COMMENT_DELETE_DENIED);
+        }
+        this.isDeleted = true;
+    }
+
     public boolean isWrittenBy(Long memberId) {
         return memberId != null && memberId.equals(writerMemberId);
     }

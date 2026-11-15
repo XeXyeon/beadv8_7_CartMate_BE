@@ -57,6 +57,7 @@ public class SalesPostFacade {
     private final SalesPostCommentCreateUseCase salesPostCommentCreateUseCase;
     private final SalesPostCommentSelectUseCase salesPostCommentSelectUseCase;
     private final SalesPostCommentUpdateUseCase salesPostCommentUpdateUseCase;
+    private final SalesPostCommentDeleteUseCase salesPostCommentDeleteUseCase;
     private final SalesPostMemberClient salesPostMemberClient;
 
     @Transactional
@@ -337,6 +338,12 @@ public class SalesPostFacade {
     public void updateComment(Long postId, Long commentId, Long memberId, UpdateSalesPostCommentRequest request) {
         requireLogin(memberId);
         salesPostCommentUpdateUseCase.update(postId, commentId, memberId, request.content());
+    }
+
+    // 댓글 · 답글 삭제 (작성자 본인만, soft delete)
+    public void deleteComment(Long postId, Long commentId, Long memberId) {
+        requireLogin(memberId);
+        salesPostCommentDeleteUseCase.delete(postId, commentId, memberId);
     }
 
     private void requireLogin(Long memberId) {
