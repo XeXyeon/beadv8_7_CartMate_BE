@@ -1,5 +1,7 @@
 package com.cartmate.cartmate.boundedContext.productService.post.domain;
 
+import com.cartmate.cartmate.boundedContext.productService.code.SalesPostErrorCode;
+import com.cartmate.cartmate.global.exception.ServiceException;
 import com.cartmate.cartmate.global.jpa.entity.BaseIdAndTime;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -72,14 +74,28 @@ public class SalesPostComment extends BaseIdAndTime {
     // 원댓글
     public static SalesPostComment root(Long salesPostId, Long writerMemberId, String writerNickname,
                                         String content, boolean isSecret) {
+        validateContent(content);
         return new SalesPostComment(salesPostId, null, writerMemberId, writerNickname, content, isSecret, false);
     }
 
-    // 답글. 판매글과 비밀 여부는 원댓글을 따른다
+    // 답글. 판매글과 비밀 여부는 원댓글을 따른다. 답글에는 답글을 달 수 없고, 삭제된 댓글에도 달 수 없다
     public static SalesPostComment reply(SalesPostComment parent, Long writerMemberId, String writerNickname,
                                          String content, boolean isSellerReply) {
+        if (!parent.isRoot()) {
+            throw new ServiceException(SalesPostErrorCode.COMMENT_REPLY_TO_REPLY);
+        }
+        if (parent.isDeleted()) {
+            throw new ServiceException(SalesPostErrorCode.COMMENT_NOT_FOUND);
+        }
+        validateContent(content);
         return new SalesPostComment(parent.getSalesPostId(), parent.getId(), writerMemberId, writerNickname,
                 content, parent.isSecret(), isSellerReply);
+    }
+
+    private static void validateContent(String content) {
+        if (content == null || content.isBlank() || content.length() > MAX_CONTENT_LENGTH) {
+            throw new ServiceException(SalesPostErrorCode.COMMENT_INVALID_CONTENT);
+        }
     }
 
     public boolean isRoot() {
