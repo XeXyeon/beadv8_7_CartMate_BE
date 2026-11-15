@@ -32,6 +32,7 @@ public enum SalesPostErrorCode implements ErrorCode {
     COMMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "COMMENT_NOT_FOUND", "댓글을 찾을 수 없습니다."),
     COMMENT_REPLY_TO_REPLY(HttpStatus.BAD_REQUEST, "COMMENT_REPLY_TO_REPLY", "답글에는 답글을 달 수 없습니다."),
     COMMENT_REPLY_DENIED(HttpStatus.FORBIDDEN, "COMMENT_REPLY_DENIED", "판매자와 댓글 작성자만 답글을 달 수 있습니다."),
+    COMMENT_EDIT_DENIED(HttpStatus.FORBIDDEN, "COMMENT_EDIT_DENIED", "본인 댓글만 수정할 수 있습니다."),
     COMMENT_WRITER_NOT_FOUND(HttpStatus.NOT_FOUND, "COMMENT_WRITER_NOT_FOUND", "회원 정보를 찾을 수 없습니다.");
 
     private final HttpStatus status;

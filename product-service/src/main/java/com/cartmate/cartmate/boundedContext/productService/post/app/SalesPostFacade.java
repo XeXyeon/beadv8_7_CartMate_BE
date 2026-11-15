@@ -56,6 +56,7 @@ public class SalesPostFacade {
     private final SalesPostDetailInventoryLoader salesPostDetailInventoryLoader;
     private final SalesPostCommentCreateUseCase salesPostCommentCreateUseCase;
     private final SalesPostCommentSelectUseCase salesPostCommentSelectUseCase;
+    private final SalesPostCommentUpdateUseCase salesPostCommentUpdateUseCase;
     private final SalesPostMemberClient salesPostMemberClient;
 
     @Transactional
@@ -330,6 +331,12 @@ public class SalesPostFacade {
     public PageResponse<SalesPostCommentResponse> selectComments(Long postId, int page,
                                                                  SecurityUser viewer) {
         return salesPostCommentSelectUseCase.selectComments(postId, page, viewer);
+    }
+
+    // 댓글 · 답글 수정 (작성자 본인만)
+    public void updateComment(Long postId, Long commentId, Long memberId, UpdateSalesPostCommentRequest request) {
+        requireLogin(memberId);
+        salesPostCommentUpdateUseCase.update(postId, commentId, memberId, request.content());
     }
 
     private void requireLogin(Long memberId) {

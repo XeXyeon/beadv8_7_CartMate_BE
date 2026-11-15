@@ -5,6 +5,7 @@ import com.cartmate.cartmate.boundedContext.productService.post.dto.CreateSalesP
 import com.cartmate.cartmate.boundedContext.productService.post.dto.CreateSalesPostCommentResponse;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.CreateSalesPostReplyRequest;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.SalesPostCommentResponse;
+import com.cartmate.cartmate.boundedContext.productService.post.dto.UpdateSalesPostCommentRequest;
 import com.cartmate.cartmate.global.page.PageResponse;
 import com.cartmate.cartmate.global.rsData.RsData;
 import com.cartmate.cartmate.global.security.SecurityUser;
@@ -55,6 +56,18 @@ public class SalesPostCommentController {
                 postId, commentId, memberIdOf(user), user == null ? null : user.sellerId(), request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(new RsData<>("201-1", "답글을 작성했습니다.", response));
+    }
+
+    // 원댓글 · 답글 모두 이 API로 수정한다 (한 테이블)
+    @PatchMapping("/{commentId}")
+    @Operation(operationId = "updateSalesPostComment", summary = "판매글 댓글 · 답글 수정")
+    public RsData<Void> updateComment(
+            @PathVariable Long postId,
+            @PathVariable Long commentId,
+            @RequestBody UpdateSalesPostCommentRequest request,
+            @AuthenticationPrincipal SecurityUser user) {
+        salesPostFacade.updateComment(postId, commentId, memberIdOf(user), request);
+        return new RsData<>("200-1", "댓글을 수정했습니다.");
     }
 
     private Long memberIdOf(SecurityUser user) {

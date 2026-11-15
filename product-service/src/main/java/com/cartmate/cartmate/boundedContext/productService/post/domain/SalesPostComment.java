@@ -11,6 +11,8 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.util.Optional;
+
 // 판매글 댓글. 원댓글과 답글을 한 테이블에 둔다.
 // parentId가 비어 있으면 원댓글, 값이 있으면 그 원댓글의 답글이다 (답글에 답글은 달 수 없다).
 @Entity
@@ -90,6 +92,29 @@ public class SalesPostComment extends BaseIdAndTime {
         validateContent(content);
         return new SalesPostComment(parent.getSalesPostId(), parent.getId(), writerMemberId, writerNickname,
                 content, parent.isSecret(), isSellerReply);
+    }
+
+    // 작성자 본인만 내용을 수정한다 (비밀 여부는 바꿀 수 없다).
+    // 내용이 그대로면 아무것도 바꾸지 않고, 바뀌면 수정 전 내용을 담은 이력을 돌려준다 (저장은 호출한 쪽에서)
+    public Optional<SalesPostCommentHistory> edit(Long memberId, String newContent) {
+        if (isDeleted) {
+            throw new ServiceException(SalesPostErrorCode.COMMENT_NOT_FOUND);
+        }
+        if (!isWrittenBy(memberId)) {
+            throw new ServiceException(SalesPostErrorCode.COMMENT_EDIT_DENIED);
+        }
+        validateContent(newContent);
+        if (newContent.equals(content)) {
+            return Optional.empty();
+        }
+        SalesPostCommentHistory history = new SalesPostCommentHistory(getId(), content);
+        this.content = newContent;
+        this.isEdited = true;
+        return Optional.of(history);
+    }
+
+    public boolean isWrittenBy(Long memberId) {
+        return memberId != null && memberId.equals(writerMemberId);
     }
 
     private static void validateContent(String content) {
