@@ -17,6 +17,9 @@ import java.util.Optional;
 public interface SalesPostQueryRepository {
     Page<SalesPost> selectSalesPostAll(SelectSalesPostRequest request, Pageable pageable);
 
+    // 판매자 본인의 판매글(삭제된 글만 뺀다). 최신순
+    Page<SalesPost> selectBySeller(Long sellerId, Pageable pageable);
+
     Long changeUpdateStatus(Long salesPostId, Collection<SalesPostUpdateStatus> from,
                             SalesPostUpdateStatus to, LocalDateTime now);
 

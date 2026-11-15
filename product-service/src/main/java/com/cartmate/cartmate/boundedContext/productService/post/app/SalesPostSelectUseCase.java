@@ -38,6 +38,15 @@ public class SalesPostSelectUseCase {
         return PageResponse.of(page);
     }
 
+    // 판매자 본인의 판매글 목록(판매글 관리 화면). 삭제된 글만 빼고 판매 중지 · 운영 중지 · 등록 중까지 모두 보여준다
+    @Transactional(readOnly = true)
+    public PageResponse<SelectSalesPostResponse> selectSalesPostsBySeller(Long sellerId, Pageable pageable) {
+        Page<SalesPost> posts = salesPostRepository.selectBySeller(sellerId, pageable);
+        SalesPostSellerTrust trust = salesPostSellerTrustRepository.findById(sellerId).orElse(null);
+
+        return PageResponse.of(posts.map(post -> toSelectResultDto(post, trust)));
+    }
+
     @Transactional(readOnly = true)
     public SelectSalesPostResponse selectSalesPostDetail(Long postId) {
         SalesPost post = salesPostRepository.findById(postId)
@@ -69,6 +78,7 @@ public class SalesPostSelectUseCase {
                 post.getContent(),
                 post.getViewCount(),
                 post.getStatus(),
+                post.getUpdateStatus(),
                 resultList,
                 post.getCreateDate(),
                 post.getModifyDate()

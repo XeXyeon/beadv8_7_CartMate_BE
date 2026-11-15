@@ -1,6 +1,7 @@
 package com.cartmate.cartmate.boundedContext.productService.post.dto;
 
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostSaleStatus;
+import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostUpdateStatus;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SellerTrustLevel;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -21,6 +22,7 @@ public class SelectSalesPostResponse {
     private String content;
     private Long viewCount;
     private SalesPostSaleStatus status;
+    private SalesPostUpdateStatus updateStatus; // 수정 진행 상태. 수정 중(PENDING) · 복구 중(RECOVERING)이면 수정 · 판매 중지 버튼을 막는다
     private List<SelectSalesPostProduct> productList;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

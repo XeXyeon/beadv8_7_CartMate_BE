@@ -113,6 +113,15 @@ public class SalesPostFacade {
         );
     }
 
+    // 판매자 본인의 판매글 목록(판매글 관리 화면)
+    public RsData<PageResponse<SelectSalesPostResponse>> selectSalesPostsBySeller(Long sellerId, Pageable pageable) {
+        return new RsData<>(
+                "200-1",
+                "내 판매글 목록 조회에 성공했습니다.",
+                salesPostSelectUseCase.selectSalesPostsBySeller(sellerId, pageable)
+        );
+    }
+
     // 판매글 · 복제본은 DB(읽기 트랜잭션)에서, 상품별 선택 목록 · 재고는 상품 서버(2초 캐시)에서 가져와 붙인다.
     // 상품 서버 호출 동안 DB 연결을 잡고 있지 않도록 이 메서드에는 트랜잭션을 걸지 않는다
     public RsData<SelectSalesPostResponse> selectSalesPostDetail(Long postId) {

@@ -49,6 +49,15 @@ public class SalesPostController {
         return ResponseEntity.ok(result);
     }
 
+    // 판매자 본인의 판매글 목록(판매글 관리 화면). 삭제된 글만 빼고 모든 상태, 최신순
+    @GetMapping("/sellers/{sellerId}/posts")
+    @Operation(operationId = "selectSalesPostsBySeller", summary = "판매자 본인의 판매글 목록")
+    public ResponseEntity<RsData<PageResponse<SelectSalesPostResponse>>> selectSalesPostsBySeller(
+            @PathVariable Long sellerId,
+            Pageable pageable) {
+        return ResponseEntity.ok(salesPostFacade.selectSalesPostsBySeller(sellerId, pageable));
+    }
+
     @DeleteMapping("/sellers/{sellerId}/posts/{postId}")
     public ResponseEntity<Void> deleteSalesPost(
             @PathVariable Long sellerId,
