@@ -72,7 +72,7 @@ docker compose -f observability/docker-compose.yaml up -d
 | 서비스 ERROR 급증 | 서비스별 `level="ERROR"` 로그 **10건 이상** (서비스마다 따로 울림) | warning |
 
 로컬은 Grafana 화면에서만 확인한다. 운영(Grafana Cloud)은 **Discord** 연락처 `discord-cartmate` + 알림 정책(`grafana_folder=CartMate` → Discord)으로 받는다 (웹훅 주소는 파일에 넣지 말 것).
-500 오류 이슈는 Sentry가 이메일로 따로 보낸다 (Sentry의 Discord · Slack 연동은 유료 플랜 전용).
+새 오류 이슈는 Sentry가 이메일 + Discord(같은 채널)로 보낸다. 단 Sentry의 Discord 연동은 유료(Team) 플랜 전용이라 **체험 기간(2026-11-30 무렵)까지만** 오고, 그 뒤에는 이메일만 온다 (Discord 알림이 끊겨도 안내가 없다).
 
 ## 5. 수집량 절약 (무료 한도 · 부하 테스트)
 
