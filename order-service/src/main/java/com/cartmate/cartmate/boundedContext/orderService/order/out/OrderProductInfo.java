@@ -8,6 +8,7 @@ public record OrderProductInfo(
         String optionName,
         long price,
         String imageUrl,
-        boolean purchasable
+        boolean purchasable,   // 판매 중 + 재고 삭제 안 됨 + 남은 수량 1개 이상
+        boolean onSale         // 판매 중 + 재고 삭제 안 됨 (남은 수량은 안 본다)
 ) {
 }

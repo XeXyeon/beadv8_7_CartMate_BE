@@ -184,7 +184,7 @@ class SharedGroupOrderPayUseCaseTest {
     @DisplayName("구매할 수 없는 상품이 있으면 차감하지 않고 재고 선점도 표시하지 않는다")
     void notPurchasableRejectedBeforeCharge() {
         useCase = useCase(ids -> ids.stream().distinct()
-                .map(id -> new OrderProductInfo(id, id, 1L, "상품", null, 1000L, null, !id.equals(5L)))
+                .map(id -> new OrderProductInfo(id, id, 1L, "상품", null, 1000L, null, !id.equals(5L), !id.equals(5L)))
                 .toList());
         SharedGroupOrder order = order(NOW);
         given(sharedGroupOrderRepository.findById(ORDER_ID)).willReturn(Optional.of(order));
@@ -238,7 +238,7 @@ class SharedGroupOrderPayUseCaseTest {
         useCase = useCase(ids -> {
             boolean onSale = calls.incrementAndGet() == 1;
             return ids.stream().distinct()
-                    .map(id -> new OrderProductInfo(id, id, 1L, "상품", null, 1000L, null, onSale))
+                    .map(id -> new OrderProductInfo(id, id, 1L, "상품", null, 1000L, null, onSale, onSale))
                     .toList();
         });
         SharedGroupOrder order = order(NOW);
@@ -300,7 +300,7 @@ class SharedGroupOrderPayUseCaseTest {
 
     private static List<OrderProductInfo> allOnSale(Collection<Long> inventoryIds) {
         return inventoryIds.stream().distinct()
-                .map(id -> new OrderProductInfo(id, id, 1L, "상품", null, 1000L, null, true))
+                .map(id -> new OrderProductInfo(id, id, 1L, "상품", null, 1000L, null, true, true))
                 .toList();
     }
 

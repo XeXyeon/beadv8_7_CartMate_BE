@@ -36,7 +36,7 @@ class HttpOrderProductClientTest {
                         "https://example.com/ball.png", 3L, true, true)));
 
         assertThat(productClient.findAllByInventoryIds(List.of(101L, 999L))).containsExactly(
-                new OrderProductInfo(101L, 10L, 7L, "축구공", "5호", 25000L, "https://example.com/ball.png", true));
+                new OrderProductInfo(101L, 10L, 7L, "축구공", "5호", 25000L, "https://example.com/ball.png", true, true));
     }
 
     @Test

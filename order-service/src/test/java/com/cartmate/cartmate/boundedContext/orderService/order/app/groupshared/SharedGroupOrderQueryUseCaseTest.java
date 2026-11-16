@@ -67,7 +67,7 @@ class SharedGroupOrderQueryUseCaseTest {
     void getDetail() {
         given(sharedGroupOrderRepository.findWithDetailsById(1L)).willReturn(Optional.of(sharedOrder(CREATOR, MEMBER, CLOSED_AT)));
         given(orderProductClient.findAllByInventoryIds(anyCollection()))
-                .willReturn(List.of(new OrderProductInfo(4L, 2L, 1L, "축구공", "5호", 25000, "ball.png", true)));
+                .willReturn(List.of(new OrderProductInfo(4L, 2L, 1L, "축구공", "5호", 25000, "ball.png", true, true)));
         given(orderMemberClient.findNicknames(Set.of(CREATOR, MEMBER))).willReturn(Map.of(CREATOR, "방장", MEMBER, "철수"));
 
         SharedGroupOrderDetailResponse response = queryUseCase.getDetail(MEMBER, 1L);
