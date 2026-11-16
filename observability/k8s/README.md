@@ -111,7 +111,9 @@ GRAFANA_URL=https://<스택>.grafana.net GRAFANA_TOKEN=<cartmate-setup 토큰> L
 알림 받는 곳 (화면에서 한 번만):
 
 1. 팀 Discord 알림 채널 → 채널 편집 → 연동 → 웹후크 → 새 웹후크 → URL 복사 (비밀 값, 파일 · 채팅에 남기지 않음)
-2. Alerting → Contact points → `discord-cartmate`, Integration **Discord**, Webhook URL 붙여 넣기 → Test → Save
+2. Alerting → Contact points → `discord-cartmate`, Integration **Discord**, Webhook URL 붙여 넣기
+   - Optional Discord settings → **Title** `{{ template "cartmate.discord.title" . }}`, **Message Content** `{{ template "cartmate.discord.message" . }}` (한국어 서식, `grafana-cloud/templates/cartmate-discord.tmpl`을 `apply.sh`가 올림)
+   - Test → Save
 3. Alerting → Notification policies → 하위 정책: `grafana_folder = CartMate` → `discord-cartmate`
 - Slack은 교육과정 공용 워크스페이스의 앱 개수 한도 때문에 못 씀
 - Sentry → Discord: Sentry Settings → Integrations → Discord → Add Installation(팀 서버 승인) → 알림 규칙(Alerts)에 Discord 액션 + 채널 ID. **유료(Team) 플랜 전용이라 체험 기간(2026-11-30 무렵)까지만 동작**, 그 뒤엔 이메일만
