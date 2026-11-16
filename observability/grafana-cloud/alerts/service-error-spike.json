@@ -1,0 +1,43 @@
+{
+  "uid": "cartmate-service-error-spike",
+  "title": "서비스 ERROR 급증",
+  "ruleGroup": "cartmate-business",
+  "folderUID": "__FOLDER_UID__",
+  "orgID": 1,
+  "condition": "C",
+  "noDataState": "OK",
+  "execErrState": "Error",
+  "for": "0s",
+  "labels": { "severity": "warning" },
+  "annotations": {
+    "summary": "{{ $labels.service }}에서 5분 동안 ERROR 로그가 {{ $values.B }}건 났습니다. 장애이거나 의존 서비스(DB · Redis · Kafka · 외부 API)가 끊겼을 수 있습니다.",
+    "description": "Loki: {service=\"{{ $labels.service }}\", level=\"ERROR\"} → 로그의 traceId로 Tempo 확인, Sentry 이슈도 확인"
+  },
+  "data": [
+    {
+      "refId": "A",
+      "relativeTimeRange": { "from": 300, "to": 0 },
+      "datasourceUid": "__LOKI_UID__",
+      "model": {
+        "refId": "A",
+        "queryType": "instant",
+        "expr": "sum by (service) (count_over_time({service=~\".+\", level=\"ERROR\"} [5m]))"
+      }
+    },
+    {
+      "refId": "B",
+      "datasourceUid": "__expr__",
+      "model": { "refId": "B", "type": "reduce", "expression": "A", "reducer": "last" }
+    },
+    {
+      "refId": "C",
+      "datasourceUid": "__expr__",
+      "model": {
+        "refId": "C",
+        "type": "threshold",
+        "expression": "B",
+        "conditions": [ { "evaluator": { "type": "gte", "params": [10] } } ]
+      }
+    }
+  ]
+}

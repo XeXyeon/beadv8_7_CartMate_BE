@@ -104,15 +104,16 @@ GRAFANA_URL=https://<스택>.grafana.net GRAFANA_TOKEN=<cartmate-setup 토큰> L
   bash observability/grafana-cloud/apply.sh
 ```
 
-- 폴더 CartMate · 대시보드 "CartMate 서비스 개요" · 알림 2개를 넣는다 (다시 실행해도 덮어쓰기)
-- Loki 데이터 소스 uid: Connections → Data sources → `grafanacloud-…-logs` 클릭 → 주소창 `/datasources/edit/<uid>`
+- 폴더 CartMate · 대시보드 "CartMate 서비스 개요" · 알림 3개를 넣는다 (다시 실행해도 덮어쓰기)
+- Loki 데이터 소스 uid는 보통 `grafanacloud-logs` (Connections → Data sources → `grafanacloud-…-logs` → 주소창 `/datasources/edit/<uid>`)
+- 로그의 traceId → Tempo 링크는 Cloud 기본 데이터 소스에 이미 있다 (Cloud 관리 데이터 소스라 수정 불가 · 불필요)
 
-그다음 화면에서 한 번만:
+알림 받는 곳 (화면에서 한 번만):
 
-1. **로그 → trace**: Loki 데이터 소스 → Derived fields 추가
-   - Name `traceId`, Regex `"traceId":"([0-9a-f]{32})"`, Internal link → Tempo 데이터 소스, Query `${__value.raw}`
-2. **trace → 로그**: Tempo 데이터 소스 → Trace to logs → Loki 데이터 소스, Use custom query, `{service=~".+"} |= "${__trace.traceId}"`
-3. **알림 받는 곳**: Alerting → Contact points (Slack 웹훅 등) → Notification policies에서 `severity=critical` 연결
+1. 팀 Discord 알림 채널 → 채널 편집 → 연동 → 웹후크 → 새 웹후크 → URL 복사 (비밀 값, 파일 · 채팅에 남기지 않음)
+2. Alerting → Contact points → `discord-cartmate`, Integration **Discord**, Webhook URL 붙여 넣기 → Test → Save
+3. Alerting → Notification policies → 하위 정책: `grafana_folder = CartMate` → `discord-cartmate`
+- Slack은 교육과정 공용 워크스페이스의 앱 개수 한도 때문에 못 씀. Sentry의 Discord · Slack 연동은 유료 플랜 전용 → Sentry는 이메일
 
 ## 6. 평시 / 부하 테스트 모드
 
