@@ -22,6 +22,7 @@ Thumbs.db
 db.properties
 log/
 *.log
+observability/logs/
 
 .env
 .env.*

@@ -1,0 +1,87 @@
+# 업무 이벤트 로그(event=...) 기반 알림 2개. Prometheus 없이 Loki 쿼리로 건다.
+#  알림 받는 곳: 로컬은 Grafana 화면(경보 목록)만. 운영은 연락처(Slack 등)를 따로 만든다 (README)
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: cartmate-business
+    folder: CartMate
+    interval: 1m
+    rules:
+      - uid: cartmate-payment-compensate-failed
+        title: 결제 보상(되돌리기) 실패
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: loki
+            model:
+              refId: A
+              queryType: instant
+              expr: 'sum(count_over_time({service=~".+"} | json | event=~"payment.compensate|payment.compensate.request" | result="FAILED" [5m]))'
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+        noDataState: OK          # 실패 로그가 없으면 정상
+        execErrState: Error
+        for: 0s
+        labels:
+          severity: critical
+        annotations:
+          summary: 결제 되돌리기가 실패했습니다. 돈이 어긋났을 수 있어 수동 확인이 필요합니다.
+          description: 'Loki: {service=~".+"} | json | event=~"payment.compensate.*" | result="FAILED" → traceId로 Tempo 확인'
+
+      - uid: cartmate-event-delivery-given-up
+        title: 이벤트 전달 포기 (Outbox · Inbox · DLT)
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: loki
+            model:
+              refId: A
+              queryType: instant
+              expr: 'sum(count_over_time({service=~".+"} | json | event=~"outbox.failed|inbox.failed|kafka.dlt" [5m]))'
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        labels:
+          severity: critical
+        annotations:
+          summary: 서비스 간 이벤트 전달을 포기했습니다 (재시도 끝). 받는 쪽 처리가 빠졌을 수 있습니다.
+          description: 'Loki: {service=~".+"} | json | event=~"outbox.failed|inbox.failed|kafka.dlt" → eventId · topic 확인'

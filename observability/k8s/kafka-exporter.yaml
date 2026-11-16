@@ -1,0 +1,51 @@
+# Kafka 컨슈머 lag 수집기 (서버 계획의 kafka-exporter 그대로, 32Mi)
+# Alloy 내장 Kafka exporter는 시작할 때 Kafka에 접속해 실패하면 Alloy 전체가 뜨지 않아 따로 둔다
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-exporter
+  labels:
+    app: kafka-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka-exporter
+  template:
+    metadata:
+      labels:
+        app: kafka-exporter
+    spec:
+      containers:
+        - name: kafka-exporter
+          image: danielqsj/kafka-exporter:v1.11.0  # 2026-10-23
+          args:
+            - --kafka.server=$(KAFKA_BOOTSTRAP)
+          env:
+            - name: KAFKA_BOOTSTRAP
+              valueFrom:
+                secretKeyRef:
+                  name: kafka-ui-auth
+                  key: KAFKA_BOOTSTRAP
+          ports:
+            - name: metrics
+              containerPort: 9308
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 32Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-exporter
+spec:
+  type: ClusterIP
+  selector:
+    app: kafka-exporter
+  ports:
+    - name: metrics
+      port: 9308
+      targetPort: 9308

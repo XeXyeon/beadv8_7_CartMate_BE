@@ -1,0 +1,79 @@
+# Kafka UI (서버1 상시): 로그인 + 읽기 전용 + 외부 노출 없음(ClusterIP, port-forward로만 접속)
+#   접속: kubectl -n monitoring port-forward svc/kafka-ui 8080:8080  →  http://localhost:8080
+#   실측(로컬, v1.5.0): limit 384Mi에서 평소 약 320MiB · 최고 334MiB, OOM 없음 (256Mi는 한도에 붙음)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-ui
+  labels:
+    app: kafka-ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka-ui
+  template:
+    metadata:
+      labels:
+        app: kafka-ui
+    spec:
+      # nodeSelector:
+      #   cartmate/role: app
+      containers:
+        - name: kafka-ui
+          image: ghcr.io/kafbat/kafka-ui:v1.5.0   # 2026-04-20
+          env:
+            - name: JAVA_OPTS
+              value: "-XX:+UseSerialGC -XX:MaxRAMPercentage=40 -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=48m -Xss512k -XX:TieredStopAtLevel=1"
+            - name: DYNAMIC_CONFIG_ENABLED
+              value: "false"
+            - name: KAFKA_CLUSTERS_0_NAME
+              value: cartmate
+            - name: KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS
+              valueFrom:
+                secretKeyRef:
+                  name: kafka-ui-auth
+                  key: KAFKA_BOOTSTRAP
+            # 읽기 전용: 토픽 삭제 · 메시지 쓰기 막힘. DLT 재전송이 필요할 때만 잠깐 false (README)
+            - name: KAFKA_CLUSTERS_0_READONLY
+              value: "true"
+            - name: AUTH_TYPE
+              value: LOGIN_FORM
+            - name: SPRING_SECURITY_USER_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: kafka-ui-auth
+                  key: USERNAME
+            - name: SPRING_SECURITY_USER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kafka-ui-auth
+                  key: PASSWORD
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 20m
+              memory: 256Mi
+            limits:
+              memory: 384Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-ui
+spec:
+  type: ClusterIP                                  # Ingress · NodePort 만들지 않음
+  selector:
+    app: kafka-ui
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
