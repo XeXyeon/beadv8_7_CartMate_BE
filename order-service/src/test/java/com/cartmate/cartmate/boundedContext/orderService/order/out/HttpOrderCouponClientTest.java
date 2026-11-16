@@ -34,7 +34,8 @@ class HttpOrderCouponClientTest {
     private static final Long ORDER_ID = 100L;
     private static final CouponOrderTarget TARGET = new CouponOrderTarget(50_000L,
             List.of(new CouponOrderTarget.SellerAmount(7L, 50_000L)));
-    private static final CouponQuote QUOTE = new CouponQuote(MEMBER_COUPON_ID, 10L, "전체 10%", 5_000L, true, null);
+    private static final CouponQuote QUOTE = new CouponQuote(MEMBER_COUPON_ID, 10L, "전체 10%", 5_000L, true, null,
+            "RATE", 10L, null, 0L);
 
     @Mock
     private InternalApiClient productServerApiClient;

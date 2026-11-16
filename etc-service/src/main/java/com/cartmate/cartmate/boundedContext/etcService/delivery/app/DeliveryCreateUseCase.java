@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -28,11 +29,20 @@ public class DeliveryCreateUseCase {
     public void create(DeliveryCreateCommand createCommand) {
         validatedCreate(createCommand);
 
-        if (!deliveryOrderStates.acceptCreation(
-                createCommand.orderId(), createCommand.purchaseType(), createCommand.sellerId())) {
+        if (!deliveryOrderStates.acceptCreation(createCommand.orderId(), createCommand.purchaseType())) {
             return;
         }
 
+        // 배송이 생기기 전에 취소된 상품은 빼고 만든다. 판매자 상품이 모두 취소됐으면 배송을 만들지 않는다.
+        Set<Long> memoed = deliveryOrderStates.memoedOrderItemIds(createCommand.orderId(), createCommand.purchaseType());
+        List<DeliveryCreateCommand.Item> items = createCommand.deliveryItem().stream()
+                .filter(item -> !memoed.contains(item.orderItemId()))
+                .toList();
+        if (items.isEmpty()) {
+            return;
+        }
+
+        // 해시는 원래 명령으로 계산한다. 메모 때문에 상품이 빠져도 같은 요청의 재전송과 비교가 같게 하려는 것이다.
         String requestHash = DeliveryRequestHasher.hash(createCommand);
 
         Optional<Delivery> existing = deliveryRepository.findByIdempotencyKey(createCommand.idempotencyKey());
@@ -62,7 +72,7 @@ public class DeliveryCreateUseCase {
 
         deliveryRepository.save(delivery);
 
-        for (DeliveryCreateCommand.Item item : createCommand.deliveryItem()) {
+        for (DeliveryCreateCommand.Item item : items) {
             DeliveryItem deliveryItem = DeliveryItem.create(
                     delivery,
                     item.orderItemId(), item.productName(), item.unitPrice(), item.quantity()

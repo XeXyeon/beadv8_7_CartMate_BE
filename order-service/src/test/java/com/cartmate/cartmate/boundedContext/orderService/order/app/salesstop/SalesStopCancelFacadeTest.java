@@ -2,7 +2,8 @@ package com.cartmate.cartmate.boundedContext.orderService.order.app.salesstop;
 
 import com.cartmate.cartmate.shared.delivery.DeliveryCancelReason;
 import com.cartmate.cartmate.boundedContext.orderService.order.app.groupshared.SharedGroupOrderFacade;
-import com.cartmate.cartmate.boundedContext.orderService.order.app.personal.OrderFacade;
+import com.cartmate.cartmate.boundedContext.orderService.order.app.itemcancel.ItemCancelService;
+import com.cartmate.cartmate.boundedContext.orderService.order.domain.itemcancel.CouponMode;
 import com.cartmate.cartmate.boundedContext.orderService.order.domain.salesstop.SalesStopCancelRequest;
 import com.cartmate.cartmate.boundedContext.orderService.order.domain.salesstop.SalesStopCancelRequestStatus;
 import com.cartmate.cartmate.boundedContext.orderService.order.out.salesstop.SalesStopCancelRequestRepository;
@@ -20,6 +21,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -40,11 +42,11 @@ class SalesStopCancelFacadeTest {
     private static final Duration RESEND_AFTER = Duration.ofMinutes(10);
 
     private final SalesStopCancelRequestRepository repository = mock(SalesStopCancelRequestRepository.class);
-    private final OrderFacade orderFacade = mock(OrderFacade.class);
+    private final ItemCancelService itemCancelService = mock(ItemCancelService.class);
     private final SharedGroupOrderFacade sharedGroupOrderFacade = mock(SharedGroupOrderFacade.class);
     private final DomainEventPublisher eventPublisher = mock(DomainEventPublisher.class);
     private final SalesStopCancelFacade facade =
-            new SalesStopCancelFacade(repository, orderFacade, sharedGroupOrderFacade, eventPublisher, CLOCK);
+            new SalesStopCancelFacade(repository, sharedGroupOrderFacade, itemCancelService, eventPublisher, CLOCK);
 
     private SalesStopCancelRequest request(PurchaseType purchaseType, SalesStopCancelRequestStatus status,
                                            LocalDateTime lastSentAt) {
@@ -69,14 +71,16 @@ class SalesStopCancelFacadeTest {
     }
 
     @Test
-    @DisplayName("처음 요청하는 판매자 몫이면 요청 장부에 넣고 배송 서버에 취소 요청을 보낸다")
-    void requestPublishesOnce() {
+    @DisplayName("처음 요청하는 판매자 몫이면 요청 장부에 넣고, 그 판매자의 아직 취소되지 않은 항목을 실어 배송 서버에 취소 요청을 보낸다")
+    void request_carriesSellersUncanceledItemIds() {
         when(repository.insertIfAbsent("INDIVIDUAL_GROUP", ORDER_ID, SELLER_ID, NOW)).thenReturn(1);
+        when(itemCancelService.findUncanceledItemIds(PurchaseType.INDIVIDUAL_GROUP, ORDER_ID, SELLER_ID))
+                .thenReturn(List.of(12L, 13L));
 
         facade.request(PurchaseType.INDIVIDUAL_GROUP, ORDER_ID, SELLER_ID);
 
-        verify(eventPublisher).publish(
-                new OrderSalesStopCancelRequestedEvent(PurchaseType.INDIVIDUAL_GROUP, ORDER_ID, SELLER_ID, NOW));
+        verify(eventPublisher).publish(new OrderSalesStopCancelRequestedEvent(
+                PurchaseType.INDIVIDUAL_GROUP, ORDER_ID, SELLER_ID, NOW, List.of(12L, 13L)));
     }
 
     @Test
@@ -96,7 +100,8 @@ class SalesStopCancelFacadeTest {
 
         facade.applyResult(result(PurchaseType.INDIVIDUAL_GROUP, SalesStopCancelResult.SELLER_CANCELED, null));
 
-        verify(orderFacade).cancelSellerItems(ORDER_ID, SELLER_ID, DeliveryCancelReason.SALES_STOPPED);
+        verify(itemCancelService).cancel(PurchaseType.INDIVIDUAL_GROUP, ORDER_ID, SELLER_ID, null,
+                DeliveryCancelReason.SALES_STOPPED, CouponMode.PROPORTIONAL);
         assertThat(request.getStatus()).isEqualTo(SalesStopCancelRequestStatus.CANCELED);
     }
 
@@ -108,7 +113,7 @@ class SalesStopCancelFacadeTest {
         facade.applyResult(result(PurchaseType.SHARED_GROUP, SalesStopCancelResult.WHOLE_CANCELED, null));
 
         verify(sharedGroupOrderFacade).cancelWholeBySalesStopResult(ORDER_ID);
-        verify(sharedGroupOrderFacade, never()).cancelSellerItems(anyLong(), anyLong(), any());
+        verifyNoInteractions(itemCancelService);
         assertThat(request.getStatus()).isEqualTo(SalesStopCancelRequestStatus.CANCELED);
     }
 
@@ -119,7 +124,8 @@ class SalesStopCancelFacadeTest {
 
         facade.applyResult(result(PurchaseType.SHARED_GROUP, SalesStopCancelResult.SELLER_CANCELED, null));
 
-        verify(sharedGroupOrderFacade).cancelSellerItems(ORDER_ID, SELLER_ID, DeliveryCancelReason.SALES_STOPPED);
+        verify(itemCancelService).cancel(PurchaseType.SHARED_GROUP, ORDER_ID, SELLER_ID, null,
+                DeliveryCancelReason.SALES_STOPPED, CouponMode.PROPORTIONAL);
     }
 
     @Test
@@ -129,7 +135,7 @@ class SalesStopCancelFacadeTest {
 
         facade.applyResult(result(PurchaseType.INDIVIDUAL_GROUP, SalesStopCancelResult.REJECTED, "409-DELIVERY_NOT_CANCELABLE"));
 
-        verifyNoInteractions(orderFacade, sharedGroupOrderFacade);
+        verifyNoInteractions(itemCancelService, sharedGroupOrderFacade);
         assertThat(request.getStatus()).isEqualTo(SalesStopCancelRequestStatus.REJECTED);
         assertThat(request.getRejectCode()).isEqualTo("409-DELIVERY_NOT_CANCELABLE");
     }
@@ -142,20 +148,22 @@ class SalesStopCancelFacadeTest {
 
         facade.applyResult(result(PurchaseType.INDIVIDUAL_GROUP, SalesStopCancelResult.SELLER_CANCELED, null));
 
-        verifyNoInteractions(orderFacade);
+        verifyNoInteractions(itemCancelService);
     }
 
     @Test
-    @DisplayName("마지막 전송 뒤 간격이 지났으면 처음 요청 시각 그대로 다시 보낸다")
+    @DisplayName("마지막 전송 뒤 간격이 지났으면 처음 요청 시각 그대로, 재발행 시점의 취소되지 않은 항목을 실어 다시 보낸다")
     void resendsWhenDue() {
         SalesStopCancelRequest request = request(PurchaseType.INDIVIDUAL_GROUP, SalesStopCancelRequestStatus.REQUESTED,
                 NOW.minus(RESEND_AFTER));
         when(repository.findByIdForUpdate(1L)).thenReturn(Optional.of(request));
+        when(itemCancelService.findUncanceledItemIds(PurchaseType.INDIVIDUAL_GROUP, ORDER_ID, SELLER_ID))
+                .thenReturn(List.of(13L));
 
         facade.resend(1L, RESEND_AFTER);
 
         verify(eventPublisher).publish(new OrderSalesStopCancelRequestedEvent(
-                PurchaseType.INDIVIDUAL_GROUP, ORDER_ID, SELLER_ID, NOW.minusHours(1)));
+                PurchaseType.INDIVIDUAL_GROUP, ORDER_ID, SELLER_ID, NOW.minusHours(1), List.of(13L)));
         assertThat(request.getLastSentAt()).isEqualTo(NOW);
     }
 

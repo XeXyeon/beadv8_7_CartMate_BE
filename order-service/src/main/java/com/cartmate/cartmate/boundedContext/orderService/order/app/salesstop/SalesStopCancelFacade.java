@@ -1,7 +1,8 @@
 package com.cartmate.cartmate.boundedContext.orderService.order.app.salesstop;
 
 import com.cartmate.cartmate.boundedContext.orderService.order.app.groupshared.SharedGroupOrderFacade;
-import com.cartmate.cartmate.boundedContext.orderService.order.app.personal.OrderFacade;
+import com.cartmate.cartmate.boundedContext.orderService.order.app.itemcancel.ItemCancelService;
+import com.cartmate.cartmate.boundedContext.orderService.order.domain.itemcancel.CouponMode;
 import com.cartmate.cartmate.boundedContext.orderService.order.domain.salesstop.SalesStopCancelRequest;
 import com.cartmate.cartmate.boundedContext.orderService.order.domain.salesstop.SalesStopCancelRequestStatus;
 import com.cartmate.cartmate.boundedContext.orderService.order.out.salesstop.SalesStopCancelRequestRepository;
@@ -31,8 +32,8 @@ import java.util.Optional;
 public class SalesStopCancelFacade {
 
     private final SalesStopCancelRequestRepository requestRepository;
-    private final OrderFacade orderFacade;
     private final SharedGroupOrderFacade sharedGroupOrderFacade;
+    private final ItemCancelService itemCancelService;
     private final DomainEventPublisher eventPublisher;
     private final Clock clock;
 
@@ -45,7 +46,8 @@ public class SalesStopCancelFacade {
             log.info("이미 요청한 판매글 내림 취소: purchaseType={}, orderId={}, sellerId={}", purchaseType, orderId, sellerId);
             return;
         }
-        eventPublisher.publish(new OrderSalesStopCancelRequestedEvent(purchaseType, orderId, sellerId, now));
+        eventPublisher.publish(new OrderSalesStopCancelRequestedEvent(purchaseType, orderId, sellerId, now,
+                itemCancelService.findUncanceledItemIds(purchaseType, orderId, sellerId)));
     }
 
     @Transactional
@@ -84,8 +86,11 @@ public class SalesStopCancelFacade {
                 .ifPresent(request -> {
                     log.warn("배송 서버 응답이 없어 판매글 내림 취소 요청 재발행: purchaseType={}, orderId={}, sellerId={}, firstRequestedAt={}",
                             request.getPurchaseType(), request.getOrderId(), request.getSellerId(), request.getRequestedAt());
+                    // 그 사이 판매자 사유 취소 등으로 빠진 항목이 있을 수 있어 재발행 시점의 남은 항목을 다시 싣는다
                     eventPublisher.publish(new OrderSalesStopCancelRequestedEvent(
-                            request.getPurchaseType(), request.getOrderId(), request.getSellerId(), request.getRequestedAt()));
+                            request.getPurchaseType(), request.getOrderId(), request.getSellerId(), request.getRequestedAt(),
+                            itemCancelService.findUncanceledItemIds(
+                                    request.getPurchaseType(), request.getOrderId(), request.getSellerId())));
                 });
     }
 
@@ -98,11 +103,9 @@ public class SalesStopCancelFacade {
         cancelSeller(event);
     }
 
+    // 판매자 사정이라 구매자 할인을 빼앗지 않도록 할인은 비율대로 나눈다
     private void cancelSeller(DeliverySalesStopCancelResultEvent event) {
-        if (event.purchaseType() == PurchaseType.SHARED_GROUP) {
-            sharedGroupOrderFacade.cancelSellerItems(event.orderId(), event.sellerId(), DeliveryCancelReason.SALES_STOPPED);
-            return;
-        }
-        orderFacade.cancelSellerItems(event.orderId(), event.sellerId(), DeliveryCancelReason.SALES_STOPPED);
+        itemCancelService.cancel(event.purchaseType(), event.orderId(), event.sellerId(), null,
+                DeliveryCancelReason.SALES_STOPPED, CouponMode.PROPORTIONAL);
     }
 }

@@ -182,7 +182,7 @@ final class AbuseSimulationScenario {
         long purchaseId = nextPurchaseId++;
         List<Long> ids = unpaid.stream().map(SimulatedMember::id).toList();
         return action(new SharedGroupOrderCanceledEvent(nextOrderId++, purchaseId,
-                SharedGroupOrderCancelReason.DEADLINE_EXPIRED, at(), ids, null), ids);
+                SharedGroupOrderCancelReason.DEADLINE_EXPIRED, at(), ids, null, List.of()), ids);
     }
 
     private SimulatedAction action(DomainEvent event, List<Long> actors) {

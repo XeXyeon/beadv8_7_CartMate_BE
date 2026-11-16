@@ -5,6 +5,7 @@ import com.cartmate.cartmate.shared.delivery.DeliveryCancelReason;
 import com.cartmate.cartmate.shared.delivery.PurchaseType;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 판매자가 자기 배송을 직접 취소했다(판매자 사유 취소). 배송 서버가 배송을 취소한 트랜잭션에서 발행하고,
@@ -15,7 +16,8 @@ public record DeliverySellerCanceledEvent(
         Long orderId,
         Long sellerId,
         DeliveryCancelReason cancelReason,
-        LocalDateTime canceledAt
+        LocalDateTime canceledAt,
+        List<Long> orderItemIds   // 이번에 새로 취소된 주문 항목
 ) implements DomainEvent {
 
     @Override

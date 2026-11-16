@@ -19,14 +19,19 @@ import com.cartmate.cartmate.boundedContext.orderService.order.out.OrderPaymentC
 
 import com.cartmate.cartmate.shared.order.OrderCancelReason;
 
-import com.cartmate.cartmate.boundedContext.orderService.order.domain.personal.BuyerCancelResult;
 import com.cartmate.cartmate.boundedContext.orderService.order.domain.personal.Order;
 import com.cartmate.cartmate.shared.order.OrderStatus;
 import com.cartmate.cartmate.boundedContext.orderService.order.out.personal.OrderRepository;
-import com.cartmate.cartmate.shared.order.event.OrderCancelRequestedEvent;
 import com.cartmate.cartmate.shared.order.event.OrderCanceledEvent;
 import com.cartmate.cartmate.global.event.DomainEvent;
 import com.cartmate.cartmate.global.event.DomainEventPublisher;
+import com.cartmate.cartmate.boundedContext.orderService.order.domain.itemcancel.CouponMode;
+import com.cartmate.cartmate.boundedContext.orderService.order.domain.itemcancel.OrderItemCancel;
+import com.cartmate.cartmate.boundedContext.orderService.order.domain.personal.OrderItem;
+import com.cartmate.cartmate.boundedContext.orderService.order.domain.personal.OrderCouponRule;
+import com.cartmate.cartmate.boundedContext.orderService.order.out.itemcancel.OrderItemCancelRepository;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -70,97 +75,15 @@ class OrderCancelUseCaseTest {
     @Mock
     private OrderCouponClient couponClient;
 
+    @Mock
+    private OrderItemCancelRepository cancelRepository;
+
     private OrderCancelUseCase cancelUseCase;
 
     @BeforeEach
     void setUp() {
         cancelUseCase = new OrderCancelUseCase(orderRepository, new OrderSupport(orderRepository), eventPublisher,
-                couponClient, paymentClient, CLOCK);
-    }
-
-    @Test
-    @DisplayName("결제한 주문을 주문자가 취소하면 바로 취소하지 않고 배송 서버에 취소 요청 이벤트를 발행한다")
-    void requestCancelOfPaidOrder() {
-        Order order = paidOrder();
-        given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(order));
-
-        BuyerCancelResult result = cancelUseCase.cancelByBuyer(BUYER, ORDER_ID);
-
-        assertThat(result).isEqualTo(BuyerCancelResult.REQUESTED);
-        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCEL_REQUESTED);
-        then(eventPublisher).should().publish(
-                new OrderCancelRequestedEvent(ORDER_ID, BUYER, 1, LocalDateTime.now(CLOCK)));
-        then(eventPublisher).should(never()).publish(any(OrderCanceledEvent.class));
-        then(couponClient).shouldHaveNoInteractions();
-    }
-
-    @Test
-    @DisplayName("배송 취소됨 결과를 받으면 취소를 확정하고 환불이 필요하다고 알리는 취소 이벤트를 발행한다")
-    void confirmCancelPublishesRefundEvent() {
-        Order order = paidOrder();
-        given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(order));
-        cancelUseCase.cancelByBuyer(BUYER, ORDER_ID);
-
-        cancelUseCase.confirmCancelByDelivery(ORDER_ID, 1);
-
-        ArgumentCaptor<OrderCanceledEvent> captor = ArgumentCaptor.forClass(OrderCanceledEvent.class);
-        then(eventPublisher).should().publish(captor.capture());
-        OrderCanceledEvent event = captor.getValue();
-        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELED);
-        assertThat(event.memberId()).isEqualTo(BUYER);
-        assertThat(event.cancelReason()).isEqualTo(OrderCancelReason.BUYER_CANCELED);
-        assertThat(event.paid()).isTrue();
-        assertThat(event.canceledAt()).isEqualTo(LocalDateTime.now(CLOCK));
-    }
-
-    @Test
-    @DisplayName("배송 취소 거절 결과를 받으면 결제 완료로 돌아가고 거절 코드를 남기며 환불 이벤트를 내지 않는다")
-    void rejectCancelRestoresPaid() {
-        Order order = paidOrder();
-        given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(order));
-        cancelUseCase.cancelByBuyer(BUYER, ORDER_ID);
-
-        cancelUseCase.rejectCancelByDelivery(ORDER_ID, 1, "409-DELIVERY_NOT_CANCELABLE");
-
-        assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
-        assertThat(order.getCancelRejectCode()).isEqualTo("409-DELIVERY_NOT_CANCELABLE");
-        then(eventPublisher).should(never()).publish(any(OrderCanceledEvent.class));
-    }
-
-    @Test
-    @DisplayName("요청 번호가 다른 늦은 결과는 반영하지 않는다")
-    void ignoreResultOfOtherRequest() {
-        Order order = paidOrder();
-        given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(order));
-        cancelUseCase.cancelByBuyer(BUYER, ORDER_ID);
-
-        cancelUseCase.confirmCancelByDelivery(ORDER_ID, 2);
-        cancelUseCase.rejectCancelByDelivery(ORDER_ID, 2, "409-DELIVERY_NOT_CANCELABLE");
-
-        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCEL_REQUESTED);
-        then(eventPublisher).should(never()).publish(any(OrderCanceledEvent.class));
-    }
-
-    @Test
-    @DisplayName("마지막 발송 뒤 정한 시간이 지난 취소 요청은 같은 번호와 처음 요청 시각으로 다시 발행한다")
-    void resendStaleCancelRequest() {
-        Order order = paidOrder();
-        LocalDateTime firstRequestedAt = LocalDateTime.now(CLOCK).minusMinutes(11);
-        order.cancelByBuyer(BUYER, firstRequestedAt);
-        given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(order));
-
-        cancelUseCase.resendCancelRequest(ORDER_ID, Duration.ofMinutes(10));
-        cancelUseCase.resendCancelRequest(ORDER_ID, Duration.ofMinutes(10));
-
-        then(eventPublisher).should().publish(new OrderCancelRequestedEvent(ORDER_ID, BUYER, 1, firstRequestedAt));
-        assertThat(order.getCancelLastSentAt()).isEqualTo(LocalDateTime.now(CLOCK));
-    }
-
-    private Order paidOrder() {
-        Order order = personalOrder(BUYER, ballLine(null, 1), LocalDateTime.now(CLOCK));
-        org.springframework.test.util.ReflectionTestUtils.setField(order, "id", ORDER_ID);
-        order.markPaid(1L, LocalDateTime.now(CLOCK));
-        return order;
+                couponClient, paymentClient, cancelRepository, CLOCK);
     }
 
     @Test
@@ -208,18 +131,6 @@ class OrderCancelUseCaseTest {
     }
 
     @Test
-    @DisplayName("결제 완료 주문 취소는 결제 서버에 남은 차감을 묻지 않는다 (환불은 payment가 취소 이벤트로)")
-    void paidCancelDoesNotLookUpCharge() {
-        Order order = order();
-        order.markPaid(1L, LocalDateTime.now(CLOCK));
-        given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(order));
-
-        cancelUseCase.cancelByBuyer(BUYER, ORDER_ID);
-
-        then(paymentClient).shouldHaveNoInteractions();
-    }
-
-    @Test
     @DisplayName("결제 서버를 조회할 수 없으면(503) 취소를 진행하지 않고 그 예외를 그대로 던진다 — 돈이 빠졌는지 모른 채 취소 금지")
     void propagateOutageOnCancel() {
         Order order = order();
@@ -244,54 +155,6 @@ class OrderCancelUseCaseTest {
     }
 
     @Test
-    @DisplayName("쿠폰을 쓴 결제 완료 주문은 취소 요청 때가 아니라 취소가 확정될 때 취소 이벤트를 낸 뒤 쿠폰을 복구 요청한다")
-    void confirmCancelOfCouponOrderRestoresCoupon() {
-        Order order = couponPaidOrder();
-        given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(order));
-
-        cancelUseCase.cancelByBuyer(BUYER, ORDER_ID);
-        then(couponClient).shouldHaveNoInteractions();
-
-        cancelUseCase.confirmCancelByDelivery(ORDER_ID, 1);
-
-        org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(eventPublisher, couponClient);
-        inOrder.verify(eventPublisher).publish(any(OrderCanceledEvent.class));
-        inOrder.verify(couponClient).restore(BUYER, 5L, ORDER_ID);
-        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELED);
-    }
-
-    @Test
-    @DisplayName("취소 확정 중 쿠폰 복구 요청에 상품 서버가 응답하지 않으면 예외를 그대로 던져 확정 전체를 롤백한다 (Inbox가 다시 시도)")
-    void confirmCancelFailsWhenCouponRestoreUnavailable() {
-        Order order = couponPaidOrder();
-        given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(order));
-        cancelUseCase.cancelByBuyer(BUYER, ORDER_ID);
-        org.mockito.BDDMockito.willThrow(new InternalServerUnavailableException("PRODUCT", "상품", new RuntimeException("timeout")))
-                .given(couponClient).restore(BUYER, 5L, ORDER_ID);
-
-        assertThatThrownBy(() -> cancelUseCase.confirmCancelByDelivery(ORDER_ID, 1))
-                .isInstanceOf(InternalServerUnavailableException.class);
-    }
-
-    @Test
-    @DisplayName("판매글 내림으로 한 판매자 몫이 먼저 환불된 주문을 취소 확정하면 남은 금액만 환불 금액으로 싣는다")
-    void confirmCancelCarriesRemainingRefundAmount() {
-        Order order = personalOrder("20261019-TWOSELLR", BUYER,
-                java.util.List.of(ballLine(10L, 1), productBLine(3L, 1)), LocalDateTime.now(CLOCK));
-        org.springframework.test.util.ReflectionTestUtils.setField(order, "id", ORDER_ID);
-        order.markPaid(1L, LocalDateTime.now(CLOCK));
-        given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(order));
-        order.cancelSellerItems(7L, DeliveryCancelReason.SALES_STOPPED, LocalDateTime.now(CLOCK));
-        cancelUseCase.cancelByBuyer(BUYER, ORDER_ID);
-
-        cancelUseCase.confirmCancelByDelivery(ORDER_ID, 1);
-
-        ArgumentCaptor<OrderCanceledEvent> captor = ArgumentCaptor.forClass(OrderCanceledEvent.class);
-        then(eventPublisher).should().publish(captor.capture());
-        assertThat(captor.getValue().refundAmount()).isEqualTo(25_000L);
-    }
-
-    @Test
     @DisplayName("결제 전 주문의 취소 이벤트에는 환불 금액이 없다")
     void unpaidCancelHasNoRefundAmount() {
         Order order = order();
@@ -306,26 +169,213 @@ class OrderCancelUseCaseTest {
         assertThat(captor.getValue().refundAmount()).isNull();
     }
 
-    private Order couponPaidOrder() {
-        Order order = personalOrder(BUYER, ballLine(null, 1), LocalDateTime.now(CLOCK));
+    @Test
+    @DisplayName("판매자 사유로 한 판매자 몫을 취소하면 환불 금액, 사유, 취소 건 ID를 실은 판매자 몫 취소 이벤트를 발행한다")
+    void cancelItemsPublishesReasonAndCancelId() {
+        Order order = personalOrder("20261019-TWOSELLR", BUYER,
+                List.of(ballLine(10L, 1), productBLine(3L, 1)), LocalDateTime.now(CLOCK));
         org.springframework.test.util.ReflectionTestUtils.setField(order, "id", ORDER_ID);
-        order.applyCoupon(5L, 1_000L, true, null);
+        order.markPaid(1L, LocalDateTime.now(CLOCK));
+        given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(order));
+        givenCancelIdsFromOne();
+
+        Optional<Long> cancelId = cancelUseCase.cancelItems(ORDER_ID, 7L, null,
+                DeliveryCancelReason.SELLER_OUT_OF_STOCK, CouponMode.PROPORTIONAL);
+
+        assertThat(cancelId).contains(1L);
+        then(eventPublisher).should().publish(new OrderSellerItemsCanceledEvent(
+                ORDER_ID, BUYER, 7L, 15_000L, LocalDateTime.now(CLOCK), DeliveryCancelReason.SELLER_OUT_OF_STOCK, 1L));
+    }
+
+    @Test
+    @DisplayName("같은 판매자의 상품을 두 번 나눠 취소하면 취소 건이 두 개 생기고, 환불 이벤트마다 자기 취소 건 ID를 싣는다")
+    void cancelItems_twiceForSameSeller_createsTwoBatchesWithOwnIds() {
+        Order order = appleBananaMilkOrder();
+        given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(order));
+        givenCancelIdsFromOne();
+        LocalDateTime now = LocalDateTime.now(CLOCK);
+
+        Optional<Long> first = cancelUseCase.cancelItems(ORDER_ID, 7L, List.of(APPLE),
+                DeliveryCancelReason.SELLER_OUT_OF_STOCK, CouponMode.PROPORTIONAL);
+        Optional<Long> second = cancelUseCase.cancelItems(ORDER_ID, 7L, List.of(PEAR),
+                DeliveryCancelReason.SELLER_OUT_OF_STOCK, CouponMode.PROPORTIONAL);
+
+        assertThat(first).contains(1L);
+        assertThat(second).contains(2L);
+        then(eventPublisher).should().publish(new OrderSellerItemsCanceledEvent(
+                ORDER_ID, BUYER, 7L, 10_000L, now, DeliveryCancelReason.SELLER_OUT_OF_STOCK, 1L));
+        then(eventPublisher).should().publish(new OrderSellerItemsCanceledEvent(
+                ORDER_ID, BUYER, 7L, 5_000L, now, DeliveryCancelReason.SELLER_OUT_OF_STOCK, 2L));
+        assertThat(order.getItems()).extracting(OrderItem::getCancelId).containsExactly(1L, 2L, null);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
+    }
+
+    @Test
+    @DisplayName("이미 취소된 항목을 다시 취소하면 취소 건도 이벤트도 만들지 않는다")
+    void cancelItems_sameItemsAgain_publishesNothing() {
+        Order order = appleBananaMilkOrder();
+        given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(order));
+        givenCancelIdsFromOne();
+        cancelUseCase.cancelItems(ORDER_ID, 7L, List.of(APPLE),
+                DeliveryCancelReason.SELLER_OUT_OF_STOCK, CouponMode.PROPORTIONAL);
+
+        Optional<Long> again = cancelUseCase.cancelItems(ORDER_ID, 7L, List.of(APPLE),
+                DeliveryCancelReason.SELLER_OUT_OF_STOCK, CouponMode.PROPORTIONAL);
+
+        assertThat(again).isEmpty();
+        then(cancelRepository).should(org.mockito.Mockito.times(1)).save(any());
+        then(eventPublisher).should(org.mockito.Mockito.times(1)).publish(any());
+    }
+
+    @Test
+    @DisplayName("결제 대기 주문은 고른 항목과 상관없이 바로 주문 전체를 취소하고 취소 이벤트를 낸다")
+    void startBuyerCancel_paymentPending_cancelsWholeOrder() {
+        Order order = order();
+        org.springframework.test.util.ReflectionTestUtils.setField(order, "id", ORDER_ID);
+        given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(order));
+        given(paymentClient.findPayment(PaymentOrderType.INDIVIDUAL_GROUP, ORDER_ID, BUYER)).willReturn(Optional.empty());
+
+        BuyerCancelStart start = cancelUseCase.startBuyerCancel(BUYER, ORDER_ID, null);
+
+        assertThat(start.canceledNow()).isTrue();
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELED);
+        assertThat(order.getCancelReason()).isEqualTo(OrderCancelReason.BUYER_CANCELED);
+        then(eventPublisher).should().publish(any(OrderCanceledEvent.class));
+    }
+
+    @Test
+    @DisplayName("결제 완료 주문은 주문을 바꾸지 않고, 고른 항목과 그 판매자를 배송 서버에 물어볼 목록으로 돌려준다")
+    void startBuyerCancel_paid_returnsTargetsWithoutChangingOrder() {
+        Order order = appleBananaMilkOrder();
+        given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(order));
+
+        BuyerCancelStart start = cancelUseCase.startBuyerCancel(BUYER, ORDER_ID, List.of(PEAR, MILK));
+
+        assertThat(start.canceledNow()).isFalse();
+        assertThat(start.targets()).containsExactly(
+                new com.cartmate.cartmate.boundedContext.orderService.order.domain.buyercancel.BuyerCancelRequest.Target(PEAR, 7L),
+                new com.cartmate.cartmate.boundedContext.orderService.order.domain.buyercancel.BuyerCancelRequest.Target(MILK, 8L));
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
+        assertThat(order.getItems()).noneMatch(OrderItem::isCanceled);
+        then(eventPublisher).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("판매자 탓 일부 취소 뒤 구매자가 나머지를 취소하면 쿠폰을 한 번 돌려주고, 같은 취소가 다시 와도 또 돌려주지 않는다")
+    void cancelAllInSteps_returnsCouponOnce() {
+        Order order = couponAppleBananaMilkOrder(OrderCouponRule.of("FIXED", 1_000L, null, 0L));
+        given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(order));
+        givenCancelIdsFromOne();
+
+        cancelUseCase.cancelItems(ORDER_ID, 7L, null, DeliveryCancelReason.SELLER_OUT_OF_STOCK, CouponMode.PROPORTIONAL);
+        then(couponClient).shouldHaveNoInteractions();
+        cancelUseCase.cancelItems(ORDER_ID, 8L, List.of(MILK), DeliveryCancelReason.BUYER_CANCELED, CouponMode.RECALCULATE);
+        cancelUseCase.cancelItems(ORDER_ID, 8L, List.of(MILK), DeliveryCancelReason.BUYER_CANCELED, CouponMode.RECALCULATE);
+
+        then(couponClient).should(org.mockito.Mockito.times(1)).restore(BUYER, 5L, ORDER_ID);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELED);
+        assertThat(order.isCouponReturned()).isTrue();
+    }
+
+    @Test
+    @DisplayName("구매자 일부 취소의 환불이 0원이면 항목만 취소하고 취소 건도 환불 이벤트도 만들지 않는다")
+    void cancelItems_refundZero_publishesNothing() {
+        Order order = personalOrder("20261019-ZEROREFU", BUYER, List.of(
+                new Order.OrderLine(10L, 11L, 7L, "상품A", null, 10_000L, 1),
+                new Order.OrderLine(30L, 31L, 8L, "상품B", null, 1_000L, 1)), LocalDateTime.now(CLOCK));
+        org.springframework.test.util.ReflectionTestUtils.setField(order, "id", ORDER_ID);
+        org.springframework.test.util.ReflectionTestUtils.setField(order.getItems().get(1), "id", PEAR);
+        order.applyCoupon(5L, 3_000L, true, null, OrderCouponRule.of("FIXED", 3_000L, null, 11_000L));
+        order.markPaid(1L, LocalDateTime.now(CLOCK));
+        given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(order));
+
+        Optional<Long> cancelId = cancelUseCase.cancelItems(ORDER_ID, 8L, List.of(PEAR),
+                DeliveryCancelReason.BUYER_CANCELED, CouponMode.RECALCULATE);
+
+        assertThat(cancelId).isEmpty();
+        assertThat(order.getItems().get(1).isCanceled()).isTrue();
+        then(cancelRepository).shouldHaveNoInteractions();
+        then(eventPublisher).shouldHaveNoInteractions();
+        then(couponClient).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("구매자가 고른 상품을 빼면 쿠폰 최소 금액이 깨져 오히려 더 내야 하면 취소 요청을 받지 않는다")
+    void startBuyerCancel_underpaid_throws() {
+        Order order = personalOrder("20261019-UNDERPAI", BUYER, List.of(
+                new Order.OrderLine(10L, 11L, 7L, "상품A", null, 10_000L, 1),
+                new Order.OrderLine(30L, 31L, 8L, "상품B", null, 1_000L, 1)), LocalDateTime.now(CLOCK));
+        org.springframework.test.util.ReflectionTestUtils.setField(order, "id", ORDER_ID);
+        org.springframework.test.util.ReflectionTestUtils.setField(order.getItems().get(0), "id", APPLE);
+        org.springframework.test.util.ReflectionTestUtils.setField(order.getItems().get(1), "id", PEAR);
+        order.applyCoupon(5L, 3_000L, true, null, OrderCouponRule.of("FIXED", 3_000L, null, 11_000L));
+        order.markPaid(1L, LocalDateTime.now(CLOCK));
+        given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(order));
+
+        assertThatThrownBy(() -> cancelUseCase.startBuyerCancel(BUYER, ORDER_ID, List.of(PEAR)))
+                .isInstanceOf(ServiceException.class)
+                .hasMessageContaining(OrderErrorCode.ORDER_CANCEL_COUPON_MINIMUM.getMsg());
+        assertThat(order.getItems()).noneMatch(OrderItem::isCanceled);
+    }
+
+    @Test
+    @DisplayName("구매자 취소 결과로 여러 판매자 상품을 취소하면 판매자마다 자기 취소 건 ID로 환불 이벤트를 하나씩 낸다")
+    void cancelItemsByBuyer_publishesEventPerSellerWithOwnCancelId() {
+        Order order = appleBananaMilkOrder();
+        given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(order));
+        givenCancelIdsFromOne();
+        java.util.Map<Long, List<Long>> bySeller = new java.util.LinkedHashMap<>();
+        bySeller.put(7L, List.of(APPLE));
+        bySeller.put(8L, List.of(MILK));
+
+        List<Long> cancelIds = cancelUseCase.cancelItemsByBuyer(ORDER_ID, bySeller);
+
+        LocalDateTime now = LocalDateTime.now(CLOCK);
+        assertThat(cancelIds).containsExactly(1L, 2L);
+        then(eventPublisher).should().publish(new OrderSellerItemsCanceledEvent(
+                ORDER_ID, BUYER, 7L, 10_000L, now, DeliveryCancelReason.BUYER_CANCELED, 1L));
+        then(eventPublisher).should().publish(new OrderSellerItemsCanceledEvent(
+                ORDER_ID, BUYER, 8L, 3_000L, now, DeliveryCancelReason.BUYER_CANCELED, 2L));
+        assertThat(order.getItems()).extracting(OrderItem::getCancelId).containsExactly(1L, null, 2L);
+    }
+
+    private Order couponAppleBananaMilkOrder(OrderCouponRule rule) {
+        Order order = personalOrder("20261019-COUPONAB", BUYER, List.of(
+                new Order.OrderLine(10L, 11L, 7L, "사과", null, 10_000L, 1),
+                new Order.OrderLine(20L, 21L, 7L, "배", null, 5_000L, 1),
+                new Order.OrderLine(30L, 31L, 8L, "우유", null, 3_000L, 1)), LocalDateTime.now(CLOCK));
+        org.springframework.test.util.ReflectionTestUtils.setField(order, "id", ORDER_ID);
+        org.springframework.test.util.ReflectionTestUtils.setField(order.getItems().get(0), "id", APPLE);
+        org.springframework.test.util.ReflectionTestUtils.setField(order.getItems().get(1), "id", PEAR);
+        org.springframework.test.util.ReflectionTestUtils.setField(order.getItems().get(2), "id", MILK);
+        order.applyCoupon(5L, 1_000L, true, null, rule);
         order.markPaid(1L, LocalDateTime.now(CLOCK));
         return order;
     }
 
-    @Test
-    @DisplayName("판매자 사유로 한 판매자 몫을 취소하면 환불 금액과 사유를 실은 판매자 몫 취소 이벤트를 발행한다")
-    void cancelSellerItemsPublishesReason() {
-        Order order = personalOrder("20261019-TWOSELLR", BUYER,
-                java.util.List.of(ballLine(10L, 1), productBLine(3L, 1)), LocalDateTime.now(CLOCK));
+    private static final Long APPLE = 501L;
+    private static final Long PEAR = 502L;
+    private static final Long MILK = 503L;
+
+    private Order appleBananaMilkOrder() {
+        Order order = personalOrder("20261019-APPLEPEA", BUYER, List.of(
+                new Order.OrderLine(10L, 11L, 7L, "사과", null, 10_000L, 1),
+                new Order.OrderLine(20L, 21L, 7L, "배", null, 5_000L, 1),
+                new Order.OrderLine(30L, 31L, 8L, "우유", null, 3_000L, 1)), LocalDateTime.now(CLOCK));
         org.springframework.test.util.ReflectionTestUtils.setField(order, "id", ORDER_ID);
+        org.springframework.test.util.ReflectionTestUtils.setField(order.getItems().get(0), "id", APPLE);
+        org.springframework.test.util.ReflectionTestUtils.setField(order.getItems().get(1), "id", PEAR);
+        org.springframework.test.util.ReflectionTestUtils.setField(order.getItems().get(2), "id", MILK);
         order.markPaid(1L, LocalDateTime.now(CLOCK));
-        given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(order));
+        return order;
+    }
 
-        cancelUseCase.cancelSellerItems(ORDER_ID, 7L, DeliveryCancelReason.SELLER_OUT_OF_STOCK);
-
-        then(eventPublisher).should().publish(new OrderSellerItemsCanceledEvent(
-                ORDER_ID, BUYER, 7L, 15_000L, LocalDateTime.now(CLOCK), DeliveryCancelReason.SELLER_OUT_OF_STOCK));
+    private void givenCancelIdsFromOne() {
+        AtomicLong seq = new AtomicLong();
+        given(cancelRepository.save(any(OrderItemCancel.class))).willAnswer(invocation -> {
+            OrderItemCancel cancel = invocation.getArgument(0);
+            org.springframework.test.util.ReflectionTestUtils.setField(cancel, "id", seq.incrementAndGet());
+            return cancel;
+        });
     }
 }

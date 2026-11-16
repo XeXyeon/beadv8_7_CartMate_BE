@@ -24,10 +24,6 @@ public interface OrderRepository extends JpaRepository<Order, Long>, OrderReposi
     List<Long> findIdsByStatusInAndProductIds(@Param("statuses") Collection<OrderStatus> statuses,
                                               @Param("productIds") Collection<Long> productIds);
 
-    @Query("select o.id from Order o where o.status = :status and o.cancelLastSentAt <= :before order by o.id")
-    List<Long> findIdsByStatusAndCancelLastSentAtBefore(@Param("status") OrderStatus status,
-                                                        @Param("before") LocalDateTime before);
-
     @Query("select o.id from Order o where o.individualGroupPurchaseId = :purchaseId and o.status = :status order by o.id")
     List<Long> findIdsByIndividualGroupPurchaseIdAndStatus(@Param("purchaseId") Long individualGroupPurchaseId,
                                                           @Param("status") OrderStatus status);

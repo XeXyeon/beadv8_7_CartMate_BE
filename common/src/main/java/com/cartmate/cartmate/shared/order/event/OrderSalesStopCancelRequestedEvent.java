@@ -4,6 +4,7 @@ import com.cartmate.cartmate.global.event.DomainEvent;
 import com.cartmate.cartmate.shared.delivery.PurchaseType;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 판매글 내림으로 인한 취소를 배송 서버에 요청할 때 order가 발행한다.
@@ -16,7 +17,8 @@ public record OrderSalesStopCancelRequestedEvent(
         PurchaseType purchaseType,
         Long orderId,
         Long sellerId,
-        LocalDateTime requestedAt
+        LocalDateTime requestedAt,
+        List<Long> orderItemIds   // 그 판매자의 아직 취소되지 않은 주문 항목 전부
 ) implements DomainEvent {
 
     @Override

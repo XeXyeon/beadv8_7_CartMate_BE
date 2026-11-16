@@ -248,27 +248,6 @@ class OrderPaymentUseCaseTest {
     }
 
     @Test
-    @DisplayName("취소 처리 중인 주문에 같은 결제로 결제가 다시 오면 반영된 것으로 보고 되돌리지 않으며 상태 · 이벤트도 그대로다 (ISS-36)")
-    void cancelRequestedOrderKeepsPaymentOnRetry() {
-        OrderPaymentClient paymentClient = org.mockito.Mockito.mock(OrderPaymentClient.class);
-        OrderPaymentUseCase useCase = new OrderPaymentUseCase(orderRepository, new OrderSupport(orderRepository),
-                eventPublisher, inventoryIds -> List.of(), replicaUseCase, paymentClient,
-                org.mockito.Mockito.mock(com.cartmate.cartmate.boundedContext.orderService.order.out.OrderCouponClient.class), inventoryClient);
-        Order order = personalOrder(BUYER, ballLine(9L, 2), CREATED_AT);
-        order.markPaid(PAYMENT_ID, CREATED_AT.plusMinutes(1));
-        order.cancelByBuyer(BUYER, CREATED_AT.plusMinutes(2));
-        given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(order));
-        given(paymentClient.findPayment(any(), any(), any())).willReturn(Optional.of(new PaymentResult(PAYMENT_ID, ORDER_ID,
-                50000L, 0L, 50000L, "INDIVIDUAL_GROUP", "PAID", CREATED_AT.plusMinutes(1), null)));
-
-        useCase.pay(ORDER_ID, BUYER, CREATED_AT.plusMinutes(3));
-
-        then(paymentClient).should(never()).compensateCharge(any(), any(), any());
-        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCEL_REQUESTED);
-        then(eventPublisher).should(never()).publish(any());
-    }
-
-    @Test
     @DisplayName("차감에 응답이 없고 재조회로도 결제를 확인하지 못하면 주문을 결제 대기로 두고 되돌리기 · 이벤트 없이 503을 그대로 던진다")
     void chargeUnavailableKeepsOrderPending() {
         assertChargeFailureLeavesOrderPending(new InternalServerUnavailableException("PAYMENT", "결제", null));
@@ -472,7 +451,25 @@ class OrderPaymentUseCaseTest {
         then(f.couponClient).should(never()).restore(any(), any(), any());
     }
 
-    private static final CouponQuote QUOTE = new CouponQuote(5L, 10L, "전체 10%", 5_000L, true, null);
+    private static final CouponQuote QUOTE = new CouponQuote(5L, 10L, "전체 10%", 5_000L, true, null, "RATE", 10L, null, 0L);
+
+    @Test
+    @DisplayName("쿠폰 결제 때 할인 방식·값·최대 할인·최소 금액을 주문에 함께 저장한다 (일부 취소 때 다시 계산하려고)")
+    void payWithCouponStoresCouponRule() {
+        CouponFixture f = couponFixture();
+        CouponQuote quote = new CouponQuote(5L, 10L, "전체 10%", 5_000L, true, null, "RATE", 10L, 7_000L, 30_000L);
+        given(f.couponClient.quote(any(), any(), any(), any())).willReturn(quote);
+        given(f.couponClient.use(any(), any(), any(), any())).willReturn(quote);
+        given(f.paymentClient.charge(any(), any(), any(), org.mockito.ArgumentMatchers.eq(45_000L))).willReturn(charged(45_000L));
+
+        f.useCase.pay(ORDER_ID, BUYER, 5L, CREATED_AT.plusMinutes(1));
+
+        assertThat(f.order.getCouponRule().getDiscountType())
+                .isEqualTo(com.cartmate.cartmate.boundedContext.orderService.order.domain.personal.OrderCouponRule.DiscountType.RATE);
+        assertThat(f.order.getCouponRule().getDiscountValue()).isEqualTo(10L);
+        assertThat(f.order.getCouponRule().getMaxDiscount()).isEqualTo(7_000L);
+        assertThat(f.order.getCouponRule().getMinOrderAmount()).isEqualTo(30_000L);
+    }
 
     private record CouponFixture(OrderPaymentUseCase useCase, OrderPaymentClient paymentClient,
                                  com.cartmate.cartmate.boundedContext.orderService.order.out.OrderCouponClient couponClient,

@@ -1,6 +1,7 @@
 package com.cartmate.cartmate.boundedContext.orderService.order.app.personal;
 
 import com.cartmate.cartmate.shared.coupon.dto.CouponQuote;
+import com.cartmate.cartmate.boundedContext.orderService.order.domain.personal.OrderCouponRule;
 import com.cartmate.cartmate.shared.coupon.dto.CouponOption;
 import com.cartmate.cartmate.boundedContext.orderService.order.out.OrderCouponClient;
 import com.cartmate.cartmate.boundedContext.orderService.order.out.OrderInventoryClient;
@@ -73,7 +74,9 @@ class OrderPaymentUseCase {
         }
         if (memberCouponId != null && order.isPaymentPending()) {
             CouponQuote quote = orderCouponClient.use(memberId, memberCouponId, orderId, order.couponTarget());
-            order.applyCoupon(quote.memberCouponId(), quote.discountAmount(), quote.platformBurden(), quote.sellerId());
+            order.applyCoupon(quote.memberCouponId(), quote.discountAmount(), quote.platformBurden(), quote.sellerId(),
+                    OrderCouponRule.of(quote.discountType(), quote.discountValue(),
+                            quote.maxDiscountAmount(), quote.minOrderAmount()));
         }
         if (paidAmount != null && order.isPaymentPending() && order.payAmount() != paidAmount) {
             throw new ServiceException(OrderErrorCode.ORDER_PAYMENT_AMOUNT_MISMATCH);

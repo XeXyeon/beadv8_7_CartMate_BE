@@ -93,7 +93,8 @@ public class DeliveryController {
                 deliveryRetryService.shipDelivery(deliveryId, user.memberId()));
     }
 
-    // 판매자가 품절 같은 사정으로 자기 배송을 취소한다. 발송 전(배송요청·배송준비중)까지만 되고 사유는 나중에 고칠 수 없다.
+    // 판매자가 품절 같은 사정으로 자기 배송의 상품을 골라 취소한다. 전부 고르면 배송이 취소된다.
+    // 발송 전(배송요청·배송준비중)까지만 되고 사유는 나중에 고칠 수 없다.
     @PatchMapping("/{deliveryId}/cancel")
     public RsData<DeliveryResponse> cancelDelivery(
             @AuthenticationPrincipal SecurityUser user,
@@ -101,7 +102,8 @@ public class DeliveryController {
             @Valid @RequestBody DeliverySellerCancelRequest request
     ) {
         return new RsData<>("200-1", "배송이 취소되었습니다.",
-                deliveryRetryService.cancelDeliveryBySeller(deliveryId, user.memberId(), request.cancelReason()));
+                deliveryRetryService.cancelDeliveryBySeller(
+                        deliveryId, user.memberId(), request.cancelReason(), request.deliveryItemIds()));
     }
 
     // 수령인(구매자) 본인이 배송완료된 배송을 구매확정한다.

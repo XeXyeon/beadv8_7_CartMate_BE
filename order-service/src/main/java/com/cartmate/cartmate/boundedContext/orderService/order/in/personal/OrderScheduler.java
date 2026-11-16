@@ -6,6 +6,7 @@ import com.cartmate.cartmate.global.exception.ServiceException;
 
 import com.cartmate.cartmate.global.http.InternalApiClient.InternalServerUnavailableException;
 
+import com.cartmate.cartmate.boundedContext.orderService.order.app.buyercancel.BuyerCancelFacade;
 import com.cartmate.cartmate.boundedContext.orderService.order.app.personal.OrderFacade;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,6 +31,7 @@ public class OrderScheduler {
     private static final String LOCK_AT_LEAST = "PT5S";
 
     private final OrderFacade orderFacade;
+    private final BuyerCancelFacade buyerCancelFacade;
     private final Clock clock;
 
     @Value("${custom.order.cancel-resend-after:PT10M}")
@@ -45,8 +47,8 @@ public class OrderScheduler {
     @Scheduled(fixedDelay = INTERVAL_MILLIS, initialDelay = INTERVAL_MILLIS)
     @SchedulerLock(name = "order.resendCancelRequest", lockAtMostFor = LOCK_AT_MOST, lockAtLeastFor = LOCK_AT_LEAST)
     public void resendCancelRequests() {
-        List<Long> ids = orderFacade.findIdsToResendCancelRequest(LocalDateTime.now(clock).minus(cancelResendAfter));
-        processEach(ids, id -> orderFacade.resendCancelRequest(id, cancelResendAfter), "취소 요청 재발행");
+        List<Long> ids = buyerCancelFacade.findIdsToResend(LocalDateTime.now(clock).minus(cancelResendAfter));
+        processEach(ids, id -> buyerCancelFacade.resend(id, cancelResendAfter), "구매자 취소 요청 재발행");
     }
 
     private void processEach(List<Long> ids, Consumer<Long> action, String taskName) {
