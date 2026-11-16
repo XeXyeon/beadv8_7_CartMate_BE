@@ -1,19 +1,23 @@
 package com.cartmate.cartmate.boundedContext.etcService.delivery.app;
 
 import com.cartmate.cartmate.boundedContext.etcService.delivery.domain.DeliveryOrderState;
+import com.cartmate.cartmate.boundedContext.etcService.delivery.out.DeliveryItemCancelMemoRepository;
 import com.cartmate.cartmate.boundedContext.etcService.delivery.out.DeliveryOrderStateRepository;
 import com.cartmate.cartmate.boundedContext.etcService.delivery.out.DeliverySellerCancelRepository;
 import com.cartmate.cartmate.shared.delivery.PurchaseType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class DeliveryOrderStatesTest {
@@ -23,8 +27,10 @@ class DeliveryOrderStatesTest {
 
     private final DeliveryOrderStateRepository stateRepository = mock(DeliveryOrderStateRepository.class);
     private final DeliverySellerCancelRepository sellerCancelRepository = mock(DeliverySellerCancelRepository.class);
+    private final DeliveryItemCancelMemoRepository itemCancelMemoRepository = mock(DeliveryItemCancelMemoRepository.class);
     private final DeliveryOrderState state = mock(DeliveryOrderState.class);
-    private final DeliveryOrderStates states = new DeliveryOrderStates(stateRepository, sellerCancelRepository);
+    private final DeliveryOrderStates states =
+            new DeliveryOrderStates(stateRepository, sellerCancelRepository, itemCancelMemoRepository);
 
     private void givenOrderState(boolean canceled) {
         when(stateRepository.insertIfAbsent(anyLong(), anyString(), anyString(), any())).thenReturn(0);
@@ -56,5 +62,14 @@ class DeliveryOrderStatesTest {
         givenOrderState(true);
 
         assertThat(states.acceptCreation(ORDER_ID, PurchaseType.INDIVIDUAL_GROUP, SELLER_ID)).isFalse();
+    }
+
+    @Test
+    @DisplayName("취소된 주문 항목마다 메모를 남긴다")
+    void marksEachItemCanceled() {
+        states.markItemsCanceled(ORDER_ID, PurchaseType.SHARED_GROUP, List.of(11L, 12L));
+
+        verify(itemCancelMemoRepository).insertIfAbsent(eq("SHARED_GROUP"), eq(ORDER_ID), eq(11L), any());
+        verify(itemCancelMemoRepository).insertIfAbsent(eq("SHARED_GROUP"), eq(ORDER_ID), eq(12L), any());
     }
 }
