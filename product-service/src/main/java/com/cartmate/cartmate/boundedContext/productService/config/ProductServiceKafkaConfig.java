@@ -11,7 +11,9 @@ import com.cartmate.cartmate.shared.order.event.OrderCanceledEvent;
 import com.cartmate.cartmate.shared.order.event.OrderCreatedEvent;
 import com.cartmate.cartmate.shared.order.event.OrderPaidEvent;
 import com.cartmate.cartmate.shared.order.event.OrderSellerItemsCanceledEvent;
+import com.cartmate.cartmate.shared.order.event.SharedGroupOrderCanceledEvent;
 import com.cartmate.cartmate.shared.order.event.SharedGroupOrderConfirmedEvent;
+import com.cartmate.cartmate.shared.order.event.SharedGroupOrderSellerItemsCanceledEvent;
 import com.cartmate.cartmate.shared.wallet.event.PaybackDepositFailedEvent;
 import com.cartmate.cartmate.shared.wallet.event.PaybackDepositedEvent;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -62,10 +64,22 @@ public class ProductServiceKafkaConfig {
         return binding(DeliveryConfirmedEvent.class);
     }
 
-    // 공동 주문 확정 → 리뷰 자격용 구매 기록 (SalesPostEventListener)
+    // 공동 주문 확정 → 재고 판매 확정 (ProductEventListener), 리뷰 자격용 구매 기록 (SalesPostEventListener)
     @Bean
     public InboundEventBinding sharedGroupOrderConfirmedBinding() {
         return binding(SharedGroupOrderConfirmedEvent.class);
+    }
+
+    // 공동 주문 취소 → 선점 해제 · 재고 복구 (ProductEventListener)
+    @Bean
+    public InboundEventBinding sharedGroupOrderCanceledBinding() {
+        return binding(SharedGroupOrderCanceledEvent.class);
+    }
+
+    // 확정된 공동 주문의 판매자 몫 취소 → 그 판매자 재고 복구 (ProductEventListener)
+    @Bean
+    public InboundEventBinding sharedGroupOrderSellerItemsCanceledBinding() {
+        return binding(SharedGroupOrderSellerItemsCanceledEvent.class);
     }
 
     @Bean

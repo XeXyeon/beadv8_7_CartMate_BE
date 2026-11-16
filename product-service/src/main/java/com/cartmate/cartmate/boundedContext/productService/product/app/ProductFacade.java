@@ -179,6 +179,11 @@ public class ProductFacade {
         inventoryReservationUseCase.cancelSeller(orderId, sellerId);
     }
 
+    // 공동 주문처럼 주문 종류를 아는 판매자 몫 취소
+    public void cancelSellerInventories(OrderType orderType, Long orderId, Long sellerId) {
+        inventoryReservationUseCase.cancelSeller(orderType, orderId, sellerId);
+    }
+
     @Transactional(readOnly = true)
     public RsData<List<SelectProductResponse>> selectProductsByPost(Long postId) {
         return new RsData<>(

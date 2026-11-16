@@ -4,7 +4,11 @@ import com.cartmate.cartmate.boundedContext.productService.product.app.ProductFa
 import com.cartmate.cartmate.global.event.OutboxMessageRelayed;
 import com.cartmate.cartmate.shared.order.event.OrderCanceledEvent;
 import com.cartmate.cartmate.shared.order.event.OrderPaidEvent;
+import com.cartmate.cartmate.shared.order.OrderType;
 import com.cartmate.cartmate.shared.order.event.OrderSellerItemsCanceledEvent;
+import com.cartmate.cartmate.shared.order.event.SharedGroupOrderCanceledEvent;
+import com.cartmate.cartmate.shared.order.event.SharedGroupOrderConfirmedEvent;
+import com.cartmate.cartmate.shared.order.event.SharedGroupOrderSellerItemsCanceledEvent;
 import com.cartmate.cartmate.shared.post.event.SalesPostDeletedEvent;
 import com.cartmate.cartmate.shared.post.event.SalesPostRegisterFailedEvent;
 import lombok.RequiredArgsConstructor;
@@ -46,5 +50,27 @@ public class ProductEventListener {
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT, fallbackExecution = true)
     public void handle(OrderSellerItemsCanceledEvent event) {
         productFacade.cancelSellerInventories(event.orderId(), event.sellerId());
+    }
+
+    // ===== 공동 주문(공동물품 공동구매) → 재고. 선점 기록의 주문 종류는 SHARED_GROUP =====
+    // 공동 주문 id는 개인 주문 id와 겹칠 수 있어 반드시 주문 종류를 함께 넘긴다.
+    // 선점 기록이 없으면(이 처리가 생기기 전에 만들어진 공동 주문 등) 아무것도 하지 않는다
+
+    // 마지막 분담금 결제로 공동 주문 확정 → 판매 확정
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT, fallbackExecution = true)
+    public void handle(SharedGroupOrderConfirmedEvent event) {
+        productFacade.confirmInventories(OrderType.SHARED_GROUP, event.sharedGroupOrderId());
+    }
+
+    // 공동 주문 취소 → 선점 해제(확정 전) 또는 재고 복구(확정 후)
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT, fallbackExecution = true)
+    public void handle(SharedGroupOrderCanceledEvent event) {
+        productFacade.cancelInventories(OrderType.SHARED_GROUP, event.sharedGroupOrderId());
+    }
+
+    // 확정된 공동 주문의 판매자 몫 취소 → 그 판매자 재고만 재고 복구
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT, fallbackExecution = true)
+    public void handle(SharedGroupOrderSellerItemsCanceledEvent event) {
+        productFacade.cancelSellerInventories(OrderType.SHARED_GROUP, event.sharedGroupOrderId(), event.sellerId());
     }
 }
