@@ -21,9 +21,10 @@ public class TossConfig {
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(3);
     private static final Duration READ_TIMEOUT = Duration.ofSeconds(10);
 
+    // 스프링 빈 빌더를 쓴다 → 관찰이 붙어 토스 호출이 trace에 span으로 남는다 (결제가 느릴 때 토스 쪽인지 구분)
     @Bean
-    public RestClient tossRestClient(TossProperties properties) {
-        return restClient(RestClient.builder().requestFactory(requestFactory()), properties);
+    public RestClient tossRestClient(RestClient.Builder restClientBuilder, TossProperties properties) {
+        return restClient(restClientBuilder.clone().requestFactory(requestFactory()), properties);
     }
 
     // 테스트가 MockRestServiceServer에 연결한 빌더를 넘길 수 있도록 요청 팩토리는 건드리지 않는다.
