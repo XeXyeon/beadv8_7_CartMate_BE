@@ -5,7 +5,7 @@ Alloy(수집) → **Loki**(로그 7일) · **Tempo**(trace 3일) → **Grafana**
 ```
 앱 ──OTLP(trace)──▶ Alloy :4318 ──▶ Tempo
 앱 ──JSON 로그 파일──▶ observability/logs/*.log ──▶ Alloy ──▶ Loki
-                                                     Grafana :3000 (Loki ↔ Tempo 연결, 알림 2개, 대시보드 1개)
+                                                     Grafana :3300 (Loki ↔ Tempo 연결, 알림 2개, 대시보드 1개)
 ```
 
 메트릭(Prometheus)은 아직 없다. 알림은 업무 이벤트 로그(`event=...`) 기반이다.
@@ -16,7 +16,7 @@ Alloy(수집) → **Loki**(로그 7일) · **Tempo**(trace 3일) → **Grafana**
 docker compose -f observability/docker-compose.yaml up -d
 ```
 
-- Grafana: http://localhost:3000 (로컬 기본 계정 admin / admin)
+- Grafana: http://localhost:3300 (로컬 기본 계정 admin / admin). 3000 · 3001은 프론트 개발 서버 포트라 피함, 바꾸려면 `GRAFANA_PORT=<포트>`
 - Alloy 상태: http://localhost:12345
 - 끄기: `docker compose -f observability/docker-compose.yaml down` (데이터까지 지우려면 `down -v`)
 - 메모리: Loki 512M · Tempo 512M · Alloy 256M · Grafana 512M 제한 (합계 약 1.8GB)

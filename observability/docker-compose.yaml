@@ -1,5 +1,6 @@
 # CartMate 관측 스택 (로컬): Alloy(수집) → Loki(로그) · Tempo(trace) → Grafana(화면 · 알림)
-#   실행: docker compose -f observability/docker-compose.yaml up -d   →   http://localhost:3000
+#   실행: docker compose -f observability/docker-compose.yaml up -d   →   http://localhost:3300
+#   (3000 · 3001은 프론트 개발 서버가 쓰므로 Grafana는 3300. 바꾸려면 GRAFANA_PORT)
 #   앱 연결 방법은 observability/README.md
 # 이미지 버전은 배포 2주 이상 지난 것으로 고정한다. 메트릭(Prometheus)은 아직 없다.
 name: cartmate-observability
@@ -65,7 +66,7 @@ services:
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana-data:/var/lib/grafana
     ports:
-      - "3000:3000"
+      - "${GRAFANA_PORT:-3300}:3000"     # 3000은 프론트 개발 서버 포트라 피함
     mem_limit: 512m                      # 13.x는 256M면 메모리가 차서 CPU를 다 쓰고 같은 VM의 Loki까지 느려짐
     depends_on: [loki, tempo]
     restart: unless-stopped
