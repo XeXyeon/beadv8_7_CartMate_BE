@@ -17,6 +17,8 @@ public class FakeOrderInventoryClient implements OrderInventoryClient {
 
     private final List<Long> reservedOrderIds = new CopyOnWriteArrayList<>();
     private final List<Long> releasedOrderIds = new CopyOnWriteArrayList<>();
+    // 선점 요청의 주문 종류 (reservedOrderIds와 같은 순서) — 공동 주문(SHARED_GROUP) 구분 확인용
+    private final List<OrderType> reservedOrderTypes = new CopyOnWriteArrayList<>();
     private volatile RuntimeException reserveFailure;
 
     public void failReserveWith(RuntimeException failure) {
@@ -26,7 +28,12 @@ public class FakeOrderInventoryClient implements OrderInventoryClient {
     public void reset() {
         reservedOrderIds.clear();
         releasedOrderIds.clear();
+        reservedOrderTypes.clear();
         reserveFailure = null;
+    }
+
+    public List<OrderType> reservedOrderTypes() {
+        return List.copyOf(reservedOrderTypes);
     }
 
     public List<Long> reservedOrderIds() {
@@ -44,6 +51,7 @@ public class FakeOrderInventoryClient implements OrderInventoryClient {
             throw failure;
         }
         reservedOrderIds.add(orderId);
+        reservedOrderTypes.add(orderType);
     }
 
     @Override

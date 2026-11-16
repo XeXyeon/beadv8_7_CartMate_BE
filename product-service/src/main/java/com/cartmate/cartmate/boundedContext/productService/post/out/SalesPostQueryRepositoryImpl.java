@@ -209,4 +209,26 @@ public class SalesPostQueryRepositoryImpl implements SalesPostQueryRepository {
                 .fetchOne());
     }
 
+    @Override
+    public List<Long> findIdsBySellerIdAndStatus(Long sellerId, SalesPostSaleStatus status) {
+        return queryFactory
+                .select(salesPost.id)
+                .from(salesPost)
+                .where(salesPost.sellerId.eq(sellerId), salesPost.status.eq(status))
+                .orderBy(salesPost.id.asc())
+                .fetch();
+    }
+
+    // @Modifying(flushAutomatically = true, clearAutomatically = true)와 같게: 실행 전 flush, 실행 뒤 비우기
+    @Override
+    public int applyReviewSummary(Long postId, long countDelta, long ratingDelta) {
+        em.flush();
+        long changed = queryFactory.update(salesPost)
+                .set(salesPost.reviewCount, salesPost.reviewCount.add(countDelta))
+                .set(salesPost.reviewRatingSum, salesPost.reviewRatingSum.add(ratingDelta))
+                .where(salesPost.id.eq(postId))
+                .execute();
+        em.clear();
+        return (int) changed;
+    }
 }

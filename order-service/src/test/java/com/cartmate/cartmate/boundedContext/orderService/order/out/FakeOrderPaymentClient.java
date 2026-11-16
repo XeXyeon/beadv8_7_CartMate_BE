@@ -21,9 +21,23 @@ public class FakeOrderPaymentClient implements OrderPaymentClient {
 
     private final Map<String, PaymentResult> payments = new ConcurrentHashMap<>();
     private final AtomicLong sequence = new AtomicLong();
+    private volatile RuntimeException chargeFailure;
+
+    // 차감 실패(잔액 부족 등)를 흉내 낸다. clearChargeFailure로 되돌린다
+    public void failChargeWith(RuntimeException failure) {
+        this.chargeFailure = failure;
+    }
+
+    public void clearChargeFailure() {
+        this.chargeFailure = null;
+    }
 
     @Override
     public PaymentResult charge(PaymentOrderType orderType, Long orderId, Long memberId, long amount) {
+        RuntimeException failure = chargeFailure;
+        if (failure != null) {
+            throw failure;
+        }
         return payments.computeIfAbsent(key(orderType, orderId, memberId), k -> new PaymentResult(
                 sequence.incrementAndGet(), orderId, amount, 0L, amount, orderType.name(), "PAID",
                 LocalDateTime.now(), null));

@@ -124,6 +124,15 @@ public class InventoryReservationUseCase {
                 .toList());
     }
 
+    // 주문 종류를 아는 판매자 몫 취소 이벤트(공동 주문): 그 주문 종류 · 주문의 그 판매자 재고만
+    @Transactional
+    public void cancelSeller(OrderType orderType, Long orderId, Long sellerId) {
+        cancelAll(inventoryReservationRepository.findByOrderTypeAndOrderIdOrderByInventoryIdAsc(orderType, orderId)
+                .stream()
+                .filter(reservation -> sellerId.equals(reservation.getSellerId()))
+                .toList());
+    }
+
     // 선점 상태 → 선점 해제(결제 전 취소, 또는 결제 완료 이벤트보다 취소가 먼저 온 경우), 판매 확정 상태 → 재고 복구
     // 이미 해제 · 복구된 기록은 건너뛴다(이벤트 중복)
     private void cancelAll(List<InventoryReservation> reservations) {
