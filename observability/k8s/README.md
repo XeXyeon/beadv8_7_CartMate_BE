@@ -38,7 +38,7 @@
 
 3. **Access Policies**에서 정책을 만든다 (scope: `logs:write`, `metrics:write`, `traces:write`) → 토큰 발급 → `GC_TOKEN`
 4. Grafana(스택) → Administration → Service accounts
-   - `cartmate-setup` (Editor): 아래 4절 스크립트용
+   - `cartmate-setup` (**Admin**): 아래 4절 스크립트용. Cloud에서는 Editor로 알림 규칙 API가 403이 난다. 실행 후 토큰은 지운다
    - `cartmate-mcp` (**Viewer**): Claude Code용 Grafana MCP
 
 ### Sentry

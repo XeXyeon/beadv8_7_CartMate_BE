@@ -15,9 +15,10 @@
         "label": "로그 저장소",
         "type": "datasource",
         "query": "loki",
+        "regex": "/^Loki$|^grafanacloud-.*-logs$/",
         "hide": 0,
         "current": {},
-        "description": "로컬은 Loki, Grafana Cloud는 grafanacloud-…-logs가 자동으로 잡힌다"
+        "description": "로컬은 Loki, Grafana Cloud는 grafanacloud-…-logs만 (Cloud의 alert-state-history · usage-insights Loki는 제외)"
       },
       {
         "name": "service",
