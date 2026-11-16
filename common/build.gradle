@@ -41,11 +41,13 @@ dependencies {
     // 관측 가능성: 여기는 API만. 실제 추적기 · OTLP 내보내기 · actuator · Sentry 스타터는 각 서비스 build.gradle이 넣는다
     api 'io.micrometer:micrometer-tracing'                 // traceparent 도우미(global/observability)가 Tracer를 씀. 추적기가 없으면 NOOP
     compileOnly "io.sentry:sentry:${sentryVersion}"       // SentryEventFilter. Sentry가 있는 서비스에서만 빈이 생긴다
+    compileOnly 'io.micrometer:context-propagation'        // 비동기 실행기에 traceId 넘기기(AsyncConfig). 있는 서비스에서만 켜진다
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'io.micrometer:micrometer-tracing-bridge-otel'   // traceparent 왕복 테스트용 실제 추적기 (버전은 BOM)
     testImplementation 'io.opentelemetry:opentelemetry-sdk'
     testImplementation "io.sentry:sentry:${sentryVersion}"
+    testImplementation 'io.micrometer:context-propagation'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
