@@ -14,6 +14,9 @@ import java.util.Optional;
 
 public interface BuyerCancelRequestRepository extends JpaRepository<BuyerCancelRequest, Long> {
 
+    @Query("select distinct r from BuyerCancelRequest r join fetch r.items where r.orderId = :orderId order by r.id desc")
+    List<BuyerCancelRequest> findWithItemsByOrderId(@Param("orderId") Long orderId);
+
     boolean existsByOrderIdAndStatus(Long orderId, BuyerCancelRequestStatus status);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

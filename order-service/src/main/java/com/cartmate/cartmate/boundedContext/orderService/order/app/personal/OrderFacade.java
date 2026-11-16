@@ -21,7 +21,6 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.cartmate.cartmate.boundedContext.orderService.order.domain.personal.BuyerCancelResult;
 import com.cartmate.cartmate.boundedContext.orderService.order.domain.personal.OrderCancelPreview;
 import java.time.Clock;
 import java.time.Duration;
@@ -100,11 +99,6 @@ public class OrderFacade {
         orderPaymentUseCase.applyPayment(orderId, memberId, paymentId, paidAt);
     }
 
-    @Transactional
-    public BuyerCancelResult cancelByBuyer(Long memberId, Long orderId) {
-        return orderCancelUseCase.cancelByBuyer(memberId, orderId);
-    }
-
     // 주문 행을 잠그므로 구매자 취소 요청 장부와 같은 트랜잭션에서 부른다
     @Transactional
     public BuyerCancelStart startBuyerCancel(Long memberId, Long orderId, Collection<Long> orderItemIds) {
@@ -125,26 +119,6 @@ public class OrderFacade {
     @Transactional(readOnly = true)
     public OrderCancelPreview previewBuyerCancel(Long memberId, Long orderId, Collection<Long> orderItemIds) {
         return orderCancelUseCase.previewBuyerCancel(memberId, orderId, orderItemIds);
-    }
-
-    @Transactional
-    public void confirmCancelByDelivery(Long orderId, int requestSeq) {
-        orderCancelUseCase.confirmCancelByDelivery(orderId, requestSeq);
-    }
-
-    @Transactional
-    public void rejectCancelByDelivery(Long orderId, int requestSeq, String rejectCode) {
-        orderCancelUseCase.rejectCancelByDelivery(orderId, requestSeq, rejectCode);
-    }
-
-    @Transactional(readOnly = true)
-    public List<Long> findIdsToResendCancelRequest(LocalDateTime lastSentBefore) {
-        return orderCancelUseCase.findIdsToResendCancelRequest(lastSentBefore);
-    }
-
-    @Transactional
-    public void resendCancelRequest(Long orderId, Duration resendAfter) {
-        orderCancelUseCase.resendCancelRequest(orderId, resendAfter);
     }
 
     @Transactional

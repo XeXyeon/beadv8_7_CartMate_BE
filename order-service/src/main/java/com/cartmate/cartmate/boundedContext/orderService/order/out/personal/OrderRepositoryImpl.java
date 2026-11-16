@@ -75,7 +75,7 @@ public class OrderRepositoryImpl implements OrderRepositoryCustom {
                 .where(
                         order.orderType.eq(OrderType.INDIVIDUAL_GROUP),
                         order.individualGroupPurchaseId.eq(individualGroupPurchaseId),
-                        order.status.in(OrderStatus.PAYMENT_PENDING, OrderStatus.PAID, OrderStatus.CANCEL_REQUESTED),
+                        order.status.in(OrderStatus.PAYMENT_PENDING, OrderStatus.PAID),
                         orderItem.productId.eq(productId)
                 )
                 .fetchFirst();

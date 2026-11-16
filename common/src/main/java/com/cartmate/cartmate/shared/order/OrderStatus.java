@@ -8,8 +8,7 @@ import lombok.RequiredArgsConstructor;
 public enum OrderStatus {
     PAYMENT_PENDING("결제 대기"),
     PAID("결제 완료"),
-    CANCELED("취소"),
-    CANCEL_REQUESTED("취소 처리 중");
+    CANCELED("취소");
 
     private final String label;
 }

@@ -139,7 +139,7 @@ class OrderConcurrencyTest {
                     .containsExactly(OrderErrorCode.ORDER_ALREADY_PENDING.resultCode());
             assertThat(repository.findPendingIndividualGroupOrderId(buyer, purchaseId)).contains(created.peek());
 
-            facade.cancelByBuyer(buyer, created.peek());
+            facade.startBuyerCancel(buyer, created.peek(), null);
             OrderCreateResponse again = facade.createIndividualGroup(buyer, request);
             assertThat(again.orderId()).isNotEqualTo(created.peek());
         }
