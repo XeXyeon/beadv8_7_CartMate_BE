@@ -136,9 +136,8 @@ public class ProductQueryUseCase {
     private InventoryForPurchase toInventoryForPurchase(Inventory inventory, Map<Long, String> imageKeyByProductId) {
         Product product = inventory.getProduct();
         String imageKey = imageKeyByProductId.get(product.getId());
-        boolean purchasable = product.getStatus() == ProductStatus.ON_SALE
-                && inventory.isActive()
-                && inventory.availableQuantity() > 0;
+        boolean onSale = product.getStatus() == ProductStatus.ON_SALE && inventory.isActive();
+        boolean purchasable = onSale && inventory.availableQuantity() > 0;
         return new InventoryForPurchase(
                 inventory.getId(),
                 product.getId(),
@@ -148,7 +147,8 @@ public class ProductQueryUseCase {
                 inventory.getAppliedPrice(),
                 imageKey == null ? null : imageStorage.toUrl(imageKey),
                 product.getCategoryId(),
-                purchasable
+                purchasable,
+                onSale
         );
     }
 

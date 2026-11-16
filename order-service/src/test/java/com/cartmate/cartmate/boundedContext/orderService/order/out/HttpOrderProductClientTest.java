@@ -33,7 +33,7 @@ class HttpOrderProductClientTest {
     void mapsInventoriesAndExcludesMissing() {
         given(productServerApiClient.get(eq(HttpOrderProductClient.PATH), eq(HttpOrderProductClient.INVENTORIES), eq("101,999")))
                 .willReturn(List.of(new InventoryForPurchase(101L, 10L, 7L, "축구공", "5호", 25000L,
-                        "https://example.com/ball.png", 3L, true)));
+                        "https://example.com/ball.png", 3L, true, true)));
 
         assertThat(productClient.findAllByInventoryIds(List.of(101L, 999L))).containsExactly(
                 new OrderProductInfo(101L, 10L, 7L, "축구공", "5호", 25000L, "https://example.com/ball.png", true));
