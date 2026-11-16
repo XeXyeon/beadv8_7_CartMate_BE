@@ -42,11 +42,7 @@ public class OrderCouponRule {
         this.minOrderAmount = minOrderAmount;
     }
 
-    // 할인 방식이 없는 쿠폰 결과(이 칸이 생기기 전 상품 서버 응답)는 조건 없음으로 본다
     public static OrderCouponRule of(String discountType, long discountValue, Long maxDiscount, long minOrderAmount) {
-        if (discountType == null) {
-            return null;
-        }
         return new OrderCouponRule(DiscountType.valueOf(discountType), discountValue, maxDiscount, minOrderAmount);
     }
 

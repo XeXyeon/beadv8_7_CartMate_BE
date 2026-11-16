@@ -46,7 +46,8 @@ public class SalesStopCancelFacade {
             log.info("이미 요청한 판매글 내림 취소: purchaseType={}, orderId={}, sellerId={}", purchaseType, orderId, sellerId);
             return;
         }
-        eventPublisher.publish(new OrderSalesStopCancelRequestedEvent(purchaseType, orderId, sellerId, now));
+        eventPublisher.publish(new OrderSalesStopCancelRequestedEvent(purchaseType, orderId, sellerId, now,
+                itemCancelService.findUncanceledItemIds(purchaseType, orderId, sellerId)));
     }
 
     @Transactional
@@ -85,8 +86,11 @@ public class SalesStopCancelFacade {
                 .ifPresent(request -> {
                     log.warn("배송 서버 응답이 없어 판매글 내림 취소 요청 재발행: purchaseType={}, orderId={}, sellerId={}, firstRequestedAt={}",
                             request.getPurchaseType(), request.getOrderId(), request.getSellerId(), request.getRequestedAt());
+                    // 그 사이 판매자 사유 취소 등으로 빠진 항목이 있을 수 있어 재발행 시점의 남은 항목을 다시 싣는다
                     eventPublisher.publish(new OrderSalesStopCancelRequestedEvent(
-                            request.getPurchaseType(), request.getOrderId(), request.getSellerId(), request.getRequestedAt()));
+                            request.getPurchaseType(), request.getOrderId(), request.getSellerId(), request.getRequestedAt(),
+                            itemCancelService.findUncanceledItemIds(
+                                    request.getPurchaseType(), request.getOrderId(), request.getSellerId())));
                 });
     }
 

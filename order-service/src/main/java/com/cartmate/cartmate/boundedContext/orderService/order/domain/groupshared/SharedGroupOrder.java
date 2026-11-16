@@ -247,6 +247,14 @@ public class SharedGroupOrder {
         );
     }
 
+    // 판매글 내림 요청에 싣는 그 판매자의 아직 취소되지 않은 항목
+    public List<Long> uncanceledItemIdsOf(Long sellerId) {
+        return items.stream()
+                .filter(item -> sellerId.equals(item.getSellerId()) && !item.isCanceled())
+                .map(SharedGroupOrderItem::getId)
+                .toList();
+    }
+
     public boolean isCreator(Long memberId) {
         return creatorMemberId.equals(memberId);
     }

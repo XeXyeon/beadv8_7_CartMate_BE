@@ -164,6 +164,23 @@ class SharedGroupOrderCancelTest {
         assertThat(order.getItems()).noneMatch(SharedGroupOrderItem::isCanceled);
     }
 
+    @Test
+    @DisplayName("판매글 내림 요청에 싣는 항목은 그 판매자의 아직 취소되지 않은 공동 주문 항목뿐이다")
+    void uncanceledItemIdsOf_excludesCanceledAndOtherSellers() {
+        SharedGroupOrder order = sharedOrder(10L, CREATOR, MEMBER, CLOSED_AT,
+                sharedLine(2L, 4L, 7L, 1, 1_000L), sharedLine(3L, 5L, 7L, 1, 1_000L),
+                sharedLine(4L, 6L, 7L, 1, 1_000L), sharedLine(5L, 7L, 8L, 1, 1_000L));
+        for (int i = 0; i < 4; i++) {
+            org.springframework.test.util.ReflectionTestUtils.setField(order.getItems().get(i), "id", 701L + i);
+        }
+        order.markStockReserved();
+        order.pay(CREATOR, 1L, CLOSED_AT, address());
+        order.pay(MEMBER, 2L, CLOSED_AT, null);
+        order.cancelItems(7L, java.util.List.of(701L), DeliveryCancelReason.SELLER_OTHER, NOW);
+
+        assertThat(order.uncanceledItemIdsOf(7L)).containsExactly(702L, 703L);
+    }
+
     private static SharedGroupOrder confirmedTwoSellers() {
         SharedGroupOrder order = sharedOrder(10L, CREATOR, MEMBER, CLOSED_AT,
                 sharedLine(2L, 4L, 7L, 1, 10_000L), sharedLine(3L, 5L, 8L, 2, 5_000L));

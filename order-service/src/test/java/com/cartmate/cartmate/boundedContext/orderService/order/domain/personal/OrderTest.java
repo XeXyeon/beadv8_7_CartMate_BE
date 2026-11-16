@@ -691,6 +691,25 @@ class OrderTest {
         assertThat(outcome.couponReturnable()).isFalse();
     }
 
+    @Test
+    @DisplayName("판매글 내림 요청에 싣는 항목은 그 판매자의 아직 취소되지 않은 항목뿐이다 (3개 중 1개 취소 → 2개)")
+    void uncanceledItemIdsOf_excludesCanceledAndOtherSellers() {
+        Order order = Order.createPersonal("ORD-UC", BUYER, List.of(
+                new OrderLine(10L, 11L, 7L, "상품A", null, 1_000L, 1),
+                new OrderLine(20L, 21L, 7L, "상품B", null, 1_000L, 1),
+                new OrderLine(30L, 31L, 7L, "상품C", null, 1_000L, 1),
+                new OrderLine(40L, 41L, 8L, "상품D", null, 1_000L, 1)
+        ), addressWithoutDetail(), NOW);
+        for (int i = 0; i < 4; i++) {
+            ReflectionTestUtils.setField(order.getItems().get(i), "id", 701L + i);
+        }
+        order.markPaid(99L, NOW.plusMinutes(1));
+        order.cancelItems(7L, List.of(701L), DeliveryCancelReason.SELLER_OUT_OF_STOCK, CouponMode.PROPORTIONAL,
+                NOW.plusMinutes(2));
+
+        assertThat(order.uncanceledItemIdsOf(7L)).containsExactly(702L, 703L);
+    }
+
     private Order twoSellerOrder() {
         return Order.createPersonal("ORD-C", BUYER, List.of(
                 new OrderLine(10L, 11L, 7L, "유니폼", null, 30_000L, 1),

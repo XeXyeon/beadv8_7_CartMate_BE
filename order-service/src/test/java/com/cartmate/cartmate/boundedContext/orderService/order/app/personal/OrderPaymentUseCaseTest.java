@@ -472,7 +472,7 @@ class OrderPaymentUseCaseTest {
         then(f.couponClient).should(never()).restore(any(), any(), any());
     }
 
-    private static final CouponQuote QUOTE = new CouponQuote(5L, 10L, "전체 10%", 5_000L, true, null);
+    private static final CouponQuote QUOTE = new CouponQuote(5L, 10L, "전체 10%", 5_000L, true, null, "RATE", 10L, null, 0L);
 
     @Test
     @DisplayName("쿠폰 결제 때 할인 방식·값·최대 할인·최소 금액을 주문에 함께 저장한다 (일부 취소 때 다시 계산하려고)")

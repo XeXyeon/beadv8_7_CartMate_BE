@@ -11,6 +11,8 @@ import com.cartmate.cartmate.shared.delivery.DeliveryCancelReason;
 import com.cartmate.cartmate.shared.order.event.SharedGroupOrderCanceledEvent.SellerAmount;
 import com.cartmate.cartmate.shared.order.event.SharedGroupOrderSellerItemsCanceledEvent;
 import com.cartmate.cartmate.global.event.DomainEventPublisher;
+import com.cartmate.cartmate.global.exception.ServiceException;
+import com.cartmate.cartmate.boundedContext.orderService.order.exception.OrderErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -71,6 +73,12 @@ class SharedGroupOrderCancelUseCase {
                     sharedGroupOrderId, sellerId, outcome.amount(), now, reason, cancelId));
         }
         return Optional.of(cancelId);
+    }
+
+    List<Long> findUncanceledItemIds(Long sharedGroupOrderId, Long sellerId) {
+        return sharedGroupOrderRepository.findById(sharedGroupOrderId)
+                .orElseThrow(() -> new ServiceException(OrderErrorCode.ORDER_NOT_FOUND))
+                .uncanceledItemIdsOf(sellerId);
     }
 
     List<Long> findIdsByStatusAndProductIds(SharedGroupOrderStatus status, Collection<Long> productIds) {

@@ -39,6 +39,16 @@ class ItemCancelServiceTest {
     }
 
     @Test
+    @DisplayName("판매자의 취소되지 않은 항목 조회도 구매 유형에 맞는 주문에서 한다")
+    void findsUncanceledItemIdsByPurchaseType() {
+        when(orderFacade.findUncanceledItemIds(ORDER_ID, SELLER_ID)).thenReturn(List.of(1L));
+        when(sharedGroupOrderFacade.findUncanceledItemIds(ORDER_ID, SELLER_ID)).thenReturn(List.of(2L));
+
+        assertThat(service.findUncanceledItemIds(PurchaseType.INDIVIDUAL_GROUP, ORDER_ID, SELLER_ID)).containsExactly(1L);
+        assertThat(service.findUncanceledItemIds(PurchaseType.SHARED_GROUP, ORDER_ID, SELLER_ID)).containsExactly(2L);
+    }
+
+    @Test
     @DisplayName("공동구매면 공동 주문의 항목 취소를 부른다")
     void cancelsSharedGroupOrderItems() {
         when(sharedGroupOrderFacade.cancelItems(ORDER_ID, SELLER_ID, null, DeliveryCancelReason.SALES_STOPPED))

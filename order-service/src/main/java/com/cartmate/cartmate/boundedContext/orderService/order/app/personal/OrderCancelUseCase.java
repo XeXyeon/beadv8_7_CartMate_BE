@@ -157,6 +157,12 @@ class OrderCancelUseCase {
         return recordCancels(order, outcome, reason, now).stream().findFirst();
     }
 
+    List<Long> findUncanceledItemIds(Long orderId, Long sellerId) {
+        return orderRepository.findById(orderId)
+                .orElseThrow(() -> new ServiceException(OrderErrorCode.ORDER_NOT_FOUND))
+                .uncanceledItemIdsOf(sellerId);
+    }
+
     // 구매자 취소 결과 하나로 취소된 판매자들의 상품을 한 번에 취소한다
     List<Long> cancelItemsByBuyer(Long orderId, Map<Long, List<Long>> itemIdsBySeller) {
         Order order = orderSupport.getOrderForUpdate(orderId);

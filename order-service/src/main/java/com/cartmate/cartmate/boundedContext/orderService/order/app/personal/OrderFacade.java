@@ -111,6 +111,11 @@ public class OrderFacade {
         return orderCancelUseCase.startBuyerCancel(memberId, orderId, orderItemIds);
     }
 
+    @Transactional(readOnly = true)
+    public List<Long> findUncanceledItemIds(Long orderId, Long sellerId) {
+        return orderCancelUseCase.findUncanceledItemIds(orderId, sellerId);
+    }
+
     // 구매자 취소 결과를 반영하는 트랜잭션에 참여한다 (Inbox·요청 장부와 함께 커밋).
     @Transactional
     public List<Long> cancelItemsByBuyer(Long orderId, Map<Long, List<Long>> itemIdsBySeller) {

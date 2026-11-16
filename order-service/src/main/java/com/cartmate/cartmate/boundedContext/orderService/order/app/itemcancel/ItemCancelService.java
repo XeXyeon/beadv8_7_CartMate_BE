@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -28,5 +29,12 @@ public class ItemCancelService {
             return sharedGroupOrderFacade.cancelItems(orderId, sellerId, orderItemIds, reason);
         }
         return orderFacade.cancelItems(orderId, sellerId, orderItemIds, reason, couponMode);
+    }
+
+    public List<Long> findUncanceledItemIds(PurchaseType purchaseType, Long orderId, Long sellerId) {
+        if (purchaseType == PurchaseType.SHARED_GROUP) {
+            return sharedGroupOrderFacade.findUncanceledItemIds(orderId, sellerId);
+        }
+        return orderFacade.findUncanceledItemIds(orderId, sellerId);
     }
 }

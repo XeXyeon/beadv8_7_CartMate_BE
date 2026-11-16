@@ -96,6 +96,11 @@ public class SharedGroupOrderFacade {
         sharedGroupOrderCancelUseCase.cancelBySalesStopped(sharedGroupOrderId);
     }
 
+    @Transactional(readOnly = true)
+    public List<Long> findUncanceledItemIds(Long sharedGroupOrderId, Long sellerId) {
+        return sharedGroupOrderCancelUseCase.findUncanceledItemIds(sharedGroupOrderId, sellerId);
+    }
+
     // 판매글 내림 취소 결과나 판매자 사유 취소를 반영하는 트랜잭션에 참여한다 (Inbox·요청 장부와 함께 커밋).
     @Transactional
     public Optional<Long> cancelItems(Long sharedGroupOrderId, Long sellerId, Collection<Long> orderItemIds,
