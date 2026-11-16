@@ -1,6 +1,7 @@
 package com.cartmate.cartmate.boundedContext.orderService.order.app.personal;
 
 import com.cartmate.cartmate.shared.delivery.DeliveryCancelReason;
+import com.cartmate.cartmate.boundedContext.orderService.order.domain.itemcancel.CouponMode;
 import com.cartmate.cartmate.shared.coupon.dto.CouponOption;
 import com.cartmate.cartmate.shared.order.OrderStatus;
 import com.cartmate.cartmate.boundedContext.orderService.order.dto.personal.IndividualGroupOrderCreateRequest;
@@ -20,11 +21,14 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.cartmate.cartmate.boundedContext.orderService.order.domain.personal.BuyerCancelResult;
+import com.cartmate.cartmate.boundedContext.orderService.order.domain.personal.OrderCancelPreview;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -95,29 +99,26 @@ public class OrderFacade {
         orderPaymentUseCase.applyPayment(orderId, memberId, paymentId, paidAt);
     }
 
+    // 주문 행을 잠그므로 구매자 취소 요청 장부와 같은 트랜잭션에서 부른다
     @Transactional
-    public BuyerCancelResult cancelByBuyer(Long memberId, Long orderId) {
-        return orderCancelUseCase.cancelByBuyer(memberId, orderId);
-    }
-
-    @Transactional
-    public void confirmCancelByDelivery(Long orderId, int requestSeq) {
-        orderCancelUseCase.confirmCancelByDelivery(orderId, requestSeq);
-    }
-
-    @Transactional
-    public void rejectCancelByDelivery(Long orderId, int requestSeq, String rejectCode) {
-        orderCancelUseCase.rejectCancelByDelivery(orderId, requestSeq, rejectCode);
+    public BuyerCancelStart startBuyerCancel(Long memberId, Long orderId, Collection<Long> orderItemIds) {
+        return orderCancelUseCase.startBuyerCancel(memberId, orderId, orderItemIds);
     }
 
     @Transactional(readOnly = true)
-    public List<Long> findIdsToResendCancelRequest(LocalDateTime lastSentBefore) {
-        return orderCancelUseCase.findIdsToResendCancelRequest(lastSentBefore);
+    public List<Long> findUncanceledItemIds(Long orderId, Long sellerId) {
+        return orderCancelUseCase.findUncanceledItemIds(orderId, sellerId);
     }
 
+    // 구매자 취소 결과를 반영하는 트랜잭션에 참여한다 (Inbox·요청 장부와 함께 커밋).
     @Transactional
-    public void resendCancelRequest(Long orderId, Duration resendAfter) {
-        orderCancelUseCase.resendCancelRequest(orderId, resendAfter);
+    public List<Long> cancelItemsByBuyer(Long orderId, Map<Long, List<Long>> itemIdsBySeller) {
+        return orderCancelUseCase.cancelItemsByBuyer(orderId, itemIdsBySeller);
+    }
+
+    @Transactional(readOnly = true)
+    public OrderCancelPreview previewBuyerCancel(Long memberId, Long orderId, Collection<Long> orderItemIds) {
+        return orderCancelUseCase.previewBuyerCancel(memberId, orderId, orderItemIds);
     }
 
     @Transactional
@@ -150,10 +151,11 @@ public class OrderFacade {
         orderCancelUseCase.cancelBySalesStopped(orderId);
     }
 
-    // 판매글 내림 취소 결과나 판매자 사유 취소를 반영하는 트랜잭션에 참여한다 (Inbox·요청 장부와 함께 커밋).
+    // 판매글 내림·판매자 사유·구매자 취소 결과를 반영하는 트랜잭션에 참여한다 (Inbox·요청 장부와 함께 커밋).
     @Transactional
-    public void cancelSellerItems(Long orderId, Long sellerId, DeliveryCancelReason reason) {
-        orderCancelUseCase.cancelSellerItems(orderId, sellerId, reason);
+    public Optional<Long> cancelItems(Long orderId, Long sellerId, Collection<Long> orderItemIds,
+                                      DeliveryCancelReason reason, CouponMode couponMode) {
+        return orderCancelUseCase.cancelItems(orderId, sellerId, orderItemIds, reason, couponMode);
     }
 
     @Transactional

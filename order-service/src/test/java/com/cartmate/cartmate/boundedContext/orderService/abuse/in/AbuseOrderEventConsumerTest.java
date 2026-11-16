@@ -151,7 +151,7 @@ class AbuseOrderEventConsumerTest {
     @DisplayName("방장 ID가 없는 예전 방장 취소 이벤트는 무시한다")
     void ignoresCreatorCanceledWithoutCreator() {
         consumer.accept(new SharedGroupOrderCanceledEvent(100L, 10L, SharedGroupOrderCancelReason.CREATOR_CANCELED,
-                CANCELED_AT, List.of(2L), null));
+                CANCELED_AT, List.of(2L), null, List.of()));
 
         then(abuseFacade).shouldHaveNoInteractions();
         then(abuseJudgeRunner).shouldHaveNoInteractions();
@@ -176,7 +176,7 @@ class AbuseOrderEventConsumerTest {
     }
 
     private SharedGroupOrderCanceledEvent canceled(SharedGroupOrderCancelReason reason, List<Long> unpaidMemberIds) {
-        return new SharedGroupOrderCanceledEvent(100L, 10L, reason, CANCELED_AT, unpaidMemberIds, CREATOR);
+        return new SharedGroupOrderCanceledEvent(100L, 10L, reason, CANCELED_AT, unpaidMemberIds, CREATOR, List.of());
     }
 
     private AbuseSignalCommand command(Long memberId) {

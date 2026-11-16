@@ -74,6 +74,8 @@ public record DeliveryDetailResponse(
             Long orderItemId,
             String productName,
             Long quantity,
+            LocalDateTime canceledAt,
+            DeliveryCancelReason cancelReason,
             List<Option> options
     ) {
         public static Item from(DeliveryItem deliveryItem, List<DeliveryItemOption> options) {
@@ -82,6 +84,8 @@ public record DeliveryDetailResponse(
                     deliveryItem.getOrderItemId(),
                     deliveryItem.getProductName(),
                     deliveryItem.getQuantity(),
+                    deliveryItem.getCanceledAt(),
+                    deliveryItem.getCancelReason(),
                     options.stream().map(Option::from).toList()
             );
         }

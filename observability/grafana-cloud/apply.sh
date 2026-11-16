@@ -2,7 +2,7 @@
 # Grafana Cloud(또는 아무 Grafana)에 CartMate 폴더 · 대시보드 · 알림 2개를 넣는다. 다시 실행해도 같은 결과(덮어씀)
 #
 #   GRAFANA_URL=https://<스택>.grafana.net \
-#   GRAFANA_TOKEN=<Editor 권한 서비스 계정 토큰> \
+#   GRAFANA_TOKEN=<Admin 권한 서비스 계정 토큰 (Cloud는 Editor면 알림 API 403), 실행 후 지움> \
 #   LOKI_UID=<Cloud Loki 데이터 소스 uid, 예: grafanacloud-logs> \
 #   bash observability/grafana-cloud/apply.sh
 #

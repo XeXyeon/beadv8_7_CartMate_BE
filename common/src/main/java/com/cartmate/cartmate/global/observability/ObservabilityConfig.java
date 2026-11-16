@@ -4,6 +4,7 @@ import io.micrometer.observation.ObservationPredicate;
 import io.micrometer.tracing.Tracer;
 import io.micrometer.tracing.propagation.Propagator;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -28,8 +29,14 @@ public class ObservabilityConfig {
         return (name, context) -> !SCHEDULED_TASK_OBSERVATION.equals(name);
     }
 
-    @Bean
-    public SentryEventFilter sentryEventFilter(ObjectProvider<Tracer> tracer) {
-        return new SentryEventFilter(tracer.getIfAvailable(() -> Tracer.NOOP));
+    /** Sentry 의존성이 있는 서비스에서만 (common은 Sentry를 compileOnly로만 안다) */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnClass(name = "io.sentry.SentryOptions")
+    static class SentryFilterConfig {
+
+        @Bean
+        public SentryEventFilter sentryEventFilter(ObjectProvider<Tracer> tracer) {
+            return new SentryEventFilter(tracer.getIfAvailable(() -> Tracer.NOOP));
+        }
     }
 }

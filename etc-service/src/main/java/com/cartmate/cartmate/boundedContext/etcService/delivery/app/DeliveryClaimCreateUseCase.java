@@ -115,12 +115,16 @@ public class DeliveryClaimCreateUseCase {
         }
     }
 
-    // 선택한 상품이 모두 이 배송의 상품이고, 요청 수량이 배송 수량을 넘지 않는지 확인한다.
+    // 선택한 상품이 모두 이 배송의 취소되지 않은 상품이고, 요청 수량이 배송 수량을 넘지 않는지 확인한다.
     private void validateItems(List<DeliveryClaimCreateCommand.Item> items, Map<Long, DeliveryItem> deliveryItems) {
         for (DeliveryClaimCreateCommand.Item item : items) {
             DeliveryItem deliveryItem = deliveryItems.get(item.deliveryItemId());
             if (deliveryItem == null) {
                 throw new ServiceException(DeliveryErrorCode.DELIVERY_ITEM_NOT_FOUND);
+            }
+            // 취소된 상품은 보내지 않았고 이미 환불됐다.
+            if (deliveryItem.isCanceled()) {
+                throw new ServiceException(DeliveryErrorCode.DELIVERY_CLAIM_ITEM_CANCELED);
             }
             if (item.quantity() > deliveryItem.getQuantity()) {
                 throw new ServiceException(DeliveryErrorCode.DELIVERY_CLAIM_QUANTITY_EXCEEDED);

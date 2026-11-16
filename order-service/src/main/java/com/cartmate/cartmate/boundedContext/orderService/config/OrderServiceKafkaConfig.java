@@ -2,9 +2,8 @@ package com.cartmate.cartmate.boundedContext.orderService.config;
 
 import com.cartmate.cartmate.global.kafka.InboundEventBinding;
 import com.cartmate.cartmate.global.outbox.OutboxTopics;
+import com.cartmate.cartmate.shared.delivery.event.DeliveryBuyerCancelResultEvent;
 import com.cartmate.cartmate.shared.delivery.event.DeliveryConfirmedEvent;
-import com.cartmate.cartmate.shared.delivery.event.DeliveryOrderCancelRejectedEvent;
-import com.cartmate.cartmate.shared.delivery.event.DeliveryOrderCanceledEvent;
 import com.cartmate.cartmate.shared.delivery.event.DeliverySalesStopCancelResultEvent;
 import com.cartmate.cartmate.shared.delivery.event.DeliverySellerCanceledEvent;
 import com.cartmate.cartmate.shared.post.event.SalesPostHiddenEvent;
@@ -31,17 +30,6 @@ public class OrderServiceKafkaConfig {
     }
 
     @Bean
-    public InboundEventBinding deliveryOrderCanceledBinding() {
-        return new InboundEventBinding(OutboxTopics.of(DeliveryOrderCanceledEvent.class), DeliveryOrderCanceledEvent.class);
-    }
-
-    @Bean
-    public InboundEventBinding deliveryOrderCancelRejectedBinding() {
-        return new InboundEventBinding(
-                OutboxTopics.of(DeliveryOrderCancelRejectedEvent.class), DeliveryOrderCancelRejectedEvent.class);
-    }
-
-    @Bean
     public InboundEventBinding deliverySalesStopCancelResultBinding() {
         return new InboundEventBinding(
                 OutboxTopics.of(DeliverySalesStopCancelResultEvent.class), DeliverySalesStopCancelResultEvent.class);
@@ -51,5 +39,11 @@ public class OrderServiceKafkaConfig {
     public InboundEventBinding deliverySellerCanceledBinding() {
         return new InboundEventBinding(
                 OutboxTopics.of(DeliverySellerCanceledEvent.class), DeliverySellerCanceledEvent.class);
+    }
+
+    @Bean
+    public InboundEventBinding deliveryBuyerCancelResultBinding() {
+        return new InboundEventBinding(
+                OutboxTopics.of(DeliveryBuyerCancelResultEvent.class), DeliveryBuyerCancelResultEvent.class);
     }
 }

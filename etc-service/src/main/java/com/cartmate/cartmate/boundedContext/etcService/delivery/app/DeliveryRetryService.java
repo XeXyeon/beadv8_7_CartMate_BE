@@ -11,6 +11,8 @@ import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.resilience.annotation.Retryable;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 // 호출하는 쪽에 트랜잭션이 없어야 한다. 이미 트랜잭션 안이면 unique 위반으로 해당 트랜잭션이
 // rollback-only가 되어 재시도가 실패한다. 이벤트로 호출할 때는 커밋 이후, 새 트랜잭션에서 호출한다.
 @Service
@@ -86,7 +88,8 @@ public class DeliveryRetryService {
             jitter = 50,
             maxDelay = 1000
     )
-    public DeliveryResponse cancelDeliveryBySeller(Long deliveryId, Long memberId, DeliveryCancelReason reason) {
-        return deliveryFacade.cancelDeliveryBySeller(deliveryId, memberId, reason);
+    public DeliveryResponse cancelDeliveryBySeller(Long deliveryId, Long memberId, DeliveryCancelReason reason,
+                                                   List<Long> deliveryItemIds) {
+        return deliveryFacade.cancelDeliveryBySeller(deliveryId, memberId, reason, deliveryItemIds);
     }
 }

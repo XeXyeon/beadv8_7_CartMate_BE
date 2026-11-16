@@ -3,6 +3,8 @@ package com.cartmate.cartmate.boundedContext.orderService.order.domain.groupshar
 import com.cartmate.cartmate.shared.delivery.DeliveryCancelReason;
 import com.cartmate.cartmate.shared.order.SharedGroupOrderCancelReason;
 import com.cartmate.cartmate.shared.order.SharedGroupOrderStatus;
+import com.cartmate.cartmate.shared.order.event.SharedGroupOrderCanceledEvent;
+import com.cartmate.cartmate.shared.order.event.SharedGroupOrderCanceledEvent.SellerAmount;
 import com.cartmate.cartmate.boundedContext.orderService.order.domain.DeliveryAddress;
 import com.cartmate.cartmate.global.exception.ServiceException;
 import com.cartmate.cartmate.boundedContext.orderService.order.exception.OrderErrorCode;
@@ -16,9 +18,12 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 
 @Getter
 @Entity
@@ -182,33 +187,72 @@ public class SharedGroupOrder {
         return true;
     }
 
-    // 확정된 공동 주문에서 한 판매자의 남은 항목을 모두 취소하고 그 금액을 돌려준다.
+    // 확정된 공동 주문에서 한 판매자의 항목 중 고른 것(null이면 남은 전부)을 취소하고 그 금액을 돌려준다.
     // 항목이 모두 취소되면 주문도 취소로 바꾼다. 이때 환불은 전체 취소 환불로 한다(마지막 판매자 몫을 따로 나누지 않음).
-    public long cancelSellerItems(Long sellerId, DeliveryCancelReason reason, LocalDateTime now) {
+    public SharedItemCancelOutcome cancelItems(Long sellerId, Collection<Long> orderItemIds,
+                                               DeliveryCancelReason reason, LocalDateTime now) {
         if (status != SharedGroupOrderStatus.CONFIRMED) {
-            return 0;
+            return SharedItemCancelOutcome.none();
         }
-        long amount = 0;
-        for (SharedGroupOrderItem item : items) {
-            if (sellerId.equals(item.getSellerId()) && !item.isCanceled()) {
-                item.cancel(reason, now);
-                amount += item.amount();
-            }
+        List<SharedGroupOrderItem> targets = items.stream()
+                .filter(item -> sellerId.equals(item.getSellerId()) && !item.isCanceled())
+                .filter(item -> orderItemIds == null || orderItemIds.contains(item.getId()))
+                .toList();
+        if (targets.isEmpty()) {
+            return SharedItemCancelOutcome.none();
         }
-        if (amount > 0 && items.stream().allMatch(SharedGroupOrderItem::isCanceled)) {
-            cancel(reason == DeliveryCancelReason.SALES_STOPPED
-                    ? SharedGroupOrderCancelReason.SALES_STOPPED : SharedGroupOrderCancelReason.SELLER_CANCELED, now);
+        targets.forEach(item -> item.cancel(reason, now));
+        long amount = targets.stream().mapToLong(SharedGroupOrderItem::amount).sum();
+        boolean orderCanceled = items.stream().allMatch(SharedGroupOrderItem::isCanceled);
+        if (orderCanceled) {
+            cancel(cancelReasonOfItems(), now);
         }
-        return amount;
+        return new SharedItemCancelOutcome(targets, amount, orderCanceled);
     }
 
-    // 전체 취소보다 먼저 판매자 몫으로 따로 취소된 항목을 판매자별 금액으로 묶는다
-    public Map<Long, Long> canceledAmountsBySeller() {
-        Map<Long, Long> bySeller = new LinkedHashMap<>();
+    // 취소된 항목의 사유가 모두 같은 갈래면 그 사유, 섞였으면 여러 사유
+    private SharedGroupOrderCancelReason cancelReasonOfItems() {
+        Set<SharedGroupOrderCancelReason> reasons = new HashSet<>();
+        items.forEach(item -> reasons.add(item.getCancelReason() == DeliveryCancelReason.SALES_STOPPED
+                ? SharedGroupOrderCancelReason.SALES_STOPPED : SharedGroupOrderCancelReason.SELLER_CANCELED));
+        return reasons.size() == 1 ? reasons.iterator().next() : SharedGroupOrderCancelReason.MULTIPLE_REASONS;
+    }
+
+    public long cancelSellerItems(Long sellerId, DeliveryCancelReason reason, LocalDateTime now) {
+        return cancelItems(sellerId, null, reason, now).amount();
+    }
+
+    // 전체 취소보다 먼저 판매자 몫으로 따로 환불된 취소 건 목록. 한 줄이 판매자 몫 환불 이벤트 한 건이다.
+    // 결제 서버가 건마다 끝전을 나눠 뺐으므로, 판매자별로 합치면 다시 나눈 금액이 실제 환불액과 1원 단위로 어긋날 수 있다.
+    public List<SellerAmount> canceledBatches() {
+        Map<Long, SellerAmount> byCancel = new TreeMap<>();
         items.stream()
-                .filter(SharedGroupOrderItem::isCanceled)
-                .forEach(item -> bySeller.merge(item.getSellerId(), item.amount(), Long::sum));
-        return bySeller;
+                .filter(item -> item.isCanceled() && item.getCancelId() != null)
+                .forEach(item -> byCancel.merge(item.getCancelId(),
+                        new SellerAmount(item.getSellerId(), item.amount(), item.getCancelId()),
+                        (a, b) -> new SellerAmount(a.sellerId(), a.amount() + b.amount(), a.cancelId())));
+        return List.copyOf(byCancel.values());
+    }
+
+    // 먼저 판매자 몫으로 환불한 건을 결제 서버가 전체 취소 환불에서 빼도록 함께 보낸다
+    public SharedGroupOrderCanceledEvent toCanceledEvent(List<SellerAmount> canceledBefore) {
+        return new SharedGroupOrderCanceledEvent(
+                id,
+                sharedGroupPurchaseId,
+                cancelReason,
+                canceledAt,
+                getUnpaidMemberIds(),
+                creatorMemberId,
+                canceledBefore
+        );
+    }
+
+    // 판매글 내림 요청에 싣는 그 판매자의 아직 취소되지 않은 항목
+    public List<Long> uncanceledItemIdsOf(Long sellerId) {
+        return items.stream()
+                .filter(item -> sellerId.equals(item.getSellerId()) && !item.isCanceled())
+                .map(SharedGroupOrderItem::getId)
+                .toList();
     }
 
     public boolean isCreator(Long memberId) {

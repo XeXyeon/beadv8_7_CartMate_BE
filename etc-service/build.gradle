@@ -7,6 +7,11 @@ plugins {
 dependencies {
     // global(예외 · RsData · 보안 · outbox · 내부 API 클라이언트 · Redis · S3) + shared(서비스 간 이벤트 · DTO 계약)
     implementation project(':common')
+    // 관측: 분산 추적(Micrometer Tracing + OTel 브리지 + OTLP 내보내기) · health · 예외 수집(SENTRY_DSN 없으면 꺼짐)
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-opentelemetry'
+    implementation "io.sentry:sentry-spring-boot-4-starter:${sentryVersion}"
+    implementation "io.sentry:sentry-logback:${sentryVersion}"   // ERROR 로그 → Sentry
     implementation 'org.springframework.boot:spring-boot-starter-kafka'
 
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.1'

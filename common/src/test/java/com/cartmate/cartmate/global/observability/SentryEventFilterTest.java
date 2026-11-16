@@ -7,6 +7,13 @@ import io.micrometer.tracing.Tracer;
 import io.sentry.Hint;
 import io.sentry.SentryEvent;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.TypeMismatchException;
+import org.springframework.http.HttpInputMessage;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.mock.http.MockHttpInputMessage;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -21,6 +28,16 @@ class SentryEventFilterTest {
         SentryEvent event = new SentryEvent(new ServiceException("409-PAYMENT_ALREADY_CANCELED", "이미 취소된 결제"));
 
         assertThat(filter.execute(event, new Hint())).isNull();
+    }
+
+    // 실제로 났던 일: 로컬 Sentry 연결 확인 때 JSON 형식 오류 · 입력값 검증 실패(400)가 Sentry 이슈로 들어감
+    @Test
+    void 스프링_요청_오류_4xx는_보내지_않는다() {
+        HttpInputMessage body = new MockHttpInputMessage(new byte[0]);
+        assertThat(filter.execute(new SentryEvent(new HttpMessageNotReadableException("JSON parse error", body)), new Hint())).isNull();
+        assertThat(filter.execute(new SentryEvent(new NoResourceFoundException(HttpMethod.GET, "/x", "x")), new Hint())).isNull();
+        assertThat(filter.execute(new SentryEvent(new HttpRequestMethodNotSupportedException("DELETE")), new Hint())).isNull();
+        assertThat(filter.execute(new SentryEvent(new TypeMismatchException("abc", Long.class)), new Hint())).isNull();
     }
 
     @Test

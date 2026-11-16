@@ -20,6 +20,7 @@ import com.cartmate.cartmate.boundedContext.productService.product.out.Inventory
 import com.cartmate.cartmate.boundedContext.productService.product.out.ProductImageRepository;
 import com.cartmate.cartmate.boundedContext.productService.product.out.ProductOptionRepository;
 import com.cartmate.cartmate.boundedContext.productService.product.out.ProductRepository;
+import com.cartmate.cartmate.shared.delivery.DeliveryCancelReason;
 import com.cartmate.cartmate.shared.order.OrderCancelReason;
 import com.cartmate.cartmate.shared.order.OrderType;
 import com.cartmate.cartmate.shared.order.SharedGroupOrderCancelReason;
@@ -164,7 +165,8 @@ class SharedGroupOrderInventoryTest {
     @DisplayName("판매자 몫 취소 → 그 판매자 재고만 재고 복구, 다른 판매자 재고는 판매 확정 그대로")
     void sellerItemsCanceledRestoresOnlyThatSeller() {
         publish(confirmed());
-        publish(new SharedGroupOrderSellerItemsCanceledEvent(ORDER_ID, OTHER_SELLER_ID, 75000L, LocalDateTime.now()));
+        publish(new SharedGroupOrderSellerItemsCanceledEvent(ORDER_ID, OTHER_SELLER_ID, 75000L, LocalDateTime.now(),
+                DeliveryCancelReason.SALES_STOPPED, 1L));
 
         assertThat(stockOf(ballId)).isEqualTo(20);
         assertThat(stockOf(blackId)).isEqualTo(8);
@@ -201,7 +203,7 @@ class SharedGroupOrderInventoryTest {
     void eventWithoutReservationDoesNothing() {
         publish(new SharedGroupOrderConfirmedEvent(99L, 5L, CREATOR_ID, LocalDateTime.now(), null, List.of()));
         publish(new SharedGroupOrderCanceledEvent(98L, 5L, SharedGroupOrderCancelReason.DEADLINE_EXPIRED,
-                LocalDateTime.now(), List.of(), CREATOR_ID));
+                LocalDateTime.now(), List.of(), CREATOR_ID, List.of()));
 
         assertThat(stockOf(blackId)).isEqualTo(10);
         assertThat(reservedOf(blackId)).isEqualTo(2);
@@ -223,7 +225,7 @@ class SharedGroupOrderInventoryTest {
     }
 
     private SharedGroupOrderCanceledEvent canceled(SharedGroupOrderCancelReason reason) {
-        return new SharedGroupOrderCanceledEvent(ORDER_ID, 5L, reason, LocalDateTime.now(), List.of(), CREATOR_ID);
+        return new SharedGroupOrderCanceledEvent(ORDER_ID, 5L, reason, LocalDateTime.now(), List.of(), CREATOR_ID, List.of());
     }
 
     private void register(Long sellerId, String name, CreateInventory inventory) {

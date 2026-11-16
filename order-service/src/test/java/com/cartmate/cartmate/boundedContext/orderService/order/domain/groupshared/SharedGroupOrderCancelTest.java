@@ -110,17 +110,20 @@ class SharedGroupOrderCancelTest {
     void cancelSellerItemsKeepsOrderConfirmed() {
         SharedGroupOrder order = confirmedTwoSellers();
 
-        long amount = order.cancelSellerItems(7L, DeliveryCancelReason.SELLER_OUT_OF_STOCK, NOW);
+        SharedItemCancelOutcome outcome = order.cancelItems(7L, null, DeliveryCancelReason.SELLER_OUT_OF_STOCK, NOW);
+        outcome.linkCancel(31L);
 
-        assertThat(amount).isEqualTo(10_000L);
+        assertThat(outcome.amount()).isEqualTo(10_000L);
+        assertThat(outcome.orderCanceled()).isFalse();
         assertThat(order.getStatus()).isEqualTo(SharedGroupOrderStatus.CONFIRMED);
         assertThat(order.getItems()).extracting(SharedGroupOrderItem::getCancelReason)
                 .containsExactly(DeliveryCancelReason.SELLER_OUT_OF_STOCK, null);
-        assertThat(order.canceledAmountsBySeller()).containsExactly(java.util.Map.entry(7L, 10_000L));
+        assertThat(order.canceledBatches()).containsExactly(
+                new com.cartmate.cartmate.shared.order.event.SharedGroupOrderCanceledEvent.SellerAmount(7L, 10_000L, 31L));
     }
 
     @Test
-    @DisplayName("마지막 판매자 몫까지 판매자 사유로 취소되면 공동 주문도 판매자 사유 취소로 취소되고, 다시 오면 0원")
+    @DisplayName("마지막 판매자 몫까지 취소되면 공동 주문도 취소되고(판매 중지와 판매자 사유가 섞여 여러 사유), 다시 오면 0원")
     void cancelSellerItemsCancelsOrderWhenAllItemsCanceled() {
         SharedGroupOrder order = confirmedTwoSellers();
         order.cancelSellerItems(7L, DeliveryCancelReason.SALES_STOPPED, NOW);
@@ -129,20 +132,25 @@ class SharedGroupOrderCancelTest {
                 .isEqualTo(10_000L);
 
         assertThat(order.getStatus()).isEqualTo(SharedGroupOrderStatus.CANCELED);
-        assertThat(order.getCancelReason()).isEqualTo(SharedGroupOrderCancelReason.SELLER_CANCELED);
+        assertThat(order.getCancelReason()).isEqualTo(SharedGroupOrderCancelReason.MULTIPLE_REASONS);
         assertThat(order.getCanceledAt()).isEqualTo(NOW.plusMinutes(1));
         assertThat(order.cancelSellerItems(8L, DeliveryCancelReason.SELLER_PRODUCT_ISSUE, NOW.plusMinutes(2))).isZero();
     }
 
     @Test
-    @DisplayName("마지막 판매자 몫이 판매 중지로 취소되면 공동 주문은 판매 중지로 취소된다")
-    void cancelSellerItemsBySalesStopCancelsOrderWithSalesStopped() {
+    @DisplayName("판매자 사유와 판매 중지가 섞여 모든 항목이 취소되면 공동 주문 사유는 여러 사유, 모두 판매 중지면 판매 중지")
+    void cancelSellerItemsWithMixedReasonsCancelsOrderWithMultipleReasons() {
         SharedGroupOrder order = confirmedTwoSellers();
         order.cancelSellerItems(7L, DeliveryCancelReason.SELLER_OTHER, NOW);
 
         order.cancelSellerItems(8L, DeliveryCancelReason.SALES_STOPPED, NOW.plusMinutes(1));
 
-        assertThat(order.getCancelReason()).isEqualTo(SharedGroupOrderCancelReason.SALES_STOPPED);
+        assertThat(order.getCancelReason()).isEqualTo(SharedGroupOrderCancelReason.MULTIPLE_REASONS);
+
+        SharedGroupOrder salesStopped = confirmedTwoSellers();
+        salesStopped.cancelSellerItems(7L, DeliveryCancelReason.SALES_STOPPED, NOW);
+        salesStopped.cancelSellerItems(8L, DeliveryCancelReason.SALES_STOPPED, NOW.plusMinutes(1));
+        assertThat(salesStopped.getCancelReason()).isEqualTo(SharedGroupOrderCancelReason.SALES_STOPPED);
     }
 
     @Test
@@ -154,6 +162,23 @@ class SharedGroupOrderCancelTest {
         assertThat(order.cancelSellerItems(7L, DeliveryCancelReason.SELLER_OTHER, NOW)).isZero();
         assertThat(order.getStatus()).isEqualTo(SharedGroupOrderStatus.PAYING);
         assertThat(order.getItems()).noneMatch(SharedGroupOrderItem::isCanceled);
+    }
+
+    @Test
+    @DisplayName("판매글 내림 요청에 싣는 항목은 그 판매자의 아직 취소되지 않은 공동 주문 항목뿐이다")
+    void uncanceledItemIdsOf_excludesCanceledAndOtherSellers() {
+        SharedGroupOrder order = sharedOrder(10L, CREATOR, MEMBER, CLOSED_AT,
+                sharedLine(2L, 4L, 7L, 1, 1_000L), sharedLine(3L, 5L, 7L, 1, 1_000L),
+                sharedLine(4L, 6L, 7L, 1, 1_000L), sharedLine(5L, 7L, 8L, 1, 1_000L));
+        for (int i = 0; i < 4; i++) {
+            org.springframework.test.util.ReflectionTestUtils.setField(order.getItems().get(i), "id", 701L + i);
+        }
+        order.markStockReserved();
+        order.pay(CREATOR, 1L, CLOSED_AT, address());
+        order.pay(MEMBER, 2L, CLOSED_AT, null);
+        order.cancelItems(7L, java.util.List.of(701L), DeliveryCancelReason.SELLER_OTHER, NOW);
+
+        assertThat(order.uncanceledItemIdsOf(7L)).containsExactly(702L, 703L);
     }
 
     private static SharedGroupOrder confirmedTwoSellers() {

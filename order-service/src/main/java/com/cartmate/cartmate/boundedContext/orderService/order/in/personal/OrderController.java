@@ -4,6 +4,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import com.cartmate.cartmate.shared.coupon.dto.CouponOption;
 import com.cartmate.cartmate.boundedContext.orderService.order.dto.personal.OrderPaymentRequest;
 import com.cartmate.cartmate.boundedContext.orderService.order.app.OrderPaymentRetryService;
+import com.cartmate.cartmate.boundedContext.orderService.order.app.buyercancel.BuyerCancelFacade;
 import com.cartmate.cartmate.boundedContext.orderService.order.app.personal.OrderFacade;
 import com.cartmate.cartmate.boundedContext.orderService.order.domain.personal.BuyerCancelResult;
 import com.cartmate.cartmate.boundedContext.orderService.order.dto.personal.*;
@@ -32,6 +33,7 @@ public class OrderController {
 
     private final OrderFacade orderFacade;
     private final OrderPaymentRetryService orderPaymentRetryService;
+    private final BuyerCancelFacade buyerCancelFacade;
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -67,12 +69,25 @@ public class OrderController {
     @PostMapping("/{id}/cancel")
     public RsData<Void> cancel(
             @AuthenticationPrincipal SecurityUser user,
-            @PathVariable Long id
+            @PathVariable Long id,
+            @RequestBody(required = false) OrderCancelRequest request
     ) {
-        if (orderFacade.cancelByBuyer(user.memberId(), id) == BuyerCancelResult.CANCELED) {
+        List<Long> orderItemIds = request == null ? null : request.orderItemIds();
+        if (buyerCancelFacade.request(user.memberId(), id, orderItemIds) == BuyerCancelResult.CANCELED) {
             return new RsData<>("200-1", "주문을 취소했습니다.");
         }
         return new RsData<>("200-1", "취소 요청을 접수했습니다. 판매자 배송 확인 후 취소됩니다.");
+    }
+
+    @GetMapping("/{id}/cancel-preview")
+    @Operation(operationId = "cancelPreview", summary = "고른 상품을 취소하면 돌려받을 예상 환불 금액과 쿠폰 반환 여부")
+    public RsData<OrderCancelPreviewResponse> cancelPreview(
+            @AuthenticationPrincipal SecurityUser user,
+            @PathVariable Long id,
+            @RequestParam List<Long> orderItemIds
+    ) {
+        return new RsData<>("200-1", "예상 환불 금액 조회 성공했습니다.",
+                OrderCancelPreviewResponse.from(orderFacade.previewBuyerCancel(user.memberId(), id, orderItemIds)));
     }
 
     @PostMapping("/{orderId}/payment")

@@ -2,12 +2,17 @@ package com.cartmate.cartmate.global.global;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.task.support.ContextPropagatingTaskDecorator;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import org.springframework.util.ClassUtils;
 
 @Configuration
 @EnableAsync
 public class AsyncConfig {
+
+    private static final boolean CONTEXT_PROPAGATION_PRESENT =
+            ClassUtils.isPresent("io.micrometer.context.ContextSnapshotFactory", AsyncConfig.class.getClassLoader());
 
     @Bean(name = "imageUploadExecutor")
     public ThreadPoolTaskExecutor imageUploadExecutor() {
@@ -16,6 +21,7 @@ public class AsyncConfig {
         executor.setMaxPoolSize(30);
         executor.setQueueCapacity(100);
         executor.setThreadNamePrefix("image-upload-");
+        propagateContext(executor);
         executor.initialize();
         return executor;
     }
@@ -31,8 +37,16 @@ public class AsyncConfig {
         executor.setThreadNamePrefix("event-");
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(30);
+        propagateContext(executor);
         executor.initialize();
         return executor;
     }
 
+    // 맡긴 스레드의 현재 trace(span · 로그 MDC traceId)를 작업 스레드로 넘긴다 → @Async · supplyAsync 작업도 같은 traceId로 이어진다.
+    // context-propagation이 없는 서비스(추적 스타터 없음)에서는 아무것도 하지 않는다
+    static void propagateContext(ThreadPoolTaskExecutor executor) {
+        if (CONTEXT_PROPAGATION_PRESENT) {
+            executor.setTaskDecorator(new ContextPropagatingTaskDecorator());
+        }
+    }
 }

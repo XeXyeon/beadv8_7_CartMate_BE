@@ -66,7 +66,7 @@ class CouponInternalControllerTest {
     @Test
     @DisplayName("할인 계산과 사용은 쿠폰 쪽 할인 결과를 그대로 돌려준다")
     void quoteAndUse() throws Exception {
-        CouponQuote quote = new CouponQuote(5L, 10L, "판매자 쿠폰", 3_000L, false, 8L);
+        CouponQuote quote = new CouponQuote(5L, 10L, "판매자 쿠폰", 3_000L, false, 8L, "FIXED", 3_000L, null, 0L);
         given(couponFacade.quoteForOrder(1L, 5L, "ORDER", 100L, TARGET)).willReturn(quote);
         given(couponFacade.useForOrder(1L, 5L, "ORDER", 100L, TARGET)).willReturn(quote);
 

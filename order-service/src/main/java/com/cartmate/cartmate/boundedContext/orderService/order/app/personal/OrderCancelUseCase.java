@@ -13,9 +13,14 @@ import com.cartmate.cartmate.shared.payment.dto.PaymentOrderType;
 
 import com.cartmate.cartmate.boundedContext.orderService.order.out.OrderPaymentClient;
 
-import com.cartmate.cartmate.boundedContext.orderService.order.domain.personal.BuyerCancelResult;
 import com.cartmate.cartmate.boundedContext.orderService.order.domain.personal.Order;
-import com.cartmate.cartmate.shared.order.event.OrderCancelRequestedEvent;
+import com.cartmate.cartmate.boundedContext.orderService.order.domain.personal.ItemCancelOutcome;
+import com.cartmate.cartmate.boundedContext.orderService.order.domain.personal.OrderCancelPreview;
+import com.cartmate.cartmate.boundedContext.orderService.order.domain.itemcancel.CouponMode;
+import com.cartmate.cartmate.boundedContext.orderService.order.domain.itemcancel.OrderItemCancel;
+import com.cartmate.cartmate.boundedContext.orderService.order.out.itemcancel.OrderItemCancelRepository;
+import com.cartmate.cartmate.shared.delivery.PurchaseType;
+import com.cartmate.cartmate.boundedContext.orderService.order.domain.buyercancel.BuyerCancelRequest;
 import com.cartmate.cartmate.shared.order.OrderStatus;
 import com.cartmate.cartmate.boundedContext.orderService.order.out.personal.OrderRepository;
 import com.cartmate.cartmate.shared.order.event.OrderCanceledEvent;
@@ -26,10 +31,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Collection;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 @Slf4j
 @Service
@@ -41,55 +48,36 @@ class OrderCancelUseCase {
     private final DomainEventPublisher eventPublisher;
     private final OrderCouponClient orderCouponClient;
     private final OrderPaymentClient orderPaymentClient;
+    private final OrderItemCancelRepository orderItemCancelRepository;
     private final Clock clock;
 
-    BuyerCancelResult cancelByBuyer(Long memberId, Long orderId) {
+    void cancelByBuyer(Long memberId, Long orderId) {
         Order order = orderSupport.getOrderForUpdate(orderId);
-        BuyerCancelResult result = order.cancelByBuyer(memberId, LocalDateTime.now(clock));
-        if (result == BuyerCancelResult.CANCELED) {
-            publishCanceledEventIf(true, order, false);
-            restoreCouponIf(true, order);
-        } else {
-            publishCancelRequested(order);
-        }
-        return result;
-    }
-
-    void confirmCancelByDelivery(Long orderId, int requestSeq) {
-        Order order = orderSupport.getOrderForUpdate(orderId);
-        if (!order.confirmCancel(requestSeq, LocalDateTime.now(clock))) {
-            log.info("반영하지 않는 배송 취소 결과: orderId={}, requestSeq={}, status={}, currentSeq={}",
-                    orderId, requestSeq, order.getStatus(), order.getCancelRequestSeq());
-            return;
-        }
-        eventPublisher.publish(toCanceledEvent(order, true));
+        order.cancelByBuyer(memberId, LocalDateTime.now(clock));
+        publishCanceledEventIf(true, order, false);
         restoreCouponIf(true, order);
     }
 
-    void rejectCancelByDelivery(Long orderId, int requestSeq, String rejectCode) {
+    BuyerCancelStart startBuyerCancel(Long memberId, Long orderId, Collection<Long> orderItemIds) {
         Order order = orderSupport.getOrderForUpdate(orderId);
-        if (!order.rejectCancel(requestSeq, rejectCode)) {
-            log.info("반영하지 않는 배송 취소 거절: orderId={}, requestSeq={}, status={}, currentSeq={}",
-                    orderId, requestSeq, order.getStatus(), order.getCancelRequestSeq());
+        if (order.isPaymentPending()) {
+            cancelByBuyer(memberId, orderId);
+            return BuyerCancelStart.canceled();
         }
+        order.previewBuyerCancel(memberId, orderItemIds);
+        return BuyerCancelStart.request(order.buyerCancelTargets(memberId, orderItemIds).stream()
+                .map(item -> new BuyerCancelRequest.Target(item.getId(), item.getSellerId()))
+                .toList());
     }
 
-    List<Long> findIdsToResendCancelRequest(LocalDateTime lastSentBefore) {
-        return orderRepository.findIdsByStatusAndCancelLastSentAtBefore(OrderStatus.CANCEL_REQUESTED, lastSentBefore);
-    }
-
-    void resendCancelRequest(Long orderId, Duration resendAfter) {
-        Order order = orderSupport.getOrderForUpdate(orderId);
-        if (order.resendCancelRequest(LocalDateTime.now(clock), resendAfter)) {
-            log.warn("배송 서버 응답이 없어 취소 요청 재발행: orderId={}, requestSeq={}, firstRequestedAt={}",
-                    orderId, order.getCancelRequestSeq(), order.getCancelRequestedAt());
-            publishCancelRequested(order);
-        }
+    OrderCancelPreview previewBuyerCancel(Long memberId, Long orderId, Collection<Long> orderItemIds) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ServiceException(OrderErrorCode.ORDER_NOT_FOUND));
+        return order.previewBuyerCancel(memberId, orderItemIds);
     }
 
     List<Long> findPaidIdsByProductIds(Collection<Long> productIds) {
-        return orderRepository.findIdsByStatusInAndProductIds(
-                List.of(OrderStatus.PAID, OrderStatus.CANCEL_REQUESTED), productIds);
+        return orderRepository.findIdsByStatusInAndProductIds(List.of(OrderStatus.PAID), productIds);
     }
 
     void cancelByDeadline(Long orderId) {
@@ -119,15 +107,50 @@ class OrderCancelUseCase {
                 OrderStatus.PAYMENT_PENDING);
     }
 
-    void cancelSellerItems(Long orderId, Long sellerId, DeliveryCancelReason reason) {
+    // 환불이 있거나 주문을 끝낸 취소만 취소 건으로 남긴다. 돌려줄 돈이 없는 일부 취소는 환불 이벤트도 내지 않는다.
+    Optional<Long> cancelItems(Long orderId, Long sellerId, Collection<Long> orderItemIds,
+                               DeliveryCancelReason reason, CouponMode couponMode) {
         Order order = orderSupport.getOrderForUpdate(orderId);
         LocalDateTime now = LocalDateTime.now(clock);
-        long amount = order.cancelSellerItems(sellerId, reason, now);
-        if (amount > 0) {
-            eventPublisher.publish(new OrderSellerItemsCanceledEvent(
-                    orderId, order.getBuyerMemberId(), sellerId, amount, now, reason));
+        ItemCancelOutcome outcome = order.cancelItems(sellerId, orderItemIds, reason, couponMode, now);
+        return recordCancels(order, outcome, reason, now).stream().findFirst();
+    }
+
+    List<Long> findUncanceledItemIds(Long orderId, Long sellerId) {
+        return orderRepository.findById(orderId)
+                .orElseThrow(() -> new ServiceException(OrderErrorCode.ORDER_NOT_FOUND))
+                .uncanceledItemIdsOf(sellerId);
+    }
+
+    // 구매자 취소 결과 하나로 취소된 판매자들의 상품을 한 번에 취소한다
+    List<Long> cancelItemsByBuyer(Long orderId, Map<Long, List<Long>> itemIdsBySeller) {
+        Order order = orderSupport.getOrderForUpdate(orderId);
+        LocalDateTime now = LocalDateTime.now(clock);
+        ItemCancelOutcome outcome = order.cancelItems(itemIdsBySeller, DeliveryCancelReason.BUYER_CANCELED,
+                CouponMode.RECALCULATE, now);
+        return recordCancels(order, outcome, DeliveryCancelReason.BUYER_CANCELED, now);
+    }
+
+    // 판매자 몫마다 환불이 있거나 주문을 끝낸 취소면 취소 건으로 남기고, 환불이 있으면 환불 이벤트를 낸다
+    private List<Long> recordCancels(Order order, ItemCancelOutcome outcome, DeliveryCancelReason reason, LocalDateTime now) {
+        List<Long> cancelIds = new ArrayList<>();
+        for (ItemCancelOutcome.SellerPart part : outcome.parts()) {
+            if (part.refundAmount() == 0 && !outcome.orderCanceled()) {
+                continue;
+            }
+            Long cancelId = orderItemCancelRepository.save(OrderItemCancel.of(PurchaseType.INDIVIDUAL_GROUP,
+                    order.getId(), part.sellerId(), reason, part.refundAmount(), now)).getId();
+            part.linkCancel(cancelId);
+            cancelIds.add(cancelId);
+            if (part.refundAmount() > 0) {
+                eventPublisher.publish(new OrderSellerItemsCanceledEvent(order.getId(), order.getBuyerMemberId(),
+                        part.sellerId(), part.refundAmount(), now, reason, cancelId));
+            }
         }
-        restoreCouponIf(amount > 0, order);
+        if (outcome.couponReturnable()) {
+            orderCouponClient.restore(order.getBuyerMemberId(), order.getMemberCouponId(), order.getId());
+        }
+        return cancelIds;
     }
 
     List<Long> findIdsByStatusAndProductIds(OrderStatus status, Collection<Long> productIds) {
@@ -141,16 +164,12 @@ class OrderCancelUseCase {
     private void restoreCouponIf(boolean canceled, Order order) {
         if (canceled && order.couponRestorable()) {
             orderCouponClient.restore(order.getBuyerMemberId(), order.getMemberCouponId(), order.getId());
+            order.markCouponReturned();
         }
     }
 
     private boolean isPaid(Order order) {
         return order.isPaid();
-    }
-
-    private void publishCancelRequested(Order order) {
-        eventPublisher.publish(new OrderCancelRequestedEvent(
-                order.getId(), order.getBuyerMemberId(), order.getCancelRequestSeq(), order.getCancelRequestedAt()));
     }
 
     private void publishCanceledEventIf(boolean canceled, Order order, boolean paid) {
