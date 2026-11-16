@@ -63,6 +63,7 @@ public enum DeliveryErrorCode implements ErrorCode {
     DELIVERY_NOT_CANCELABLE_BY_SELLER("DELIVERY_NOT_CANCELABLE_BY_SELLER", "이미 발송한 배송은 취소할 수 없습니다. 구매자의 교환·환불 요청으로 처리됩니다.", HttpStatus.CONFLICT),
 
     // 클레임 접수
+    DELIVERY_CLAIM_ITEM_CANCELED("DELIVERY_CLAIM_ITEM_CANCELED", "취소된 상품은 교환·환불을 접수할 수 없습니다.", HttpStatus.CONFLICT),
     DELIVERY_CLAIM_ALREADY_EXISTS("DELIVERY_CLAIM_ALREADY_EXISTS", "이미 처리 중인 교환·환불 요청이 있습니다.", HttpStatus.CONFLICT),
     DELIVERY_CLAIM_IN_PROGRESS("DELIVERY_CLAIM_IN_PROGRESS", "처리 중인 교환·환불 요청이 있어 구매확정할 수 없습니다.", HttpStatus.CONFLICT),
     DELIVERY_CLAIM_REFUND_NOT_ALLOWED("DELIVERY_CLAIM_REFUND_NOT_ALLOWED", "공동물품 구매는 환불을 접수할 수 없습니다.", HttpStatus.CONFLICT),

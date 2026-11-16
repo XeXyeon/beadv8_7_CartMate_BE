@@ -24,12 +24,13 @@ public class DeliveryConfirmedEventPublisher {
     private final DomainEventPublisher eventPublisher;
 
     // 구매확정된 배송과 그 상품 정보를 담아 DeliveryConfirmedEvent를 발행한다.
-    // 구매확정 전에 환불이 완료된 수량은 판매가 아니므로 상품 수량에서 빼고, 전량 환불된 상품은 제외한다.
+    // 배송 전에 취소된 상품은 팔리지 않았으므로 뺀다. 구매확정 전에 환불이 완료된 수량도 상품 수량에서 빼고, 전량 환불된 상품은 제외한다.
     // 남는 상품이 하나도 없으면 정산할 것이 없으므로 이벤트를 발행하지 않는다.
     public void publish(Delivery delivery) {
         Map<Long, Long> refundedQuantities = refundedQuantities(delivery.getId());
 
         List<DeliveryConfirmedEvent.Item> items = deliveryItemRepository.findByDeliveryId(delivery.getId()).stream()
+                .filter(item -> !item.isCanceled())
                 .map(item -> toItem(item, refundedQuantities.getOrDefault(item.getId(), 0L)))
                 .filter(item -> item.quantity() > 0)
                 .toList();
