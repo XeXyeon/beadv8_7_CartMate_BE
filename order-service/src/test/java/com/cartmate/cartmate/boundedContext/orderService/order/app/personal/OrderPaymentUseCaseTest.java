@@ -281,6 +281,64 @@ class OrderPaymentUseCaseTest {
     }
 
     @Test
+    @DisplayName("남은 수량을 전부 사서 내 선점으로 남은 수량이 0이 돼도(판매 중) 결제 직후 확인을 통과해 결제 완료된다")
+    void buyingAllRemainingStockStillPays() {
+        OrderPaymentClient paymentClient = org.mockito.Mockito.mock(OrderPaymentClient.class);
+        Order order = personalOrder(BUYER, ballLine(9L, 2), CREATED_AT);
+        OrderPaymentUseCase useCase = useCaseWithProducts(paymentClient, afterFirstCall(false, true));
+        givenPayable(paymentClient, order);
+
+        useCase.pay(ORDER_ID, BUYER, CREATED_AT.plusMinutes(1));
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
+        then(paymentClient).should(never()).compensateCharge(any(), any(), any());
+        then(inventoryClient).should(never()).release(any(), any());
+    }
+
+    @Test
+    @DisplayName("결제하는 사이 판매가 중지되면(onSale=false) 결제 직후 확인에서 차감을 되돌리고 선점도 해제한다")
+    void salesStoppedDuringPaymentCompensates() {
+        OrderPaymentClient paymentClient = org.mockito.Mockito.mock(OrderPaymentClient.class);
+        Order order = personalOrder(BUYER, ballLine(9L, 2), CREATED_AT);
+        OrderPaymentUseCase useCase = useCaseWithProducts(paymentClient, afterFirstCall(false, false));
+        givenPayable(paymentClient, order);
+
+        assertThatThrownBy(() -> useCase.pay(ORDER_ID, BUYER, CREATED_AT.plusMinutes(1)))
+                .isInstanceOf(ServiceException.class)
+                .hasMessageContaining(OrderErrorCode.ORDER_PRODUCT_NOT_PURCHASABLE.getMsg());
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PAYMENT_PENDING);
+        then(paymentClient).should().compensateCharge(any(), any(), any());
+        then(inventoryClient).should().release(OrderType.PERSONAL, ORDER_ID);
+    }
+
+    // 첫 조회(결제 전 확인)는 판매 중 + 남은 수량 있음, 그 뒤(결제 직후 확인)는 주어진 값으로 돌려준다
+    private static OrderProductClient afterFirstCall(boolean purchasable, boolean onSale) {
+        int[] calls = {0};
+        return inventoryIds -> {
+            boolean first = ++calls[0] == 1;
+            return inventoryIds.stream().distinct()
+                    .map(id -> new OrderProductInfo(id, id, 1L, "상품", null, 1000L, null,
+                            first || purchasable, first || onSale))
+                    .toList();
+        };
+    }
+
+    private OrderPaymentUseCase useCaseWithProducts(OrderPaymentClient paymentClient, OrderProductClient productClient) {
+        return new OrderPaymentUseCase(orderRepository, new OrderSupport(orderRepository), eventPublisher, productClient,
+                replicaUseCase, paymentClient,
+                org.mockito.Mockito.mock(com.cartmate.cartmate.boundedContext.orderService.order.out.OrderCouponClient.class),
+                inventoryClient);
+    }
+
+    private void givenPayable(OrderPaymentClient paymentClient, Order order) {
+        given(orderRepository.findById(ORDER_ID)).willReturn(Optional.of(order));
+        given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(order));
+        given(paymentClient.findPayment(any(), any(), any())).willReturn(Optional.empty());
+        given(paymentClient.charge(any(), any(), any(), org.mockito.ArgumentMatchers.anyLong())).willReturn(new PaymentResult(
+                PAYMENT_ID, ORDER_ID, 50000L, 0L, 50000L, "INDIVIDUAL_GROUP", "PAID", CREATED_AT.plusMinutes(1), null));
+    }
+
+    @Test
     @DisplayName("재고 선점: 남은 수량이 부족하면 ORDER_OUT_OF_STOCK이고 차감하지 않는다")
     void payOutOfStockDoesNotCharge() {
         OrderPaymentClient paymentClient = org.mockito.Mockito.mock(OrderPaymentClient.class);

@@ -29,6 +29,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.function.Predicate;
 
 @Slf4j
 @Service
@@ -67,7 +68,8 @@ class OrderPaymentUseCase {
         Order order = orderSupport.getOrderForUpdate(orderId);
         orderSupport.validateBuyer(order, memberId);
         if (order.isPaymentPending()) {
-            validatePurchasable(order.getItems().stream().map(OrderItem::getInventoryId).toList());
+            // 결제 직후라 이 주문의 재고 선점이 이미 잡혀 있다. 남은 수량은 보지 않고 판매 중인지만 다시 본다
+            validateOnSale(order.getItems().stream().map(OrderItem::getInventoryId).toList());
             if (!groupPurchaseAcceptsPayment(order, paidAt, true)) {
                 throw new ServiceException(OrderErrorCode.ORDER_GROUP_PURCHASE_PAYMENT_CLOSED);
             }
@@ -127,11 +129,21 @@ class OrderPaymentUseCase {
                 .orElse(false);
     }
 
+    // 결제 전: 판매 중 + 남은 수량 1개 이상
     private void validatePurchasable(List<Long> inventoryIds) {
+        validateProducts(inventoryIds, OrderProductInfo::purchasable);
+    }
+
+    // 결제 직후: 판매 중인지만 (내 선점으로 남은 수량이 0이 될 수 있다)
+    private void validateOnSale(List<Long> inventoryIds) {
+        validateProducts(inventoryIds, OrderProductInfo::onSale);
+    }
+
+    private void validateProducts(List<Long> inventoryIds, Predicate<OrderProductInfo> check) {
         List<OrderProductInfo> infos = orderProductClient.findAllByInventoryIds(inventoryIds);
-        boolean purchasable = infos.size() == inventoryIds.stream().distinct().count()
-                && infos.stream().allMatch(OrderProductInfo::purchasable);
-        if (!purchasable) {
+        boolean ok = infos.size() == inventoryIds.stream().distinct().count()
+                && infos.stream().allMatch(check);
+        if (!ok) {
             throw new ServiceException(OrderErrorCode.ORDER_PRODUCT_NOT_PURCHASABLE);
         }
     }
