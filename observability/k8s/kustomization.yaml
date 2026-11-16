@@ -1,0 +1,20 @@
+# CartMate 운영 관측 (k3s): Alloy 1개(수집 → Grafana Cloud) + Kafka UI
+#   적용: kubectl apply -k observability/k8s   (먼저 README의 Secret 3개를 만든다)
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: monitoring
+
+resources:
+  - namespace.yaml
+  - alloy.yaml
+  - kafka-exporter.yaml
+  - kafka-ui.yaml
+
+configMapGenerator:
+  - name: alloy-config
+    files:
+      - config.alloy=alloy/config.alloy
+
+generatorOptions:
+  disableNameSuffixHash: false   # 설정이 바뀌면 이름이 바뀌어 Alloy가 자동으로 다시 뜬다

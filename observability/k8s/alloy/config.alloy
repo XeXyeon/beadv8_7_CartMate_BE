@@ -1,0 +1,344 @@
+// CartMate 운영 수집기 (k3s, Alloy 1개) → Grafana Cloud
+//   로그   : 앱 네임스페이스 Pod 로그를 쿠버네티스 API로 읽음 (hostPath · 노드별 수집기 불필요) → Cloud Loki
+//   trace  : 앱 OTLP → tail sampling(오류 · 느린 trace 100%) → Cloud Tempo
+//   메트릭 : kubelet(cAdvisor · resource) · kube-state-metrics · kafka-exporter · 내장 exporter(MySQL 6 · Redis 2 · ES) → Cloud Prometheus
+// 로그 처리 규칙은 로컬 observability/alloy/config.alloy와 같게 유지한다 (라벨 service · env · level만)
+//
+// 환경 변수 (observability/k8s/README.md)
+//   GC_TOKEN, GC_LOKI_URL, GC_LOKI_USER, GC_OTLP_URL, GC_OTLP_USER, GC_PROM_URL, GC_PROM_USER   Grafana Cloud
+//   ENV_NAME, APP_NAMESPACES, APP_SERVICE_REGEX                                                   대상
+//   OBS_TRACE_SAMPLE_PERCENT, OBS_SLOW_TRACE_MS, OBS_DROP_PLAIN_LOG_LEVELS, OBS_LOG_RATE_LIMIT     절약 (평시 / 부하 테스트)
+//   KSM_ADDR, KAFKA_EXPORTER_ADDR, MYSQL_*_DSN, REDIS_*_ADDR, REDIS_PASSWORD, ES_URL                 메트릭 대상
+
+// ======================================================================
+// 로그
+// ======================================================================
+discovery.kubernetes "pods" {
+  role = "pod"
+  namespaces {
+    names = split(coalesce(sys.env("APP_NAMESPACES"), "cartmate"), ",")
+  }
+}
+
+discovery.relabel "app_pods" {
+  targets = discovery.kubernetes.pods.targets
+
+  // service 라벨: 컨테이너 이름 → Pod의 app 라벨이 있으면 그것으로
+  rule {
+    source_labels = ["__meta_kubernetes_pod_container_name"]
+    target_label  = "service"
+  }
+  rule {
+    source_labels = ["__meta_kubernetes_pod_label_app"]
+    regex         = "(.+)"
+    target_label  = "service"
+  }
+  // 앱 서비스만 (MySQL · Kafka 등 인프라 Pod 로그는 보내지 않음)
+  rule {
+    source_labels = ["service"]
+    regex         = coalesce(sys.env("APP_SERVICE_REGEX"), ".*-service")
+    action        = "keep"
+  }
+}
+
+loki.source.kubernetes "pods" {
+  targets    = discovery.relabel.app_pods.output
+  forward_to = [loki.process.cartmate.receiver]
+}
+
+loki.process "cartmate" {
+  stage.json {
+    expressions = {
+      level     = "level",
+      timestamp = "\"@timestamp\"",
+    }
+  }
+
+  stage.timestamp {
+    source = "timestamp"
+    format = "RFC3339Nano"
+  }
+
+  stage.labels {
+    values = {
+      level = "",
+    }
+  }
+
+  // 업무 이벤트(event)가 없는 줄 중 지정한 레벨은 버린다 (부하 테스트 때 INFO까지)
+  stage.match {
+    selector            = "{level=~\"" + coalesce(sys.env("OBS_DROP_PLAIN_LOG_LEVELS"), "DEBUG|TRACE") + "\"} != \"\\\"event\\\":\""
+    action              = "drop"
+    drop_counter_reason = "plain_log"
+  }
+
+  // 서비스별 초당 줄 수 상한 (오류가 폭주해도 무료 한도를 다 쓰지 않게)
+  stage.limit {
+    rate          = encoding.from_json(coalesce(sys.env("OBS_LOG_RATE_LIMIT"), "200"))
+    burst         = encoding.from_json(coalesce(sys.env("OBS_LOG_RATE_LIMIT"), "200")) * 2
+    by_label_name = "service"
+    drop          = true
+  }
+
+  // 검색에 안 쓰는 필드 제거
+  stage.replace {
+    expression = "(\"@version\":\"1\",)"
+    replace    = ""
+  }
+
+  stage.replace {
+    expression = "(,\"level_value\":\\d+)"
+    replace    = ""
+  }
+
+  stage.static_labels {
+    values = {
+      env = coalesce(sys.env("ENV_NAME"), "prod"),
+    }
+  }
+
+  // 라벨은 service · env · level만 (traceId · event · orderId 등은 JSON 필드 → 쿼리 때 `| json`)
+  stage.label_keep {
+    values = ["service", "env", "level"]
+  }
+
+  forward_to = [loki.write.cloud.receiver]
+}
+
+loki.write "cloud" {
+  endpoint {
+    url = sys.env("GC_LOKI_URL")
+    basic_auth {
+      username = sys.env("GC_LOKI_USER")
+      password = sys.env("GC_TOKEN")
+    }
+  }
+}
+
+// ======================================================================
+// trace: 앱은 100% 보내고(TRACING_SAMPLING=1.0), 여기서 trace를 다 모아 본 뒤 고른다
+// Service는 Alloy 1개로만 가므로 한 trace의 span이 한곳에 모인다 (tail sampling 전제)
+// ======================================================================
+otelcol.receiver.otlp "default" {
+  grpc {
+    endpoint = "0.0.0.0:4317"
+  }
+  http {
+    endpoint = "0.0.0.0:4318"
+  }
+  output {
+    traces = [otelcol.processor.tail_sampling.default.input]
+  }
+}
+
+otelcol.processor.tail_sampling "default" {
+  decision_wait = "10s"
+  num_traces    = 20000
+
+  // 남기기로 한 trace에 늦게 온 span(Kafka 비동기 처리 등)도 같이 남긴다
+  decision_cache = {
+    sampled_cache_size = 20000,
+  }
+
+  policy {
+    name = "errors"
+    type = "status_code"
+    status_code {
+      status_codes = ["ERROR"]
+    }
+  }
+
+  policy {
+    name = "slow"
+    type = "latency"
+    latency {
+      threshold_ms = encoding.from_json(coalesce(sys.env("OBS_SLOW_TRACE_MS"), "1000"))
+    }
+  }
+
+  policy {
+    name = "sample"
+    type = "probabilistic"
+    probabilistic {
+      sampling_percentage = encoding.from_json(coalesce(sys.env("OBS_TRACE_SAMPLE_PERCENT"), "10"))
+    }
+  }
+
+  output {
+    traces = [otelcol.processor.batch.default.input]
+  }
+}
+
+otelcol.processor.batch "default" {
+  output {
+    traces = [otelcol.exporter.otlphttp.cloud.input]
+  }
+}
+
+otelcol.auth.basic "cloud" {
+  username = sys.env("GC_OTLP_USER")
+  password = sys.env("GC_TOKEN")
+}
+
+otelcol.exporter.otlphttp "cloud" {
+  client {
+    endpoint = sys.env("GC_OTLP_URL")
+    auth     = otelcol.auth.basic.cloud.handler
+  }
+}
+
+// ======================================================================
+// 메트릭: Prometheus · exporter 대신 Alloy가 수집 (60초 간격, 필요한 지표만 → 무료 1만 시계열 안)
+// ======================================================================
+
+// --- kubelet (노드 2대 모두, API 서버 프록시로 — 노드별 수집기 불필요)
+discovery.kubernetes "nodes" {
+  role = "node"
+}
+
+discovery.relabel "kubelet_cadvisor" {
+  targets = discovery.kubernetes.nodes.targets
+  rule {
+    target_label = "__address__"
+    replacement  = "kubernetes.default.svc:443"
+  }
+  rule {
+    source_labels = ["__meta_kubernetes_node_name"]
+    regex         = "(.+)"
+    target_label  = "__metrics_path__"
+    replacement   = "/api/v1/nodes/$1/proxy/metrics/cadvisor"
+  }
+  rule {
+    source_labels = ["__meta_kubernetes_node_name"]
+    target_label  = "node"
+  }
+}
+
+discovery.relabel "kubelet_resource" {
+  targets = discovery.kubernetes.nodes.targets
+  rule {
+    target_label = "__address__"
+    replacement  = "kubernetes.default.svc:443"
+  }
+  rule {
+    source_labels = ["__meta_kubernetes_node_name"]
+    regex         = "(.+)"
+    target_label  = "__metrics_path__"
+    replacement   = "/api/v1/nodes/$1/proxy/metrics/resource"
+  }
+  rule {
+    source_labels = ["__meta_kubernetes_node_name"]
+    target_label  = "node"
+  }
+}
+
+prometheus.scrape "kubelet" {
+  targets         = array.concat(discovery.relabel.kubelet_cadvisor.output, discovery.relabel.kubelet_resource.output)
+  scheme          = "https"
+  scrape_interval = "60s"
+  job_name        = "kubelet"
+  bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+  tls_config {
+    ca_file = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+  }
+  forward_to = [prometheus.relabel.keep.receiver]
+}
+
+// --- kube-state-metrics (Pod 재시작 · 상태)
+prometheus.scrape "kube_state_metrics" {
+  targets         = [{"__address__" = coalesce(sys.env("KSM_ADDR"), "kube-state-metrics.monitoring.svc:8080")}]
+  scrape_interval = "60s"
+  job_name        = "kube-state-metrics"
+  forward_to      = [prometheus.relabel.keep.receiver]
+}
+
+// --- MySQL 6개 (내장 exporter, 접속은 조회 때만)
+prometheus.exporter.mysql "product" {
+  data_source_name = coalesce(sys.env("MYSQL_PRODUCT_DSN"), "exporter@(mysql-product:3306)/")
+}
+prometheus.exporter.mysql "order" {
+  data_source_name = coalesce(sys.env("MYSQL_ORDER_DSN"), "exporter@(mysql-order:3306)/")
+}
+prometheus.exporter.mysql "member" {
+  data_source_name = coalesce(sys.env("MYSQL_MEMBER_DSN"), "exporter@(mysql-member:3306)/")
+}
+prometheus.exporter.mysql "payment" {
+  data_source_name = coalesce(sys.env("MYSQL_PAYMENT_DSN"), "exporter@(mysql-payment:3306)/")
+}
+prometheus.exporter.mysql "etc" {
+  data_source_name = coalesce(sys.env("MYSQL_ETC_DSN"), "exporter@(mysql-etc:3306)/")
+}
+prometheus.exporter.mysql "ai" {
+  data_source_name = coalesce(sys.env("MYSQL_AI_DSN"), "exporter@(mysql-ai:3306)/")
+}
+
+// --- Redis 2개
+prometheus.exporter.redis "cache" {
+  redis_addr     = coalesce(sys.env("REDIS_CACHE_ADDR"), "redis-cache:6379")
+  redis_password = sys.env("REDIS_PASSWORD")
+}
+prometheus.exporter.redis "core" {
+  redis_addr     = coalesce(sys.env("REDIS_CORE_ADDR"), "redis-core:6379")
+  redis_password = sys.env("REDIS_PASSWORD")
+}
+
+// --- Kafka (컨슈머 lag): 내장 exporter는 시작할 때 Kafka에 접속해, Kafka가 죽어 있으면 Alloy 전체가 뜨지 않는다
+//     → 별도 kafka-exporter Pod(32Mi, kafka-exporter.yaml)를 조회한다
+prometheus.scrape "kafka" {
+  targets         = [{"__address__" = coalesce(sys.env("KAFKA_EXPORTER_ADDR"), "kafka-exporter.monitoring.svc:9308")}]
+  scrape_interval = "60s"
+  job_name        = "kafka"
+  forward_to      = [prometheus.relabel.keep.receiver]
+}
+
+// --- Elasticsearch
+prometheus.exporter.elasticsearch "default" {
+  address = coalesce(sys.env("ES_URL"), "http://elasticsearch:9200")
+}
+
+prometheus.scrape "exporters" {
+  targets = array.concat(
+    prometheus.exporter.mysql.product.targets,
+    prometheus.exporter.mysql.order.targets,
+    prometheus.exporter.mysql.member.targets,
+    prometheus.exporter.mysql.payment.targets,
+    prometheus.exporter.mysql.etc.targets,
+    prometheus.exporter.mysql.ai.targets,
+    prometheus.exporter.redis.cache.targets,
+    prometheus.exporter.redis.core.targets,
+    prometheus.exporter.elasticsearch.default.targets,
+  )
+  scrape_interval = "60s"
+  job_name        = "infra"
+  forward_to      = [prometheus.relabel.keep.receiver]
+}
+
+// --- 필요한 지표만 남김 (무료 한도: 활성 시계열 1만 개). 더 보고 싶으면 정규식에 추가
+prometheus.relabel "keep" {
+  rule {
+    source_labels = ["__name__"]
+    action        = "keep"
+    regex         = coalesce(sys.env("METRICS_KEEP_REGEX"), "(up|container_memory_working_set_bytes|container_cpu_usage_seconds_total|container_oom_events_total|node_memory_working_set_bytes|node_cpu_usage_seconds_total|kube_pod_container_status_restarts_total|kube_pod_status_phase|kube_pod_container_resource_limits|kube_deployment_status_replicas_available|kube_node_status_condition|mysql_up|mysql_global_status_threads_connected|mysql_global_status_slow_queries|mysql_global_status_questions|mysql_global_variables_max_connections|redis_up|redis_memory_used_bytes|redis_memory_max_bytes|redis_connected_clients|redis_evicted_keys_total|kafka_brokers|kafka_consumergroup_lag|kafka_consumergroup_lag_sum|elasticsearch_cluster_health_status|elasticsearch_jvm_memory_used_bytes|elasticsearch_jvm_memory_max_bytes)")
+  }
+  // 이름 없는 컨테이너(Pod 합계) · 빈 컨테이너 줄 제거로 시계열 절약
+  rule {
+    source_labels = ["__name__", "container"]
+    regex         = "container_.*;(|POD)"
+    action        = "drop"
+  }
+  forward_to = [prometheus.remote_write.cloud.receiver]
+}
+
+prometheus.remote_write "cloud" {
+  external_labels = {
+    cluster = "cartmate",
+    env     = coalesce(sys.env("ENV_NAME"), "prod"),
+  }
+  endpoint {
+    url = sys.env("GC_PROM_URL")
+    basic_auth {
+      username = sys.env("GC_PROM_USER")
+      password = sys.env("GC_TOKEN")
+    }
+  }
+}

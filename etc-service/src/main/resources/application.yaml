@@ -104,6 +104,14 @@ management:
   observations:
     annotations:
       enabled: true   # cron 배치의 @Observed (실행 1회 = span 하나)
+    enable:
+      "[spring.security]": false   # 요청마다 생기는 보안 필터 span 4개 끔 → trace 양 절반 (요청 span은 그대로)
+
+logging:
+  structured:
+    json:
+      stacktrace:
+        max-length: 2048   # JSON 로그(운영 · 로컬 파일)의 stack trace 길이 상한 → 오류 로그 한 줄 크기 제한
 
 sentry:
   dsn: ${SENTRY_DSN:}   # 비어 있으면 꺼짐
