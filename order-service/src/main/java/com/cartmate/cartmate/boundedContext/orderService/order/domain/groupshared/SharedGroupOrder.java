@@ -19,6 +19,8 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -203,10 +205,17 @@ public class SharedGroupOrder {
         long amount = targets.stream().mapToLong(SharedGroupOrderItem::amount).sum();
         boolean orderCanceled = items.stream().allMatch(SharedGroupOrderItem::isCanceled);
         if (orderCanceled) {
-            cancel(reason == DeliveryCancelReason.SALES_STOPPED
-                    ? SharedGroupOrderCancelReason.SALES_STOPPED : SharedGroupOrderCancelReason.SELLER_CANCELED, now);
+            cancel(cancelReasonOfItems(), now);
         }
         return new SharedItemCancelOutcome(targets, amount, orderCanceled);
+    }
+
+    // 취소된 항목의 사유가 모두 같은 갈래면 그 사유, 섞였으면 여러 사유
+    private SharedGroupOrderCancelReason cancelReasonOfItems() {
+        Set<SharedGroupOrderCancelReason> reasons = new HashSet<>();
+        items.forEach(item -> reasons.add(item.getCancelReason() == DeliveryCancelReason.SALES_STOPPED
+                ? SharedGroupOrderCancelReason.SALES_STOPPED : SharedGroupOrderCancelReason.SELLER_CANCELED));
+        return reasons.size() == 1 ? reasons.iterator().next() : SharedGroupOrderCancelReason.MULTIPLE_REASONS;
     }
 
     public long cancelSellerItems(Long sellerId, DeliveryCancelReason reason, LocalDateTime now) {

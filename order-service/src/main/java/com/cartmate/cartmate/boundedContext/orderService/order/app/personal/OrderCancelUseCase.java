@@ -16,6 +16,7 @@ import com.cartmate.cartmate.boundedContext.orderService.order.out.OrderPaymentC
 import com.cartmate.cartmate.boundedContext.orderService.order.domain.personal.BuyerCancelResult;
 import com.cartmate.cartmate.boundedContext.orderService.order.domain.personal.Order;
 import com.cartmate.cartmate.boundedContext.orderService.order.domain.personal.ItemCancelOutcome;
+import com.cartmate.cartmate.boundedContext.orderService.order.domain.personal.OrderCancelPreview;
 import com.cartmate.cartmate.boundedContext.orderService.order.domain.itemcancel.CouponMode;
 import com.cartmate.cartmate.boundedContext.orderService.order.domain.itemcancel.OrderItemCancel;
 import com.cartmate.cartmate.boundedContext.orderService.order.out.itemcancel.OrderItemCancelRepository;
@@ -72,6 +73,12 @@ class OrderCancelUseCase {
         return BuyerCancelStart.request(order.buyerCancelTargets(memberId, orderItemIds).stream()
                 .map(item -> new BuyerCancelRequest.Target(item.getId(), item.getSellerId()))
                 .toList());
+    }
+
+    OrderCancelPreview previewBuyerCancel(Long memberId, Long orderId, Collection<Long> orderItemIds) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ServiceException(OrderErrorCode.ORDER_NOT_FOUND));
+        return order.previewBuyerCancel(memberId, orderItemIds);
     }
 
     void confirmCancelByDelivery(Long orderId, int requestSeq) {
@@ -174,6 +181,7 @@ class OrderCancelUseCase {
     private void restoreCouponIf(boolean canceled, Order order) {
         if (canceled && order.couponRestorable()) {
             orderCouponClient.restore(order.getBuyerMemberId(), order.getMemberCouponId(), order.getId());
+            order.markCouponReturned();
         }
     }
 

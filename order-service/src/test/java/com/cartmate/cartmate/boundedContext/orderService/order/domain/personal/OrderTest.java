@@ -435,6 +435,149 @@ class OrderTest {
         assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
     }
 
+    private static final Long ITEM_A = 601L;
+    private static final Long ITEM_B = 602L;
+    private static final Long ITEM_C = 603L;
+
+    // 판매자 7의 상품 A와 판매자 8의 상품 B, 전체 쿠폰으로 결제한 주문
+    private Order couponOrder(long priceA, long priceB, long discount, OrderCouponRule rule) {
+        Order order = Order.createPersonal("ORD-CP", BUYER, List.of(
+                new OrderLine(10L, 11L, 7L, "상품A", null, priceA, 1),
+                new OrderLine(30L, 31L, 8L, "상품B", null, priceB, 1)
+        ), addressWithoutDetail(), NOW);
+        ReflectionTestUtils.setField(order.getItems().get(0), "id", ITEM_A);
+        ReflectionTestUtils.setField(order.getItems().get(1), "id", ITEM_B);
+        order.applyCoupon(5L, discount, true, null, rule);
+        order.markPaid(99L, NOW.plusMinutes(1));
+        return order;
+    }
+
+    @Test
+    @DisplayName("구매자 일부 취소로 쿠폰 최소 금액이 깨지면 할인을 모두 빼고 환불하고 쿠폰을 돌려준다 (32,000원 - 3,000원 쿠폰, 5,000원 취소 → 2,000원)")
+    void cancelByBuyer_belowMinimum_dropsWholeDiscount() {
+        Order order = couponOrder(27_000L, 5_000L, 3_000L, OrderCouponRule.of("FIXED", 3_000L, null, 30_000L));
+
+        ItemCancelOutcome outcome = order.cancelItems(8L, List.of(ITEM_B), DeliveryCancelReason.BUYER_CANCELED,
+                CouponMode.RECALCULATE, NOW.plusMinutes(2));
+
+        assertThat(outcome.refundAmount()).isEqualTo(2_000L);
+        assertThat(outcome.couponReturnable()).isTrue();
+        assertThat(order.isCouponReturned()).isTrue();
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
+    }
+
+    @Test
+    @DisplayName("정률 쿠폰은 남은 상품에 같은 비율로 다시 할인하고 쿠폰은 계속 쓰인다 (30,000원 10%, 10,000원 취소 → 9,000원)")
+    void cancelByBuyer_rateCoupon_keepsRateOnRemaining() {
+        Order order = couponOrder(20_000L, 10_000L, 3_000L, OrderCouponRule.of("RATE", 10L, null, 0L));
+
+        ItemCancelOutcome outcome = order.cancelItems(8L, List.of(ITEM_B), DeliveryCancelReason.BUYER_CANCELED,
+                CouponMode.RECALCULATE, NOW.plusMinutes(2));
+
+        assertThat(outcome.refundAmount()).isEqualTo(9_000L);
+        assertThat(outcome.couponReturnable()).isFalse();
+    }
+
+    @Test
+    @DisplayName("다시 계산하면 돌려줄 돈이 음수일 때는 0원으로 하고 추가로 받지 않는다. 할인이 실제로 남아 있어 쿠폰은 돌려주지 않는다")
+    void cancelByBuyer_refundNeverNegative() {
+        Order order = couponOrder(10_000L, 1_000L, 3_000L, OrderCouponRule.of("FIXED", 3_000L, null, 11_000L));
+
+        ItemCancelOutcome outcome = order.cancelItems(8L, List.of(ITEM_B), DeliveryCancelReason.BUYER_CANCELED,
+                CouponMode.RECALCULATE, NOW.plusMinutes(2));
+
+        assertThat(outcome.refundAmount()).isZero();
+        assertThat(outcome.canceled()).hasSize(1);
+        assertThat(order.getItems().get(1).isCanceled()).isTrue();
+        assertThat(outcome.couponReturnable()).isFalse();
+        assertThat(order.remainingRefundAmount()).isEqualTo(8_000L);
+    }
+
+    @Test
+    @DisplayName("판매자 탓 일부 취소는 쿠폰 조건이 깨져도 할인을 비율로만 나눈다 (5,000원 취소 → 4,532원)")
+    void cancelBySeller_belowMinimum_keepsProportionalDiscount() {
+        Order order = couponOrder(27_000L, 5_000L, 3_000L, OrderCouponRule.of("FIXED", 3_000L, null, 30_000L));
+
+        ItemCancelOutcome outcome = order.cancelItems(8L, null, DeliveryCancelReason.SELLER_OUT_OF_STOCK,
+                CouponMode.PROPORTIONAL, NOW.plusMinutes(2));
+
+        assertThat(outcome.refundAmount()).isEqualTo(4_532L);
+        assertThat(outcome.couponReturnable()).isFalse();
+    }
+
+    @Test
+    @DisplayName("구매자 취소로 할인이 이미 없어진 뒤 판매자 탓 취소가 오면 할인을 또 빼지 않고 상품값 전부를 돌려준다")
+    void cancelBySeller_afterDiscountDropped_refundsFullItem() {
+        Order order = Order.createPersonal("ORD-CP3", BUYER, List.of(
+                new OrderLine(10L, 11L, 7L, "상품A", null, 20_000L, 1),
+                new OrderLine(30L, 31L, 8L, "상품B", null, 10_000L, 1),
+                new OrderLine(40L, 41L, 9L, "상품C", null, 5_000L, 1)
+        ), addressWithoutDetail(), NOW);
+        ReflectionTestUtils.setField(order.getItems().get(1), "id", ITEM_B);
+        order.applyCoupon(5L, 3_000L, true, null, OrderCouponRule.of("FIXED", 3_000L, null, 30_000L));
+        order.markPaid(99L, NOW.plusMinutes(1));
+        assertThat(order.cancelItems(8L, List.of(ITEM_B), DeliveryCancelReason.BUYER_CANCELED,
+                CouponMode.RECALCULATE, NOW.plusMinutes(2)).refundAmount()).isEqualTo(7_000L);
+
+        ItemCancelOutcome outcome = order.cancelItems(9L, null, DeliveryCancelReason.SELLER_OUT_OF_STOCK,
+                CouponMode.PROPORTIONAL, NOW.plusMinutes(3));
+
+        assertThat(outcome.refundAmount()).isEqualTo(5_000L);
+        assertThat(order.remainingRefundAmount()).isEqualTo(20_000L);
+    }
+
+    @Test
+    @DisplayName("나눠서 모두 취소됐는데 항목 사유가 섞이면 주문 사유는 여러 사유")
+    void allCanceled_mixedReasons_orderReasonMultiple() {
+        Order order = twoSellerOrder();
+        order.markPaid(99L, NOW.plusMinutes(1));
+        order.cancelItems(7L, null, DeliveryCancelReason.SELLER_OUT_OF_STOCK, CouponMode.PROPORTIONAL, NOW.plusMinutes(2));
+
+        order.cancelItems(8L, null, DeliveryCancelReason.BUYER_CANCELED, CouponMode.RECALCULATE, NOW.plusMinutes(3));
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELED);
+        assertThat(order.getCancelReason()).isEqualTo(OrderCancelReason.MULTIPLE_REASONS);
+    }
+
+    @Test
+    @DisplayName("나눠서 모두 취소됐어도 항목 사유가 같은 갈래(판매자 사유)면 그 사유를 주문 사유로 쓴다")
+    void allCanceled_sameReason_keepsThatReason() {
+        Order order = twoSellerOrder();
+        order.markPaid(99L, NOW.plusMinutes(1));
+        order.cancelItems(7L, null, DeliveryCancelReason.SELLER_OUT_OF_STOCK, CouponMode.PROPORTIONAL, NOW.plusMinutes(2));
+
+        order.cancelItems(8L, null, DeliveryCancelReason.SELLER_OTHER, CouponMode.PROPORTIONAL, NOW.plusMinutes(3));
+
+        assertThat(order.getCancelReason()).isEqualTo(OrderCancelReason.SELLER_CANCELED);
+    }
+
+    @Test
+    @DisplayName("미리보기는 고른 상품을 판매자별로 차례로 취소한 환불 합계와 같고, 주문은 바꾸지 않는다")
+    void preview_matchesActualRefund() {
+        Order order = Order.createPersonal("ORD-PV", BUYER, List.of(
+                new OrderLine(10L, 11L, 7L, "상품A", null, 20_000L, 1),
+                new OrderLine(30L, 31L, 8L, "상품B", null, 8_000L, 1),
+                new OrderLine(40L, 41L, 9L, "상품C", null, 4_000L, 1)
+        ), addressWithoutDetail(), NOW);
+        ReflectionTestUtils.setField(order.getItems().get(0), "id", ITEM_A);
+        ReflectionTestUtils.setField(order.getItems().get(1), "id", ITEM_B);
+        ReflectionTestUtils.setField(order.getItems().get(2), "id", ITEM_C);
+        order.applyCoupon(5L, 3_000L, true, null, OrderCouponRule.of("FIXED", 3_000L, null, 25_000L));
+        order.markPaid(99L, NOW.plusMinutes(1));
+
+        OrderCancelPreview preview = order.previewBuyerCancel(BUYER, List.of(ITEM_C, ITEM_B));
+
+        assertThat(order.getItems()).noneMatch(OrderItem::isCanceled);
+        assertThat(order.remainingRefundAmount()).isEqualTo(29_000L);
+        long actual = order.cancelItems(8L, List.of(ITEM_B), DeliveryCancelReason.BUYER_CANCELED,
+                CouponMode.RECALCULATE, NOW.plusMinutes(2)).refundAmount()
+                + order.cancelItems(9L, List.of(ITEM_C), DeliveryCancelReason.BUYER_CANCELED,
+                CouponMode.RECALCULATE, NOW.plusMinutes(2)).refundAmount();
+        assertThat(preview.refundAmount()).isEqualTo(9_000L).isEqualTo(actual);
+        assertThat(preview.couponReturned()).isTrue();
+        assertThat(order.isCouponReturned()).isTrue();
+    }
+
     private Order twoSellerOrder() {
         return Order.createPersonal("ORD-C", BUYER, List.of(
                 new OrderLine(10L, 11L, 7L, "유니폼", null, 30_000L, 1),
@@ -490,7 +633,7 @@ class OrderTest {
         assertThat(second).isEqualTo(24_000L);
         assertThat(first + second).isEqualTo(order.payAmount());
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELED);
-        assertThat(order.couponRestorable()).isFalse();
+        assertThat(order.isCouponReturned()).isTrue();
     }
 
     @Test
@@ -540,7 +683,7 @@ class OrderTest {
         oneSeller.applyCoupon(5L, 3_000L, true, null);
         oneSeller.markPaid(99L, NOW.plusMinutes(1));
         assertThat(oneSeller.cancelSellerItems(7L, DeliveryCancelReason.SALES_STOPPED, NOW.plusMinutes(2))).isEqualTo(27_000L);
-        assertThat(oneSeller.couponRestorable()).isTrue();
+        assertThat(oneSeller.isCouponReturned()).isTrue();
     }
 
     @Test

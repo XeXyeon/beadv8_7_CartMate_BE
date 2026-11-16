@@ -22,8 +22,10 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Predicate;
 
 @Getter
 @Entity
@@ -123,6 +125,13 @@ public class Order {
 
     @Column(name = "partially_canceled", nullable = false)
     private boolean partiallyCanceled;
+
+    @Embedded
+    private OrderCouponRule couponRule;
+
+    // 한 주문에서 쿠폰은 한 번만 돌려준다
+    @Column(name = "coupon_returned", nullable = false)
+    private boolean couponReturned;
 
     @OrderBy("id")
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
@@ -280,6 +289,11 @@ public class Order {
     }
 
     public void applyCoupon(Long memberCouponId, long discountAmount, boolean platformBurden, Long sellerId) {
+        applyCoupon(memberCouponId, discountAmount, platformBurden, sellerId, null);
+    }
+
+    public void applyCoupon(Long memberCouponId, long discountAmount, boolean platformBurden, Long sellerId,
+                            OrderCouponRule couponRule) {
         if (this.memberCouponId != null) {
             if (this.memberCouponId.equals(memberCouponId) && this.discountAmount == discountAmount) {
                 return;
@@ -294,6 +308,7 @@ public class Order {
         this.discountAmount = discountAmount;
         this.discountBurden = platformBurden ? OrderDiscountBurden.PLATFORM : OrderDiscountBurden.SELLER;
         this.discountSellerId = platformBurden ? null : sellerId;
+        this.couponRule = couponRule;
     }
 
     public long payAmount() {
@@ -321,7 +336,11 @@ public class Order {
     }
 
     public boolean couponRestorable() {
-        return hasCoupon() && status == OrderStatus.CANCELED && !partiallyCanceled;
+        return hasCoupon() && status == OrderStatus.CANCELED && !couponReturned;
+    }
+
+    public void markCouponReturned() {
+        this.couponReturned = true;
     }
 
     private long discountShareOf(Long sellerId, long itemsAmount) {
@@ -352,20 +371,93 @@ public class Order {
         if (targets.isEmpty()) {
             return ItemCancelOutcome.none();
         }
+        CancelCalc calc = calculate(sellerId, targets, OrderItem::isCanceled, remainingRefundAmount(), couponMode);
         targets.forEach(item -> item.cancel(reason, now));
-        long itemsAmount = targets.stream().mapToLong(OrderItem::amount).sum();
-        long refund = itemsAmount - discountShareOf(sellerId, itemsAmount);
-        boolean orderCanceled = items.stream().allMatch(OrderItem::isCanceled);
-        boolean couponReturnable = false;
-        if (orderCanceled) {
-            refund = remainingRefundAmount();
-            couponReturnable = hasCoupon() && !partiallyCanceled;
-            cancel(orderCancelReasonOf(reason), now);
+        boolean couponReturnable = couponReturnsWith(calc, couponMode);
+        if (calc.orderCanceled()) {
+            cancel(orderCancelReasonOfItems(), now);
         } else {
             partiallyCanceled = true;
         }
-        itemRefundedAmount += refund;
-        return new ItemCancelOutcome(targets, refund, orderCanceled, couponReturnable);
+        if (couponReturnable) {
+            couponReturned = true;
+        }
+        itemRefundedAmount += calc.refund();
+        return new ItemCancelOutcome(targets, calc.refund(), calc.orderCanceled(), couponReturnable);
+    }
+
+    // 구매자가 고른 항목을 판매자별로(항목 순서대로) 차례로 취소한다고 보고 환불 합계와 쿠폰 반환 여부를 계산한다.
+    // 실제 취소도 같은 순서로 판매자마다 하므로 금액이 같다. 주문은 바꾸지 않는다.
+    public OrderCancelPreview previewBuyerCancel(Long requesterId, Collection<Long> orderItemIds) {
+        List<OrderItem> targets = buyerCancelTargets(requesterId, orderItemIds);
+        if (!isPaid()) {
+            return new OrderCancelPreview(0, false);
+        }
+        Set<OrderItem> canceled = new HashSet<>(items.stream().filter(OrderItem::isCanceled).toList());
+        Map<Long, List<OrderItem>> bySeller = new LinkedHashMap<>();
+        targets.forEach(item -> bySeller.computeIfAbsent(item.getSellerId(), key -> new ArrayList<>()).add(item));
+        long netPaid = remainingRefundAmount();
+        long total = 0;
+        boolean couponReturns = false;
+        for (Map.Entry<Long, List<OrderItem>> entry : bySeller.entrySet()) {
+            CancelCalc calc = calculate(entry.getKey(), entry.getValue(), canceled::contains, netPaid, CouponMode.RECALCULATE);
+            total += calc.refund();
+            netPaid -= calc.refund();
+            couponReturns |= couponReturnsWith(calc, CouponMode.RECALCULATE);
+            canceled.addAll(entry.getValue());
+        }
+        return new OrderCancelPreview(total, couponReturns);
+    }
+
+    private record CancelCalc(long refund, boolean orderCanceled, long remainingDiscount) {
+    }
+
+    // 이번 취소의 환불 금액. canceledBefore는 이번 취소 전에 이미 취소된 항목인지 (미리보기는 앞선 판매자 취소를 흉내 낸 결과).
+    // 구매자 취소는 남은 상품으로 쿠폰 할인을 다시 계산하고, 판매자 탓 취소는 할인을 비율로 나눈다.
+    // 어느 쪽이든 지금 남은 할인보다 많이 빼지 않고, 지금까지 낸 돈보다 많이 돌려주지 않으며, 추가로 받지도 않는다.
+    private CancelCalc calculate(Long sellerId, List<OrderItem> targets, Predicate<OrderItem> canceledBefore,
+                                 long netPaid, CouponMode couponMode) {
+        long itemsAmount = amountOf(targets);
+        List<OrderItem> remaining = items.stream()
+                .filter(item -> !canceledBefore.test(item) && !targets.contains(item))
+                .toList();
+        if (remaining.isEmpty()) {
+            return new CancelCalc(netPaid, true, 0);
+        }
+        long remainingAfter = amountOf(remaining);
+        long currentDiscount = Math.max(0, remainingAfter + itemsAmount - netPaid);
+        long refund;
+        if (couponMode == CouponMode.RECALCULATE && couponRule != null) {
+            long eligible = discountBurden == OrderDiscountBurden.SELLER
+                    ? amountOf(remaining.stream().filter(item -> discountSellerId.equals(item.getSellerId())).toList())
+                    : remainingAfter;
+            long newDiscount = Math.min(couponRule.discountFor(eligible), currentDiscount);
+            refund = Math.max(0, netPaid - (remainingAfter - newDiscount));
+        } else {
+            refund = itemsAmount - Math.min(discountShareOf(sellerId, itemsAmount), currentDiscount);
+        }
+        refund = Math.min(refund, netPaid);
+        return new CancelCalc(refund, false, remainingAfter - (netPaid - refund));
+    }
+
+    // 쿠폰은 그 주문에서 혜택이 0이 되는 순간 한 번 돌려준다: 주문이 모두 취소되거나, 구매자 취소로 다시 계산한 할인이 실제로 0이 될 때
+    private boolean couponReturnsWith(CancelCalc calc, CouponMode couponMode) {
+        if (!hasCoupon() || couponReturned) {
+            return false;
+        }
+        return calc.orderCanceled()
+                || (couponMode == CouponMode.RECALCULATE && couponRule != null && calc.remainingDiscount() == 0);
+    }
+
+    private static long amountOf(List<OrderItem> orderItems) {
+        return orderItems.stream().mapToLong(OrderItem::amount).sum();
+    }
+
+    // 취소된 항목의 사유가 모두 같은 갈래면 그 사유, 섞였으면 여러 사유
+    private OrderCancelReason orderCancelReasonOfItems() {
+        Set<OrderCancelReason> reasons = new HashSet<>();
+        items.forEach(item -> reasons.add(orderCancelReasonOf(item.getCancelReason())));
+        return reasons.size() == 1 ? reasons.iterator().next() : OrderCancelReason.MULTIPLE_REASONS;
     }
 
     // 판매 중지(판매글 내림)나 판매자 사유 취소로 한 판매자의 남은 항목을 모두 취소하고, 그 몫의 환불 금액을 돌려준다

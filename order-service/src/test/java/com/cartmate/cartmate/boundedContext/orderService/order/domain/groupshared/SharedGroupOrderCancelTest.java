@@ -123,7 +123,7 @@ class SharedGroupOrderCancelTest {
     }
 
     @Test
-    @DisplayName("마지막 판매자 몫까지 판매자 사유로 취소되면 공동 주문도 판매자 사유 취소로 취소되고, 다시 오면 0원")
+    @DisplayName("마지막 판매자 몫까지 취소되면 공동 주문도 취소되고(판매 중지와 판매자 사유가 섞여 여러 사유), 다시 오면 0원")
     void cancelSellerItemsCancelsOrderWhenAllItemsCanceled() {
         SharedGroupOrder order = confirmedTwoSellers();
         order.cancelSellerItems(7L, DeliveryCancelReason.SALES_STOPPED, NOW);
@@ -132,20 +132,25 @@ class SharedGroupOrderCancelTest {
                 .isEqualTo(10_000L);
 
         assertThat(order.getStatus()).isEqualTo(SharedGroupOrderStatus.CANCELED);
-        assertThat(order.getCancelReason()).isEqualTo(SharedGroupOrderCancelReason.SELLER_CANCELED);
+        assertThat(order.getCancelReason()).isEqualTo(SharedGroupOrderCancelReason.MULTIPLE_REASONS);
         assertThat(order.getCanceledAt()).isEqualTo(NOW.plusMinutes(1));
         assertThat(order.cancelSellerItems(8L, DeliveryCancelReason.SELLER_PRODUCT_ISSUE, NOW.plusMinutes(2))).isZero();
     }
 
     @Test
-    @DisplayName("마지막 판매자 몫이 판매 중지로 취소되면 공동 주문은 판매 중지로 취소된다")
-    void cancelSellerItemsBySalesStopCancelsOrderWithSalesStopped() {
+    @DisplayName("판매자 사유와 판매 중지가 섞여 모든 항목이 취소되면 공동 주문 사유는 여러 사유, 모두 판매 중지면 판매 중지")
+    void cancelSellerItemsWithMixedReasonsCancelsOrderWithMultipleReasons() {
         SharedGroupOrder order = confirmedTwoSellers();
         order.cancelSellerItems(7L, DeliveryCancelReason.SELLER_OTHER, NOW);
 
         order.cancelSellerItems(8L, DeliveryCancelReason.SALES_STOPPED, NOW.plusMinutes(1));
 
-        assertThat(order.getCancelReason()).isEqualTo(SharedGroupOrderCancelReason.SALES_STOPPED);
+        assertThat(order.getCancelReason()).isEqualTo(SharedGroupOrderCancelReason.MULTIPLE_REASONS);
+
+        SharedGroupOrder salesStopped = confirmedTwoSellers();
+        salesStopped.cancelSellerItems(7L, DeliveryCancelReason.SALES_STOPPED, NOW);
+        salesStopped.cancelSellerItems(8L, DeliveryCancelReason.SALES_STOPPED, NOW.plusMinutes(1));
+        assertThat(salesStopped.getCancelReason()).isEqualTo(SharedGroupOrderCancelReason.SALES_STOPPED);
     }
 
     @Test

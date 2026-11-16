@@ -79,6 +79,17 @@ public class OrderController {
         return new RsData<>("200-1", "취소 요청을 접수했습니다. 판매자 배송 확인 후 취소됩니다.");
     }
 
+    @GetMapping("/{id}/cancel-preview")
+    @Operation(operationId = "cancelPreview", summary = "고른 상품을 취소하면 돌려받을 예상 환불 금액과 쿠폰 반환 여부")
+    public RsData<OrderCancelPreviewResponse> cancelPreview(
+            @AuthenticationPrincipal SecurityUser user,
+            @PathVariable Long id,
+            @RequestParam List<Long> orderItemIds
+    ) {
+        return new RsData<>("200-1", "예상 환불 금액 조회 성공했습니다.",
+                OrderCancelPreviewResponse.from(orderFacade.previewBuyerCancel(user.memberId(), id, orderItemIds)));
+    }
+
     @PostMapping("/{orderId}/payment")
     @Operation(operationId = "payOrder", summary = "개인 주문 예치금 결제 (쿠폰 선택)")
     public RsData<PaymentResult> pay(@AuthenticationPrincipal SecurityUser user, @PathVariable Long orderId,

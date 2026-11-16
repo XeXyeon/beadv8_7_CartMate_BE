@@ -244,7 +244,7 @@ class SharedGroupOrderCancelUseCaseTest {
         then(eventPublisher).should(org.mockito.Mockito.times(2)).publish(captor.capture());
         assertThat(captor.getAllValues().get(0)).isInstanceOf(SharedGroupOrderSellerItemsCanceledEvent.class);
         SharedGroupOrderCanceledEvent event = (SharedGroupOrderCanceledEvent) captor.getAllValues().get(1);
-        assertThat(event.cancelReason()).isEqualTo(SharedGroupOrderCancelReason.SELLER_CANCELED);
+        assertThat(event.cancelReason()).isEqualTo(SharedGroupOrderCancelReason.MULTIPLE_REASONS);
         assertThat(event.canceledSellerAmounts()).containsExactly(new SellerAmount(7L, 10_000L, 1L));
         assertThat(order.getStatus()).isEqualTo(SharedGroupOrderStatus.CANCELED);
     }

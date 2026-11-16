@@ -30,6 +30,7 @@ import com.cartmate.cartmate.global.event.DomainEventPublisher;
 import com.cartmate.cartmate.boundedContext.orderService.order.domain.itemcancel.CouponMode;
 import com.cartmate.cartmate.boundedContext.orderService.order.domain.itemcancel.OrderItemCancel;
 import com.cartmate.cartmate.boundedContext.orderService.order.domain.personal.OrderItem;
+import com.cartmate.cartmate.boundedContext.orderService.order.domain.personal.OrderCouponRule;
 import com.cartmate.cartmate.boundedContext.orderService.order.out.itemcancel.OrderItemCancelRepository;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
@@ -412,6 +413,59 @@ class OrderCancelUseCaseTest {
         assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
         assertThat(order.getItems()).noneMatch(OrderItem::isCanceled);
         then(eventPublisher).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("판매자 탓 일부 취소 뒤 구매자가 나머지를 취소하면 쿠폰을 한 번 돌려주고, 같은 취소가 다시 와도 또 돌려주지 않는다")
+    void cancelAllInSteps_returnsCouponOnce() {
+        Order order = couponAppleBananaMilkOrder(OrderCouponRule.of("FIXED", 1_000L, null, 0L));
+        given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(order));
+        givenCancelIdsFromOne();
+
+        cancelUseCase.cancelItems(ORDER_ID, 7L, null, DeliveryCancelReason.SELLER_OUT_OF_STOCK, CouponMode.PROPORTIONAL);
+        then(couponClient).shouldHaveNoInteractions();
+        cancelUseCase.cancelItems(ORDER_ID, 8L, List.of(MILK), DeliveryCancelReason.BUYER_CANCELED, CouponMode.RECALCULATE);
+        cancelUseCase.cancelItems(ORDER_ID, 8L, List.of(MILK), DeliveryCancelReason.BUYER_CANCELED, CouponMode.RECALCULATE);
+
+        then(couponClient).should(org.mockito.Mockito.times(1)).restore(BUYER, 5L, ORDER_ID);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELED);
+        assertThat(order.isCouponReturned()).isTrue();
+    }
+
+    @Test
+    @DisplayName("구매자 일부 취소의 환불이 0원이면 항목만 취소하고 취소 건도 환불 이벤트도 만들지 않는다")
+    void cancelItems_refundZero_publishesNothing() {
+        Order order = personalOrder("20261019-ZEROREFU", BUYER, List.of(
+                new Order.OrderLine(10L, 11L, 7L, "상품A", null, 10_000L, 1),
+                new Order.OrderLine(30L, 31L, 8L, "상품B", null, 1_000L, 1)), LocalDateTime.now(CLOCK));
+        org.springframework.test.util.ReflectionTestUtils.setField(order, "id", ORDER_ID);
+        org.springframework.test.util.ReflectionTestUtils.setField(order.getItems().get(1), "id", PEAR);
+        order.applyCoupon(5L, 3_000L, true, null, OrderCouponRule.of("FIXED", 3_000L, null, 11_000L));
+        order.markPaid(1L, LocalDateTime.now(CLOCK));
+        given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(order));
+
+        Optional<Long> cancelId = cancelUseCase.cancelItems(ORDER_ID, 8L, List.of(PEAR),
+                DeliveryCancelReason.BUYER_CANCELED, CouponMode.RECALCULATE);
+
+        assertThat(cancelId).isEmpty();
+        assertThat(order.getItems().get(1).isCanceled()).isTrue();
+        then(cancelRepository).shouldHaveNoInteractions();
+        then(eventPublisher).shouldHaveNoInteractions();
+        then(couponClient).shouldHaveNoInteractions();
+    }
+
+    private Order couponAppleBananaMilkOrder(OrderCouponRule rule) {
+        Order order = personalOrder("20261019-COUPONAB", BUYER, List.of(
+                new Order.OrderLine(10L, 11L, 7L, "사과", null, 10_000L, 1),
+                new Order.OrderLine(20L, 21L, 7L, "배", null, 5_000L, 1),
+                new Order.OrderLine(30L, 31L, 8L, "우유", null, 3_000L, 1)), LocalDateTime.now(CLOCK));
+        org.springframework.test.util.ReflectionTestUtils.setField(order, "id", ORDER_ID);
+        org.springframework.test.util.ReflectionTestUtils.setField(order.getItems().get(0), "id", APPLE);
+        org.springframework.test.util.ReflectionTestUtils.setField(order.getItems().get(1), "id", PEAR);
+        org.springframework.test.util.ReflectionTestUtils.setField(order.getItems().get(2), "id", MILK);
+        order.applyCoupon(5L, 1_000L, true, null, rule);
+        order.markPaid(1L, LocalDateTime.now(CLOCK));
+        return order;
     }
 
     private static final Long APPLE = 501L;

@@ -474,6 +474,24 @@ class OrderPaymentUseCaseTest {
 
     private static final CouponQuote QUOTE = new CouponQuote(5L, 10L, "전체 10%", 5_000L, true, null);
 
+    @Test
+    @DisplayName("쿠폰 결제 때 할인 방식·값·최대 할인·최소 금액을 주문에 함께 저장한다 (일부 취소 때 다시 계산하려고)")
+    void payWithCouponStoresCouponRule() {
+        CouponFixture f = couponFixture();
+        CouponQuote quote = new CouponQuote(5L, 10L, "전체 10%", 5_000L, true, null, "RATE", 10L, 7_000L, 30_000L);
+        given(f.couponClient.quote(any(), any(), any(), any())).willReturn(quote);
+        given(f.couponClient.use(any(), any(), any(), any())).willReturn(quote);
+        given(f.paymentClient.charge(any(), any(), any(), org.mockito.ArgumentMatchers.eq(45_000L))).willReturn(charged(45_000L));
+
+        f.useCase.pay(ORDER_ID, BUYER, 5L, CREATED_AT.plusMinutes(1));
+
+        assertThat(f.order.getCouponRule().getDiscountType())
+                .isEqualTo(com.cartmate.cartmate.boundedContext.orderService.order.domain.personal.OrderCouponRule.DiscountType.RATE);
+        assertThat(f.order.getCouponRule().getDiscountValue()).isEqualTo(10L);
+        assertThat(f.order.getCouponRule().getMaxDiscount()).isEqualTo(7_000L);
+        assertThat(f.order.getCouponRule().getMinOrderAmount()).isEqualTo(30_000L);
+    }
+
     private record CouponFixture(OrderPaymentUseCase useCase, OrderPaymentClient paymentClient,
                                  com.cartmate.cartmate.boundedContext.orderService.order.out.OrderCouponClient couponClient,
                                  Order order) {

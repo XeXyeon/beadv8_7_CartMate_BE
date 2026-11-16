@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.cartmate.cartmate.boundedContext.orderService.order.domain.personal.BuyerCancelResult;
+import com.cartmate.cartmate.boundedContext.orderService.order.domain.personal.OrderCancelPreview;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -107,6 +108,11 @@ public class OrderFacade {
     @Transactional
     public BuyerCancelStart startBuyerCancel(Long memberId, Long orderId, Collection<Long> orderItemIds) {
         return orderCancelUseCase.startBuyerCancel(memberId, orderId, orderItemIds);
+    }
+
+    @Transactional(readOnly = true)
+    public OrderCancelPreview previewBuyerCancel(Long memberId, Long orderId, Collection<Long> orderItemIds) {
+        return orderCancelUseCase.previewBuyerCancel(memberId, orderId, orderItemIds);
     }
 
     @Transactional
