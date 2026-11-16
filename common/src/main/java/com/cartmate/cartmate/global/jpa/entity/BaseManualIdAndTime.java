@@ -32,4 +32,9 @@ public abstract class BaseManualIdAndTime extends BaseEntity {
         this.createDate = createDate;
         this.modifyDate = modifyDate;
     }
+
+    // 복제본을 원본으로 다시 맞출 때 원본의 수정 시각을 그대로 옮긴다
+    protected void copyModifyDate(LocalDateTime modifyDate) {
+        this.modifyDate = modifyDate;
+    }
 }

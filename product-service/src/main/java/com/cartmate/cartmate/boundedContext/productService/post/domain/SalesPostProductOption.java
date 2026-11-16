@@ -61,6 +61,14 @@ public class SalesPostProductOption extends BaseManualIdAndTime {
         );
     }
 
+    // product의 선택된 옵션(같은 ID)으로 복제본을 맞춘다. 빠진 재고의 옵션은 status가 DELETED로 온다
+    public void syncFrom(SyncProductOption option) {
+        this.productTypeId = option.getProductTypeId();
+        this.productOptionId = option.getProductOptionId();
+        this.status = option.getStatus() == null ? SalesPostProductStatus.ACTIVE : option.getStatus();
+        copyModifyDate(option.getModifyDate());
+    }
+
     public SalesPostProductOption delete() {
         this.status = SalesPostProductStatus.DELETED;
         return this;

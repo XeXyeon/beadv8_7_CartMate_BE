@@ -41,36 +41,53 @@ public class SalesPostSyncProductUseCase {
                     .orElseThrow(() -> new ServiceException(SalesPostErrorCode.POST_NOT_FOUND));
 
         syncList.forEach(product -> {
-            SalesPostProduct newProduct = new SalesPostProduct(
-                    product.getId(),
-                    product.getSellerId(),
-                    salesPost,
-                    product.getCategoryId(),
-                    product.getName(),
-                    product.getDescription(),
-                    product.getBasePrice(),
-                    SalesPostProductStatus.ON_SALE,
-                    product.getCreateDate(),
-                    product.getModifyDate()
-            );
-            salesPostProductRepository.save(newProduct);
+            // 이미 있는 복제본(수정 · 복구)은 찾아서 값만 맞춘다. 같은 ID의 새 객체를 save(merge)하면
+            // 비어 있는 사진 · 옵션 목록이 orphanRemoval로 기존 사진 · 옵션 복제본을 지워 목록 · 상세에서 사진이 사라졌다
+            SalesPostProduct target = salesPostProductRepository.findById(product.getId())
+                    .map(existing -> {
+                        existing.syncFrom(product.getCategoryId(), product.getName(), product.getDescription(),
+                                product.getBasePrice(), SalesPostProductStatus.ON_SALE, product.getModifyDate());
+                        return existing;
+                    })
+                    .orElseGet(() -> salesPostProductRepository.save(new SalesPostProduct(
+                            product.getId(),
+                            product.getSellerId(),
+                            salesPost,
+                            product.getCategoryId(),
+                            product.getName(),
+                            product.getDescription(),
+                            product.getBasePrice(),
+                            SalesPostProductStatus.ON_SALE,
+                            product.getCreateDate(),
+                            product.getModifyDate()
+                    )));
 
             List<SyncProductImage> imageList = product.getProductImageList();
             if (imageList != null) {
-                imageList.forEach(image -> {
-                    SalesPostProductImage newImage = SalesPostProductImage.from(image, newProduct);
-                    salesPostProductImageRepository.save(newImage);
-                });
+                imageList.forEach(image -> syncImage(image, target));
             }
 
             List<SyncProductOption> optionList = product.getProductOptionList();
             if (optionList != null) {
-                optionList.forEach(option -> {
-                    SalesPostProductOption newOption = SalesPostProductOption.from(option, newProduct);
-                    salesPostProductOptionRepository.save(newOption);
-                });
+                optionList.forEach(option -> syncOption(option, target));
             }
         });
+    }
+
+    // 같은 ID의 사진 복제본이 있으면 값을 맞추고(빠진 사진은 DELETED로 온다), 없으면 새로 만든다
+    private void syncImage(SyncProductImage image, SalesPostProduct product) {
+        salesPostProductImageRepository.findById(image.getId())
+                .ifPresentOrElse(
+                        existing -> existing.syncFrom(image),
+                        () -> salesPostProductImageRepository.save(SalesPostProductImage.from(image, product)));
+    }
+
+    // 같은 ID의 선택된 옵션 복제본이 있으면 값을 맞추고, 없으면 새로 만든다
+    private void syncOption(SyncProductOption option, SalesPostProduct product) {
+        salesPostProductOptionRepository.findById(option.getId())
+                .ifPresentOrElse(
+                        existing -> existing.syncFrom(option),
+                        () -> salesPostProductOptionRepository.save(SalesPostProductOption.from(option, product)));
     }
 
     // 판매글 삭제로 product에서 지워진 상품의 복제본을 지운다(소프트 삭제라 다시 와도 결과가 같다)
