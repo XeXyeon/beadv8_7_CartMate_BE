@@ -8,6 +8,9 @@ import com.cartmate.cartmate.boundedContext.productService.product.app.ProductFa
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostApiClient;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPost;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostProduct;
+import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostProductImage;
+import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostProductOption;
+import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostProductStatus;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostRecoveryRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostSaleStatus;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostUpdateStatus;
@@ -170,6 +173,49 @@ class SalesPostUpdateFlowTest {
         assertThat(copy.getBasePrice()).isEqualTo(30000L);
 
         assertThat(salesPostRecoveryRepository.findBySalesPostId(postId)).isEmpty();
+    }
+
+    // 수정 후 복제본을 덮어쓸 때 기존 사진 · 옵션 복제본이 지워지던 버그(목록 · 상세에서 사진이 사라짐)
+    @Test
+    @DisplayName("복제본: 사진 · 옵션을 그대로 두고 수정해도 post 복제본의 사진 2장 · 옵션 1개가 그대로 남는다")
+    void replicaImagesAndOptionsSurviveUpdate() {
+        salesPostFacade.updateSalesPostByUser(updateRequest(SELLER_ID, "새 제목", "새이름", 30000L), List.of());
+
+        assertThat(activeReplicaImages()).extracting(SalesPostProductImage::getImageSeq).containsExactlyInAnyOrder(0, 1);
+        assertThat(activeReplicaOptions()).hasSize(1);
+        // 목록 · 상세가 읽는 연관(살아 있는 것만)으로도 보인다
+        Integer visibleImages = transactionTemplate.execute(s ->
+                salesPostProductRepository.findById(productId).orElseThrow().getImageList().size());
+        assertThat(visibleImages).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("복제본: 사진 한 장을 빼고 수정하면 그 사진 복제본만 삭제 상태가 되고 나머지는 남는다")
+    void replicaRemovesOnlyDroppedImage() {
+        UpdateSalesPostRequest request = updateRequest(SELLER_ID, "새 제목", "새이름", 30000L);
+        List<UpdateSalesPostProductImage> keepFirstOnly = List.of(currentImages().getFirst());
+        UpdateSalesPostProduct product = request.getProductList().getFirst();
+        UpdateSalesPostProduct withOneImage = new UpdateSalesPostProduct(product.getId(), product.getCategoryId(),
+                product.getName(), product.getDescription(), product.getBasePrice(), new ArrayList<>(keepFirstOnly),
+                product.getInventoryList());
+        salesPostFacade.updateSalesPostByUser(new UpdateSalesPostRequest(postId, SELLER_ID, "새 제목", "새 내용",
+                List.of(withOneImage)), List.of());
+
+        assertThat(activeReplicaImages()).extracting(SalesPostProductImage::getId)
+                .containsExactly(keepFirstOnly.getFirst().getId());
+        assertThat(salesPostProductImageRepository.findAll()).hasSize(2);   // 뺀 사진은 행이 남고 상태만 DELETED
+    }
+
+    private List<SalesPostProductImage> activeReplicaImages() {
+        return salesPostProductImageRepository.findAll().stream()
+                .filter(i -> i.getStatus() == SalesPostProductStatus.ACTIVE)
+                .toList();
+    }
+
+    private List<SalesPostProductOption> activeReplicaOptions() {
+        return salesPostProductOptionRepository.findAll().stream()
+                .filter(o -> o.getStatus() == SalesPostProductStatus.ACTIVE)
+                .toList();
     }
 
     // id 없는 새 사진을 넣고 파일은 보내지 않아 product가 PRODUCT_UPDATE_INVALID(400)로 거절한다.

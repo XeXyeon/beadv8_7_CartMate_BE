@@ -59,6 +59,18 @@ public class SalesPostProduct extends BaseManualIdAndTime {
         this.status = status;
     }
 
+    // product의 수정 · 복구 응답으로 이미 있는 복제본을 맞춘다. 사진 · 옵션 목록은 건드리지 않는다
+    // (새 객체로 덮어쓰면 빈 목록이 orphanRemoval로 기존 사진 · 옵션 복제본을 지운다)
+    public void syncFrom(Long categoryId, String name, String description, Long basePrice,
+                         SalesPostProductStatus status, LocalDateTime modifyDate) {
+        this.categoryId = categoryId;
+        this.name = name;
+        this.description = description;
+        this.basePrice = basePrice;
+        this.status = status;
+        copyModifyDate(modifyDate);
+    }
+
     public SalesPostProduct delete() {
         this.status = SalesPostProductStatus.DELETED;
         imageList.forEach(SalesPostProductImage::delete);

@@ -184,7 +184,7 @@ class SharedGroupOrderPayUseCaseTest {
     @DisplayName("구매할 수 없는 상품이 있으면 차감하지 않고 재고 선점도 표시하지 않는다")
     void notPurchasableRejectedBeforeCharge() {
         useCase = useCase(ids -> ids.stream().distinct()
-                .map(id -> new OrderProductInfo(id, id, 1L, "상품", null, 1000L, null, !id.equals(5L)))
+                .map(id -> new OrderProductInfo(id, id, 1L, "상품", null, 1000L, null, !id.equals(5L), !id.equals(5L)))
                 .toList());
         SharedGroupOrder order = order(NOW);
         given(sharedGroupOrderRepository.findById(ORDER_ID)).willReturn(Optional.of(order));
@@ -238,7 +238,7 @@ class SharedGroupOrderPayUseCaseTest {
         useCase = useCase(ids -> {
             boolean onSale = calls.incrementAndGet() == 1;
             return ids.stream().distinct()
-                    .map(id -> new OrderProductInfo(id, id, 1L, "상품", null, 1000L, null, onSale))
+                    .map(id -> new OrderProductInfo(id, id, 1L, "상품", null, 1000L, null, onSale, onSale))
                     .toList();
         });
         SharedGroupOrder order = order(NOW);
@@ -253,6 +253,32 @@ class SharedGroupOrderPayUseCaseTest {
         assertThat(order.getParticipant(MEMBER).isPaid()).isFalse();
         assertThat(order.getStatus()).isEqualTo(SharedGroupOrderStatus.PAYING);
         then(eventPublisher).should(never()).publish(any());
+    }
+
+    @Test
+    @DisplayName("이 주문의 재고 선점으로 남은 수량이 0이 돼도(판매 중) 두 번째 참여자의 결제 전 확인 · 결제 직후 확인을 통과해 주문이 확정된다")
+    void ownReservationUsingAllStockStillConfirms() {
+        AtomicInteger calls = new AtomicInteger();
+        // 첫 확인(첫 결제 전)만 남은 수량이 있고, 그 뒤로는 이 주문의 선점으로 남은 수량 0 → purchasable=false, onSale=true
+        useCase = useCase(ids -> {
+            boolean hasStock = calls.incrementAndGet() == 1;
+            return ids.stream().distinct()
+                    .map(id -> new OrderProductInfo(id, id, 1L, "상품", null, 1000L, null, hasStock, true))
+                    .toList();
+        });
+        SharedGroupOrder order = order(NOW);
+        givenOrder(order);
+        given(paymentClient.findPayment(any(), any(), any())).willReturn(Optional.empty());
+        given(paymentClient.charge(PaymentOrderType.SHARED_GROUP, ORDER_ID, CREATOR, 15001L))
+                .willReturn(paid(501L, 15001L, NOW.plusMinutes(1)));
+        given(paymentClient.charge(PaymentOrderType.SHARED_GROUP, ORDER_ID, MEMBER, 15000L))
+                .willReturn(paid(502L, 15000L, NOW.plusMinutes(2)));
+
+        useCase.pay(ORDER_ID, CREATOR, ADDRESS, NOW.plusMinutes(1));
+        useCase.pay(ORDER_ID, MEMBER, null, NOW.plusMinutes(2));
+
+        assertThat(order.getStatus()).isEqualTo(SharedGroupOrderStatus.CONFIRMED);
+        then(paymentClient).should(never()).compensateCharge(any(), any(), any());
     }
 
     private void assertChargeFailureLeavesUnpaid(ServiceException failure) {
@@ -300,7 +326,7 @@ class SharedGroupOrderPayUseCaseTest {
 
     private static List<OrderProductInfo> allOnSale(Collection<Long> inventoryIds) {
         return inventoryIds.stream().distinct()
-                .map(id -> new OrderProductInfo(id, id, 1L, "상품", null, 1000L, null, true))
+                .map(id -> new OrderProductInfo(id, id, 1L, "상품", null, 1000L, null, true, true))
                 .toList();
     }
 

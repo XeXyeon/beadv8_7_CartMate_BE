@@ -3,6 +3,7 @@ package com.cartmate.cartmate.boundedContext.productService.post.app;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPost;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostSaleStatus;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostUpdateStatus;
+import com.cartmate.cartmate.boundedContext.productService.post.dto.SelectSalesPostRequest;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.SelectSalesPostResponse;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductImageRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductOptionRepository;
@@ -100,6 +101,24 @@ class SalesPostSellerListTest {
 
         assertThat(page.content()).isEmpty();
         assertThat(page.totalElements()).isZero();
+    }
+
+    // 공개 목록(홈 · 검색)과의 차이: 공개 목록은 판매 중인 글만, 판매자 목록은 삭제된 글만 뺀다
+    @Test
+    @DisplayName("공개 목록에는 판매 중인 글만 나온다 (판매 중지 · 운영 중지 · 판매 종료 · 등록 중 · 삭제 중 · 삭제됨은 빠진다)")
+    void publicListShowsOnlyOnSale() {
+        save(SELLER_ID, "판매 종료", SalesPostSaleStatus.CLOSED, SalesPostUpdateStatus.NEW);
+        save(SELLER_ID, "등록 중", SalesPostSaleStatus.PENDING, SalesPostUpdateStatus.NEW);
+        save(SELLER_ID, "삭제 중", SalesPostSaleStatus.DELETING, SalesPostUpdateStatus.NEW);
+
+        PageResponse<SelectSalesPostResponse> page = salesPostFacade
+                .selectSalesPostAll(new SelectSalesPostRequest(), PageRequest.of(0, 20)).getData();
+
+        assertThat(page.content()).extracting(SelectSalesPostResponse::getStatus)
+                .containsOnly(SalesPostSaleStatus.ON_SALE);
+        assertThat(page.content()).extracting(SelectSalesPostResponse::getTitle)
+                .containsExactlyInAnyOrder("판매 중", "수정 중", "다른 판매자");
+        assertThat(page.totalElements()).isEqualTo(3);
     }
 
     private Long save(Long sellerId, String title, SalesPostSaleStatus status, SalesPostUpdateStatus updateStatus) {

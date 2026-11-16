@@ -37,7 +37,7 @@ public class SalesPostQueryRepositoryImpl implements SalesPostQueryRepository {
                 .selectFrom(salesPost)
                 .where(
                         titleContains(request.getTitle()),
-                        notDeleted()
+                        onSale()
                 )
                 .orderBy(salesPost.id.desc())
                 .offset(pageable.getOffset())
@@ -53,7 +53,7 @@ public class SalesPostQueryRepositoryImpl implements SalesPostQueryRepository {
                 .from(salesPost)
                 .where(
                         titleContains(request.getTitle()),
-                        notDeleted()
+                        onSale()
                 )
                 .fetchOne();
         return total == null ? 0L : total;
@@ -83,8 +83,10 @@ public class SalesPostQueryRepositoryImpl implements SalesPostQueryRepository {
         return title == null || title.isBlank() ? null : salesPost.title.contains(title);
     }
 
-    private BooleanExpression notDeleted() {
-        return salesPost.status.notIn(SalesPostSaleStatus.DELETED, SalesPostSaleStatus.SUSPENDED);
+    // 공개 목록(홈 · 검색)은 지금 살 수 있는 판매 중인 글만 보여준다.
+    // 판매 중지 · 운영 중지 · 판매 종료 · 등록 중 · 삭제 중은 빠진다(판매자 본인 목록은 selectBySeller가 삭제된 글만 뺀다)
+    private BooleanExpression onSale() {
+        return salesPost.status.eq(SalesPostSaleStatus.ON_SALE);
     }
 
     @Override

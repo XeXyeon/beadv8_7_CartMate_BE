@@ -59,6 +59,14 @@ public class SalesPostProductImage extends BaseManualIdAndTime {
         );
     }
 
+    // product의 사진(같은 ID)으로 복제본을 맞춘다. 수정에서 빠진 사진은 status가 DELETED로 온다
+    public void syncFrom(SyncProductImage image) {
+        this.s3Key = image.getS3Key();
+        this.imageSeq = image.getImageSeq();
+        this.status = image.getStatus();
+        copyModifyDate(image.getModifyDate());
+    }
+
     public SalesPostProductImage delete() {
         this.status = SalesPostProductStatus.DELETED;
         return this;

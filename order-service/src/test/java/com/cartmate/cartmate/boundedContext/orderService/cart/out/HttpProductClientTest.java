@@ -93,6 +93,6 @@ class HttpProductClientTest {
     private InventoryForPurchase inventory(Long inventoryId, Long productId, String optionName, Long price,
                                            boolean purchasable) {
         return new InventoryForPurchase(inventoryId, productId, 1L, "축구 유니폼", optionName, price,
-                "https://example.com/" + productId + ".png", 3L, purchasable);
+                "https://example.com/" + productId + ".png", 3L, purchasable, purchasable);
     }
 }

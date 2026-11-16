@@ -48,7 +48,8 @@ class HttpOrderProductClient implements OrderProductClient {
                 inventory.optionName(),
                 inventory.price(),
                 inventory.imageUrl(),
-                inventory.purchasable()
+                inventory.purchasable(),
+                inventory.onSale()
         );
     }
 }

@@ -124,15 +124,15 @@ class InventoryForPurchaseQueryTest {
     }
 
     @Test
-    @DisplayName("재고 ID 조회: 남은 수량이 0이면 구매 불가")
+    @DisplayName("재고 ID 조회: 남은 수량이 0이면 구매 불가지만 판매 중(onSale)은 그대로다")
     void soldOutInventoryIsNotPurchasable() {
         updateInventories(List.of(
                 new UpdateInventory(blackId, null, 0L, 0),
                 new UpdateInventory(whiteId, null, 1000L, 5)));
 
         assertThat(productFacade.findInventoriesForPurchase(List.of(blackId, whiteId)))
-                .extracting(InventoryForPurchase::inventoryId, InventoryForPurchase::purchasable)
-                .containsExactly(tuple(blackId, false), tuple(whiteId, true));
+                .extracting(InventoryForPurchase::inventoryId, InventoryForPurchase::purchasable, InventoryForPurchase::onSale)
+                .containsExactly(tuple(blackId, false, true), tuple(whiteId, true, true));
     }
 
     @Test
@@ -143,8 +143,8 @@ class InventoryForPurchaseQueryTest {
         productRepository.save(product);
 
         assertThat(productFacade.findInventoriesForPurchase(List.of(blackId, whiteId)))
-                .extracting(InventoryForPurchase::purchasable)
-                .containsExactly(false, false);
+                .extracting(InventoryForPurchase::purchasable, InventoryForPurchase::onSale)
+                .containsExactly(tuple(false, false), tuple(false, false));
     }
 
     @Test
@@ -153,8 +153,8 @@ class InventoryForPurchaseQueryTest {
         updateInventories(List.of(new UpdateInventory(blackId, null, 0L, 10)));   // 화이트를 뺀다 → 삭제
 
         assertThat(productFacade.findInventoriesForPurchase(List.of(whiteId)))
-                .extracting(InventoryForPurchase::inventoryId, InventoryForPurchase::purchasable)
-                .containsExactly(tuple(whiteId, false));
+                .extracting(InventoryForPurchase::inventoryId, InventoryForPurchase::purchasable, InventoryForPurchase::onSale)
+                .containsExactly(tuple(whiteId, false, false));
         assertThat(productFacade.findInventoriesForPurchaseByProducts(List.of(productId)))
                 .extracting(InventoryForPurchase::inventoryId)
                 .containsExactly(blackId);

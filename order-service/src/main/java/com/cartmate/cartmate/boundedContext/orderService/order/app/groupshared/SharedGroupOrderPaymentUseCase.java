@@ -24,6 +24,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.function.Predicate;
 
 @Service
 @RequiredArgsConstructor
@@ -66,7 +67,8 @@ class SharedGroupOrderPaymentUseCase {
                       TeamDeliveryAddress teamDeliveryAddress) {
         SharedGroupOrder order = sharedGroupOrderSupport.getOrderForUpdate(sharedGroupOrderId);
         if (order.getStatus() == SharedGroupOrderStatus.PAYING) {
-            validatePurchasable(order.getItems().stream().map(SharedGroupOrderItem::getInventoryId).toList());
+            // 결제 직후라 이 주문의 재고 선점이 이미 잡혀 있다. 남은 수량은 보지 않고 판매 중인지만 다시 본다
+            validateOnSale(order.getItems().stream().map(SharedGroupOrderItem::getInventoryId).toList());
         }
         DeliveryAddress deliveryAddress = order.isCreator(memberId) ? toDeliveryAddress(teamDeliveryAddress) : null;
         if (order.pay(memberId, paymentId, paidAt, deliveryAddress)) {
@@ -115,11 +117,21 @@ class SharedGroupOrderPaymentUseCase {
         );
     }
 
+    // 결제 전: 판매 중 + 남은 수량 1개 이상
     private void validatePurchasable(List<Long> inventoryIds) {
+        validateProducts(inventoryIds, OrderProductInfo::purchasable);
+    }
+
+    // 결제 직후: 판매 중인지만 (내 선점으로 남은 수량이 0이 될 수 있다)
+    private void validateOnSale(List<Long> inventoryIds) {
+        validateProducts(inventoryIds, OrderProductInfo::onSale);
+    }
+
+    private void validateProducts(List<Long> inventoryIds, Predicate<OrderProductInfo> check) {
         List<OrderProductInfo> infos = orderProductClient.findAllByInventoryIds(inventoryIds);
-        boolean purchasable = infos.size() == inventoryIds.stream().distinct().count()
-                && infos.stream().allMatch(OrderProductInfo::purchasable);
-        if (!purchasable) {
+        boolean ok = infos.size() == inventoryIds.stream().distinct().count()
+                && infos.stream().allMatch(check);
+        if (!ok) {
             throw new ServiceException(OrderErrorCode.ORDER_PRODUCT_NOT_PURCHASABLE);
         }
     }
@@ -138,7 +150,13 @@ class SharedGroupOrderPaymentUseCase {
         }
         SharedGroupOrder order = sharedGroupOrderRepository.findById(sharedGroupOrderId)
                 .orElseThrow(() -> new ServiceException(OrderErrorCode.ORDER_NOT_FOUND));
-        validatePurchasable(order.getItems().stream().map(SharedGroupOrderItem::getInventoryId).toList());
+        List<Long> inventoryIds = order.getItems().stream().map(SharedGroupOrderItem::getInventoryId).toList();
+        if (info.needsStockReservation()) {
+            validatePurchasable(inventoryIds);
+        } else {
+            // 앞선 참여자의 결제로 이 주문의 재고 선점이 이미 잡혀 있다. 남은 수량은 보지 않고 판매 중인지만 본다
+            validateOnSale(inventoryIds);
+        }
         if (info.needsStockReservation()) {
             // 첫 결제: 상품 서버 재고 선점 + "선점함" 표시를 별도 트랜잭션으로 먼저 커밋한다
             // (이 결제가 실패해도 선점은 유지). 재고가 부족하면 ORDER_OUT_OF_STOCK — 차감하지 않는다
