@@ -36,4 +36,12 @@ public interface SalesPostQueryRepository {
     Map<SalesPostSaleStatus, Long> countByStatuses(Collection<SalesPostSaleStatus> statuses);
 
     Optional<SalesPost> findLatestById(Long id);
+
+    // 회원 탈퇴 신청: 판매자의 특정 상태 판매글 ID, id 순서
+    List<Long> findIdsBySellerIdAndStatus(Long sellerId, SalesPostSaleStatus status);
+
+    // 리뷰 집계: 리뷰 수 · 별점 합계를 DB에서 바로 더하고 뺀다 (동시에 여러 리뷰가 쓰여도 어긋나지 않게). 바뀐 행 수
+    // countDelta: 작성 +1, 삭제 -1, 수정 0 / ratingDelta: 작성 +별점, 삭제 -별점, 수정 (새 별점 - 옛 별점)
+    // 실행 전 flush, 실행 뒤 영속성 컨텍스트를 비운다
+    int applyReviewSummary(Long postId, long countDelta, long ratingDelta);
 }
