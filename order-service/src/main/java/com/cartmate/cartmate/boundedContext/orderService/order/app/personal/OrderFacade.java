@@ -103,6 +103,12 @@ public class OrderFacade {
         return orderCancelUseCase.cancelByBuyer(memberId, orderId);
     }
 
+    // 주문 행을 잠그므로 구매자 취소 요청 장부와 같은 트랜잭션에서 부른다
+    @Transactional
+    public BuyerCancelStart startBuyerCancel(Long memberId, Long orderId, Collection<Long> orderItemIds) {
+        return orderCancelUseCase.startBuyerCancel(memberId, orderId, orderItemIds);
+    }
+
     @Transactional
     public void confirmCancelByDelivery(Long orderId, int requestSeq) {
         orderCancelUseCase.confirmCancelByDelivery(orderId, requestSeq);

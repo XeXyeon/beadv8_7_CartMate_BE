@@ -82,6 +82,31 @@ class OrderTest {
     }
 
     @Test
+    @DisplayName("구매자 취소: 이미 취소된 항목, 이 주문에 없는 항목, 같은 항목 중복, 빈 목록은 고를 수 없다")
+    void buyerCancelTargets_canceledOrForeignItem_throwsItemInvalid() {
+        Order order = Order.createPersonal("ORD-6", BUYER, List.of(
+                new OrderLine(10L, 11L, 7L, "사과", null, 10_000L, 1),
+                new OrderLine(30L, 31L, 8L, "우유", null, 3_000L, 1)
+        ), addressWithoutDetail(), NOW);
+        ReflectionTestUtils.setField(order.getItems().get(0), "id", 501L);
+        ReflectionTestUtils.setField(order.getItems().get(1), "id", 502L);
+        order.markPaid(99L, NOW.plusMinutes(1));
+        order.cancelItems(7L, List.of(501L), DeliveryCancelReason.SELLER_OUT_OF_STOCK, CouponMode.PROPORTIONAL,
+                NOW.plusMinutes(2));
+
+        for (List<Long> ids : List.of(List.of(501L), List.of(999L), List.of(502L, 502L), List.<Long>of())) {
+            assertThatThrownBy(() -> order.buyerCancelTargets(BUYER, ids))
+                    .isInstanceOf(ServiceException.class)
+                    .hasMessageContaining(OrderErrorCode.ORDER_CANCEL_ITEM_INVALID.getMsg());
+        }
+        assertThatThrownBy(() -> order.buyerCancelTargets(BUYER, null))
+                .hasMessageContaining(OrderErrorCode.ORDER_CANCEL_ITEM_INVALID.getMsg());
+        assertThatThrownBy(() -> order.buyerCancelTargets(OTHER, List.of(502L)))
+                .hasMessageContaining(OrderErrorCode.ORDER_BUYER_ONLY.getMsg());
+        assertThat(order.buyerCancelTargets(BUYER, List.of(502L))).extracting(OrderItem::getSellerId).containsExactly(8L);
+    }
+
+    @Test
     @DisplayName("판매 중지: 결제 전 주문이나 판매자 상품이 없으면 0원 (판매자 없는 상품이 섞여 있어도 오류 없이)")
     void cancelSellerItemsReturnsZero() {
         Order pending = personalOrder();

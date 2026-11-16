@@ -381,6 +381,39 @@ class OrderCancelUseCaseTest {
         then(eventPublisher).should(org.mockito.Mockito.times(1)).publish(any());
     }
 
+    @Test
+    @DisplayName("결제 대기 주문은 고른 항목과 상관없이 바로 주문 전체를 취소하고 취소 이벤트를 낸다")
+    void startBuyerCancel_paymentPending_cancelsWholeOrder() {
+        Order order = order();
+        org.springframework.test.util.ReflectionTestUtils.setField(order, "id", ORDER_ID);
+        given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(order));
+        given(paymentClient.findPayment(PaymentOrderType.INDIVIDUAL_GROUP, ORDER_ID, BUYER)).willReturn(Optional.empty());
+
+        BuyerCancelStart start = cancelUseCase.startBuyerCancel(BUYER, ORDER_ID, null);
+
+        assertThat(start.canceledNow()).isTrue();
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELED);
+        assertThat(order.getCancelReason()).isEqualTo(OrderCancelReason.BUYER_CANCELED);
+        then(eventPublisher).should().publish(any(OrderCanceledEvent.class));
+    }
+
+    @Test
+    @DisplayName("결제 완료 주문은 주문을 바꾸지 않고, 고른 항목과 그 판매자를 배송 서버에 물어볼 목록으로 돌려준다")
+    void startBuyerCancel_paid_returnsTargetsWithoutChangingOrder() {
+        Order order = appleBananaMilkOrder();
+        given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(order));
+
+        BuyerCancelStart start = cancelUseCase.startBuyerCancel(BUYER, ORDER_ID, List.of(PEAR, MILK));
+
+        assertThat(start.canceledNow()).isFalse();
+        assertThat(start.targets()).containsExactly(
+                new com.cartmate.cartmate.boundedContext.orderService.order.domain.buyercancel.BuyerCancelRequest.Target(PEAR, 7L),
+                new com.cartmate.cartmate.boundedContext.orderService.order.domain.buyercancel.BuyerCancelRequest.Target(MILK, 8L));
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
+        assertThat(order.getItems()).noneMatch(OrderItem::isCanceled);
+        then(eventPublisher).shouldHaveNoInteractions();
+    }
+
     private static final Long APPLE = 501L;
     private static final Long PEAR = 502L;
     private static final Long MILK = 503L;

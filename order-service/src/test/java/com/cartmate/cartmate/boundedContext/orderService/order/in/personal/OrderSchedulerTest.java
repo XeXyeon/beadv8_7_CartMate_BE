@@ -1,5 +1,6 @@
 package com.cartmate.cartmate.boundedContext.orderService.order.in.personal;
 
+import com.cartmate.cartmate.boundedContext.orderService.order.app.buyercancel.BuyerCancelFacade;
 import com.cartmate.cartmate.boundedContext.orderService.order.app.personal.OrderFacade;
 import com.cartmate.cartmate.boundedContext.orderService.order.exception.OrderErrorCode;
 import com.cartmate.cartmate.global.exception.ServiceException;
@@ -20,7 +21,8 @@ import static org.mockito.Mockito.never;
 class OrderSchedulerTest {
 
     private final OrderFacade orderFacade = mock(OrderFacade.class);
-    private final OrderScheduler scheduler = new OrderScheduler(orderFacade, Clock.systemDefaultZone());
+    private final BuyerCancelFacade buyerCancelFacade = mock(BuyerCancelFacade.class);
+    private final OrderScheduler scheduler = new OrderScheduler(orderFacade, buyerCancelFacade, Clock.systemDefaultZone());
 
     @Test
     @DisplayName("기한 만료 취소 중 다른 서버가 응답하지 않으면(503) 남은 주문은 이번 회차에 시도하지 않는다 (ISS-27)")

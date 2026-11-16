@@ -20,6 +20,7 @@ import com.cartmate.cartmate.boundedContext.orderService.order.domain.itemcancel
 import com.cartmate.cartmate.boundedContext.orderService.order.domain.itemcancel.OrderItemCancel;
 import com.cartmate.cartmate.boundedContext.orderService.order.out.itemcancel.OrderItemCancelRepository;
 import com.cartmate.cartmate.shared.delivery.PurchaseType;
+import com.cartmate.cartmate.boundedContext.orderService.order.domain.buyercancel.BuyerCancelRequest;
 import com.cartmate.cartmate.shared.order.event.OrderCancelRequestedEvent;
 import com.cartmate.cartmate.shared.order.OrderStatus;
 import com.cartmate.cartmate.boundedContext.orderService.order.out.personal.OrderRepository;
@@ -60,6 +61,17 @@ class OrderCancelUseCase {
             publishCancelRequested(order);
         }
         return result;
+    }
+
+    BuyerCancelStart startBuyerCancel(Long memberId, Long orderId, Collection<Long> orderItemIds) {
+        Order order = orderSupport.getOrderForUpdate(orderId);
+        if (order.isPaymentPending()) {
+            cancelByBuyer(memberId, orderId);
+            return BuyerCancelStart.canceled();
+        }
+        return BuyerCancelStart.request(order.buyerCancelTargets(memberId, orderItemIds).stream()
+                .map(item -> new BuyerCancelRequest.Target(item.getId(), item.getSellerId()))
+                .toList());
     }
 
     void confirmCancelByDelivery(Long orderId, int requestSeq) {

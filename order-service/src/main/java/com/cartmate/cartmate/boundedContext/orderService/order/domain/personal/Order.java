@@ -23,6 +23,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 @Getter
 @Entity
@@ -378,6 +379,26 @@ public class Order {
             case SALES_STOPPED -> OrderCancelReason.SALES_STOPPED;
             default -> OrderCancelReason.SELLER_CANCELED;
         };
+    }
+
+    // 결제 완료 주문에서 구매자가 고른 항목을 확인한다. 이 주문의 취소되지 않은 항목이어야 하고 같은 항목을 두 번 고를 수 없다.
+    public List<OrderItem> buyerCancelTargets(Long requesterId, Collection<Long> orderItemIds) {
+        if (!isBuyer(requesterId)) {
+            throw new ServiceException(OrderErrorCode.ORDER_BUYER_ONLY);
+        }
+        if (status == OrderStatus.CANCELED) {
+            throw new ServiceException(OrderErrorCode.ORDER_ALREADY_CANCELED);
+        }
+        if (orderItemIds == null || orderItemIds.isEmpty() || Set.copyOf(orderItemIds).size() != orderItemIds.size()) {
+            throw new ServiceException(OrderErrorCode.ORDER_CANCEL_ITEM_INVALID);
+        }
+        List<OrderItem> targets = items.stream()
+                .filter(item -> orderItemIds.contains(item.getId()) && !item.isCanceled() && item.getSellerId() != null)
+                .toList();
+        if (targets.size() != orderItemIds.size()) {
+            throw new ServiceException(OrderErrorCode.ORDER_CANCEL_ITEM_INVALID);
+        }
+        return targets;
     }
 
     public boolean isBuyer(Long memberId) {
