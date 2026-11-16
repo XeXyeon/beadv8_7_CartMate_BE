@@ -87,6 +87,21 @@ class CouponOrderUseCaseTest {
     }
 
     @Test
+    @DisplayName("할인 결과에 쿠폰의 할인 방식·값·최대 할인·최소 금액을 함께 싣는다")
+    void quote_carriesCouponRules() {
+        Coupon fixed = Coupon.create("정액 3천원", CouponDiscountType.FIXED, 3_000L, null, 30_000L, CouponScope.ALL, null,
+                CouponIssueType.DOWNLOAD, null, null, null, null, 30, null, 99L);
+        given(fixed, 10L, 1L, MEMBER);
+
+        CouponQuote quote = useCase.quote(MEMBER, 1L, "ORDER", ORDER, TARGET, NOW);
+
+        assertThat(quote.discountType()).isEqualTo("FIXED");
+        assertThat(quote.discountValue()).isEqualTo(3_000L);
+        assertThat(quote.maxDiscountAmount()).isNull();
+        assertThat(quote.minOrderAmount()).isEqualTo(30_000L);
+    }
+
+    @Test
     void 쓸_수_없으면_이유와_함께_거절() {
         given(sellerFixed(9L, 1_000L), 10L, 1L, MEMBER); // 주문에 판매자 9 상품 없음
         assertThatThrownBy(() -> useCase.quote(MEMBER, 1L, "ORDER", ORDER, TARGET, NOW))

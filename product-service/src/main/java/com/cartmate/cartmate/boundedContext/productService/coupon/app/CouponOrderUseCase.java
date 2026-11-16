@@ -82,7 +82,9 @@ class CouponOrderUseCase {
         }
         long discount = coupon.discountFor(coupon.eligibleAmount(target));
         return new CouponQuote(memberCoupon.getId(), coupon.getId(), coupon.getName(), discount,
-                coupon.isPlatformBurden(), coupon.getScope() == CouponScope.SELLER ? coupon.getSellerId() : null);
+                coupon.isPlatformBurden(), coupon.getScope() == CouponScope.SELLER ? coupon.getSellerId() : null,
+                coupon.getDiscountType().name(), coupon.getDiscountValue(),
+                coupon.getMaxDiscountAmount(), coupon.getMinOrderAmount());
     }
 
     // 쓸 수 없는 이유 (없으면 null). 순서: 이미 씀 → 다른 주문에 사용 중 → 기간 → 대상 상품 → 최소 금액

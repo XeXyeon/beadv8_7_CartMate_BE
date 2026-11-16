@@ -14,6 +14,8 @@ import java.time.LocalDateTime;
  * 그래서 같은 판매자 몫이 판매 중지와 판매자 사유로 두 번 와도 한 번만 환불된다.
  *
  * @param cancelReason 그 판매자 몫이 취소된 사유. 이 필드가 생기기 전 이벤트에는 없어서 null이면 판매 중지로 본다.
+ * @param cancelId     주문 서버 취소 건 ID. 같은 판매자 몫이 여러 번 나눠 취소돼도 건마다 따로 환불하도록 싣는다.
+ *                     null이면 이 필드가 생기기 전 이벤트.
  */
 public record OrderSellerItemsCanceledEvent(
         Long orderId,
@@ -21,8 +23,14 @@ public record OrderSellerItemsCanceledEvent(
         Long sellerId,
         long amount,
         LocalDateTime canceledAt,
-        DeliveryCancelReason cancelReason
+        DeliveryCancelReason cancelReason,
+        Long cancelId
 ) implements DomainEvent {
+
+    public OrderSellerItemsCanceledEvent(Long orderId, Long buyerMemberId, Long sellerId, long amount,
+                                         LocalDateTime canceledAt, DeliveryCancelReason cancelReason) {
+        this(orderId, buyerMemberId, sellerId, amount, canceledAt, cancelReason, null);
+    }
 
     public OrderSellerItemsCanceledEvent(Long orderId, Long buyerMemberId, Long sellerId, long amount,
                                          LocalDateTime canceledAt) {

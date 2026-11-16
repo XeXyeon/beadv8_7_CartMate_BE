@@ -12,14 +12,22 @@ import java.time.LocalDateTime;
  * payment가 amount를 결제한 사람들에게 낸 금액 비율대로(분담금이 같으면 1/n) 나눠 환불한다.
  *
  * @param cancelReason 그 판매자 몫이 취소된 사유. 이 필드가 생기기 전 이벤트에는 없어서 null이면 판매 중지로 본다.
+ * @param cancelId     주문 서버 취소 건 ID. 같은 판매자 몫이 여러 번 나눠 취소돼도 건마다 따로 환불하도록 싣는다.
+ *                     null이면 이 필드가 생기기 전 이벤트.
  */
 public record SharedGroupOrderSellerItemsCanceledEvent(
         Long sharedGroupOrderId,
         Long sellerId,
         long amount,
         LocalDateTime canceledAt,
-        DeliveryCancelReason cancelReason
+        DeliveryCancelReason cancelReason,
+        Long cancelId
 ) implements DomainEvent {
+
+    public SharedGroupOrderSellerItemsCanceledEvent(Long sharedGroupOrderId, Long sellerId, long amount,
+                                                    LocalDateTime canceledAt, DeliveryCancelReason cancelReason) {
+        this(sharedGroupOrderId, sellerId, amount, canceledAt, cancelReason, null);
+    }
 
     public SharedGroupOrderSellerItemsCanceledEvent(Long sharedGroupOrderId, Long sellerId, long amount,
                                                     LocalDateTime canceledAt) {

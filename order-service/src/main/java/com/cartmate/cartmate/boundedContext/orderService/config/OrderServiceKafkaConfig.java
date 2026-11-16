@@ -2,6 +2,7 @@ package com.cartmate.cartmate.boundedContext.orderService.config;
 
 import com.cartmate.cartmate.global.kafka.InboundEventBinding;
 import com.cartmate.cartmate.global.outbox.OutboxTopics;
+import com.cartmate.cartmate.shared.delivery.event.DeliveryBuyerCancelResultEvent;
 import com.cartmate.cartmate.shared.delivery.event.DeliveryConfirmedEvent;
 import com.cartmate.cartmate.shared.delivery.event.DeliveryOrderCancelRejectedEvent;
 import com.cartmate.cartmate.shared.delivery.event.DeliveryOrderCanceledEvent;
@@ -51,5 +52,11 @@ public class OrderServiceKafkaConfig {
     public InboundEventBinding deliverySellerCanceledBinding() {
         return new InboundEventBinding(
                 OutboxTopics.of(DeliverySellerCanceledEvent.class), DeliverySellerCanceledEvent.class);
+    }
+
+    @Bean
+    public InboundEventBinding deliveryBuyerCancelResultBinding() {
+        return new InboundEventBinding(
+                OutboxTopics.of(DeliveryBuyerCancelResultEvent.class), DeliveryBuyerCancelResultEvent.class);
     }
 }
