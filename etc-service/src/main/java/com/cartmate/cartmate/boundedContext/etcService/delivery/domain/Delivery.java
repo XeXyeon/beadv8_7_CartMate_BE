@@ -13,6 +13,9 @@ import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
 
 @Entity
 @Table(name = "delivery")
@@ -108,6 +111,10 @@ public class Delivery {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    @Getter(AccessLevel.NONE)
+    @OneToMany(mappedBy = "delivery")
+    @OrderBy("id")
+    private List<DeliveryItem> items = new ArrayList<>();
 
     public static Delivery create(
             Long memberId, Long sellerId, Long orderId, String orderNumber, PurchaseType purchaseType,
@@ -163,9 +170,7 @@ public class Delivery {
             throw new ServiceException(DeliveryErrorCode.DELIVERY_NOT_CANCELABLE);
         }
 
-        this.status = DeliveryStatus.CANCELED;
-        this.canceledAt = canceledAt;
-        this.cancelReason = DeliveryCancelReason.BUYER_CANCELED;
+        markCanceled(DeliveryCancelReason.BUYER_CANCELED, canceledAt);
     }
 
     // 판매글 내림으로 인한 취소: 판매자가 판매를 멈춘 것이라 요청 시각과 상관없이 배송준비중(판매자 확인 후)까지 취소한다.
@@ -185,9 +190,7 @@ public class Delivery {
             throw new ServiceException(DeliveryErrorCode.DELIVERY_NOT_CANCELABLE);
         }
 
-        this.status = DeliveryStatus.CANCELED;
-        this.canceledAt = canceledAt;
-        this.cancelReason = DeliveryCancelReason.SALES_STOPPED;
+        markCanceled(DeliveryCancelReason.SALES_STOPPED, canceledAt);
     }
 
     // 판매자가 품절 같은 사정으로 자기 배송을 취소한다. 물건이 나가기 전(배송요청·배송준비중)까지만 된다.
@@ -211,10 +214,42 @@ public class Delivery {
             throw new ServiceException(DeliveryErrorCode.DELIVERY_NOT_CANCELABLE_BY_SELLER);
         }
 
+        markCanceled(reason, canceledAt);
+        return true;
+    }
+
+    void addItem(DeliveryItem item) {
+        items.add(item);
+    }
+
+    // 고른 주문 항목의 배송 상품을 취소하고, 남은 상품이 없으면 배송도 취소한다. 이번에 새로 취소된 상품만 돌려준다.
+    // 취소할 수 있는지는 경로마다 규칙(요청 시각 판정, 판매글 내림, 판매자 사유)이 달라 부르는 쪽이 먼저 확인한다.
+    // 여기서는 이미 나간 배송을 실수로 건드리지 않게만 막는다.
+    public List<DeliveryItem> cancelItems(Set<Long> orderItemIds, DeliveryCancelReason reason, LocalDateTime canceledAt) {
+        if (this.status == DeliveryStatus.CANCELED) {
+            return List.of();
+        }
+        if (this.status != DeliveryStatus.REQUESTED && this.status != DeliveryStatus.PREPARING) {
+            throw new ServiceException(DeliveryErrorCode.DELIVERY_NOT_CANCELABLE);
+        }
+        List<DeliveryItem> newlyCanceled = new ArrayList<>();
+        for (DeliveryItem item : items) {
+            if (orderItemIds.contains(item.getOrderItemId()) && item.cancel(reason, canceledAt)) {
+                newlyCanceled.add(item);
+            }
+        }
+        if (!newlyCanceled.isEmpty() && items.stream().allMatch(DeliveryItem::isCanceled)) {
+            markCanceled(reason, canceledAt);
+        }
+        return newlyCanceled;
+    }
+
+    // 배송을 취소하면 남은 상품도 같은 사유로 취소 표시한다. 클레임·정산이 상품의 취소 표시만 보고 뺄 수 있게 하려는 것이다.
+    private void markCanceled(DeliveryCancelReason reason, LocalDateTime canceledAt) {
         this.status = DeliveryStatus.CANCELED;
         this.canceledAt = canceledAt;
         this.cancelReason = reason;
-        return true;
+        items.forEach(item -> item.cancel(reason, canceledAt));
     }
 
     // 판매자가 이미 취소된 배송을 누르면 왜 취소됐는지 알려 준다. 사유가 없는 예전 취소는 문구만 보낸다.
