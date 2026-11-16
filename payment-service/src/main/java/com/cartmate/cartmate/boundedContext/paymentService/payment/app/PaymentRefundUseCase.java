@@ -85,21 +85,24 @@ public class PaymentRefundUseCase {
         return refunded;
     }
 
-    // 개인 주문에서 한 판매자 항목만 취소됨(판매 중지 또는 판매자 사유) → 그 금액만 환불.
-    // 환불 키가 주문·판매자라서 같은 판매자 항목이 판매 중지와 판매자 사유로 두 번 와도 한 번만 환불된다.
+    // 개인 주문에서 한 판매자 상품이 취소됨(구매자 상품 취소, 판매 중지, 판매자 사유) → 그 금액만 환불.
+    // 같은 판매자 몫이 여러 번 나눠 취소될 수 있어 환불 키는 주문 서버 취소 건마다 하나다.
+    // 취소 건 ID가 없는 옛 이벤트는 주문·판매자 키로 그 판매자 몫을 한 번만 환불한다.
     public void refundOrderSellerItems(Long orderId, Long memberId, Long sellerId, long amount,
-                                       DeliveryCancelReason cancelReason) {
+                                       DeliveryCancelReason cancelReason, Long cancelId) {
         validateRefundAmount(amount);
         Payment payment = paymentRepository.findByTypeAndOrderIdAndMemberId(PaymentType.INDIVIDUAL_GROUP, orderId, memberId)
                 .orElseThrow(() -> new ServiceException(PaymentErrorCode.PAYMENT_NOT_FOUND));
-        refund(payment, amount, RefundKey.orderSellerItems(orderId, sellerId),
-                sellerItemsRefundReason(cancelReason), sellerItemsMemo(cancelReason, ""));
+        String refundKey = cancelId != null
+                ? RefundKey.orderItemCancel(cancelId)
+                : RefundKey.orderSellerItems(orderId, sellerId);
+        refund(payment, amount, refundKey, sellerItemsRefundReason(cancelReason), sellerItemsMemo(cancelReason, ""));
     }
 
     // 확정 공동 주문에서 한 판매자 항목만 취소됨 → 결제한 사람들에게 참여자 몫으로 나눠 환불 (나누는 규칙은 SharedRefundSplit).
     // 확정된 공동 주문인데 결제가 없다면 데이터가 어긋난 것이므로 조용히 넘기지 않고 예외로 주문 취소까지 롤백한다.
     public void refundSharedSellerItems(Long sharedGroupOrderId, Long sellerId, long amount,
-                                        DeliveryCancelReason cancelReason) {
+                                        DeliveryCancelReason cancelReason, Long cancelId) {
         validateRefundAmount(amount);
         List<Payment> payments = sharedSplitTargets(sharedGroupOrderId);
         Map<Long, Long> parts = SharedRefundSplit.split(payments, amount);
@@ -107,8 +110,10 @@ public class PaymentRefundUseCase {
         for (Payment payment : payments) {
             long part = parts.get(payment.getId());
             if (part > 0) {
-                refund(payment, part, RefundKey.sharedSellerItems(sharedGroupOrderId, sellerId, payment.getId()),
-                        sellerItemsRefundReason(cancelReason), sellerItemsMemo(cancelReason, "참여자 몫 "));
+                String refundKey = cancelId != null
+                        ? RefundKey.sharedItemCancel(cancelId, payment.getId())
+                        : RefundKey.sharedSellerItems(sharedGroupOrderId, sellerId, payment.getId());
+                refund(payment, part, refundKey, sellerItemsRefundReason(cancelReason), sellerItemsMemo(cancelReason, "참여자 몫 "));
             }
         }
         log.info("공동 주문 #{} 판매자 #{} 취소 상품 {}원을 {}명에게 나눠 환불", sharedGroupOrderId, sellerId, amount, payments.size());
@@ -123,12 +128,18 @@ public class PaymentRefundUseCase {
                 .toList();
     }
 
-    // 사유가 없으면 판매 중지로 본다
+    // 구매자가 고른 상품 취소는 구매자 취소, 판매자가 고른 사유는 판매자 사유 취소, 그 밖(사유 없음 포함)은 판매 중지로 본다
     private PaymentRefundReason sellerItemsRefundReason(DeliveryCancelReason cancelReason) {
+        if (cancelReason == DeliveryCancelReason.BUYER_CANCELED) {
+            return PaymentRefundReason.BUYER_CANCEL;
+        }
         return isSellerReason(cancelReason) ? PaymentRefundReason.SELLER_CANCEL : PaymentRefundReason.PRODUCT_HIDDEN;
     }
 
     private String sellerItemsMemo(DeliveryCancelReason cancelReason, String share) {
+        if (cancelReason == DeliveryCancelReason.BUYER_CANCELED) {
+            return "구매자 상품 취소 %s환불".formatted(share);
+        }
         return isSellerReason(cancelReason)
                 ? "판매자 사유 취소 %s자동 환불(%s)".formatted(share, cancelReason.getLabel())
                 : "판매 중지 상품 %s자동 환불".formatted(share);

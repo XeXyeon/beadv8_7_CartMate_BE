@@ -43,18 +43,18 @@ public class PaymentOrderEventListener {
                 canceledSellerAmounts(event));
     }
 
-    // 판매 중지·판매자 사유 취소: 개인 주문 판매자 항목 취소 → 그 금액만 환불 (배송 취소와 같은 트랜잭션)
+    // 구매자 상품 취소·판매 중지·판매자 사유 취소: 개인 주문 판매자 항목 취소 → 취소 건마다 그 금액만 환불
     @EventListener
     public void handle(OrderSellerItemsCanceledEvent event) {
         paymentFacade.refundOrderSellerItems(event.orderId(), event.buyerMemberId(), event.sellerId(), event.amount(),
-                event.cancelReason());
+                event.cancelReason(), event.cancelId());
     }
 
-    // 판매 중지·판매자 사유 취소: 확정 공동 주문 판매자 항목 취소 → 결제한 사람들에게 참여자 몫으로 나눠 환불
+    // 구매자 상품 취소·판매 중지·판매자 사유 취소: 확정 공동 주문 판매자 항목 취소 → 결제한 사람들에게 참여자 몫으로 나눠 환불
     @EventListener
     public void handle(SharedGroupOrderSellerItemsCanceledEvent event) {
         paymentFacade.refundSharedSellerItems(event.sharedGroupOrderId(), event.sellerId(), event.amount(),
-                event.cancelReason());
+                event.cancelReason(), event.cancelId());
     }
 
     // 전체 취소보다 먼저 취소된 판매자 항목 금액들. 나누는 데는 금액만 필요하다.
