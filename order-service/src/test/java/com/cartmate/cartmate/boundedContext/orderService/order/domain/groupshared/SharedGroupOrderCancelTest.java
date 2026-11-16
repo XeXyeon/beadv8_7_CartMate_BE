@@ -110,13 +110,16 @@ class SharedGroupOrderCancelTest {
     void cancelSellerItemsKeepsOrderConfirmed() {
         SharedGroupOrder order = confirmedTwoSellers();
 
-        long amount = order.cancelSellerItems(7L, DeliveryCancelReason.SELLER_OUT_OF_STOCK, NOW);
+        SharedItemCancelOutcome outcome = order.cancelItems(7L, null, DeliveryCancelReason.SELLER_OUT_OF_STOCK, NOW);
+        outcome.linkCancel(31L);
 
-        assertThat(amount).isEqualTo(10_000L);
+        assertThat(outcome.amount()).isEqualTo(10_000L);
+        assertThat(outcome.orderCanceled()).isFalse();
         assertThat(order.getStatus()).isEqualTo(SharedGroupOrderStatus.CONFIRMED);
         assertThat(order.getItems()).extracting(SharedGroupOrderItem::getCancelReason)
                 .containsExactly(DeliveryCancelReason.SELLER_OUT_OF_STOCK, null);
-        assertThat(order.canceledAmountsBySeller()).containsExactly(java.util.Map.entry(7L, 10_000L));
+        assertThat(order.canceledBatches()).containsExactly(
+                new com.cartmate.cartmate.shared.order.event.SharedGroupOrderCanceledEvent.SellerAmount(7L, 10_000L, 31L));
     }
 
     @Test

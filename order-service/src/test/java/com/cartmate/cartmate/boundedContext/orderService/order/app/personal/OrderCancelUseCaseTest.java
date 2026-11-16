@@ -27,6 +27,12 @@ import com.cartmate.cartmate.shared.order.event.OrderCancelRequestedEvent;
 import com.cartmate.cartmate.shared.order.event.OrderCanceledEvent;
 import com.cartmate.cartmate.global.event.DomainEvent;
 import com.cartmate.cartmate.global.event.DomainEventPublisher;
+import com.cartmate.cartmate.boundedContext.orderService.order.domain.itemcancel.CouponMode;
+import com.cartmate.cartmate.boundedContext.orderService.order.domain.itemcancel.OrderItemCancel;
+import com.cartmate.cartmate.boundedContext.orderService.order.domain.personal.OrderItem;
+import com.cartmate.cartmate.boundedContext.orderService.order.out.itemcancel.OrderItemCancelRepository;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -70,12 +76,15 @@ class OrderCancelUseCaseTest {
     @Mock
     private OrderCouponClient couponClient;
 
+    @Mock
+    private OrderItemCancelRepository cancelRepository;
+
     private OrderCancelUseCase cancelUseCase;
 
     @BeforeEach
     void setUp() {
         cancelUseCase = new OrderCancelUseCase(orderRepository, new OrderSupport(orderRepository), eventPublisher,
-                couponClient, paymentClient, CLOCK);
+                couponClient, paymentClient, cancelRepository, CLOCK);
     }
 
     @Test
@@ -315,17 +324,86 @@ class OrderCancelUseCaseTest {
     }
 
     @Test
-    @DisplayName("판매자 사유로 한 판매자 몫을 취소하면 환불 금액과 사유를 실은 판매자 몫 취소 이벤트를 발행한다")
-    void cancelSellerItemsPublishesReason() {
+    @DisplayName("판매자 사유로 한 판매자 몫을 취소하면 환불 금액, 사유, 취소 건 ID를 실은 판매자 몫 취소 이벤트를 발행한다")
+    void cancelItemsPublishesReasonAndCancelId() {
         Order order = personalOrder("20261019-TWOSELLR", BUYER,
-                java.util.List.of(ballLine(10L, 1), productBLine(3L, 1)), LocalDateTime.now(CLOCK));
+                List.of(ballLine(10L, 1), productBLine(3L, 1)), LocalDateTime.now(CLOCK));
         org.springframework.test.util.ReflectionTestUtils.setField(order, "id", ORDER_ID);
         order.markPaid(1L, LocalDateTime.now(CLOCK));
         given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(order));
+        givenCancelIdsFromOne();
 
-        cancelUseCase.cancelSellerItems(ORDER_ID, 7L, DeliveryCancelReason.SELLER_OUT_OF_STOCK);
+        Optional<Long> cancelId = cancelUseCase.cancelItems(ORDER_ID, 7L, null,
+                DeliveryCancelReason.SELLER_OUT_OF_STOCK, CouponMode.PROPORTIONAL);
 
+        assertThat(cancelId).contains(1L);
         then(eventPublisher).should().publish(new OrderSellerItemsCanceledEvent(
-                ORDER_ID, BUYER, 7L, 15_000L, LocalDateTime.now(CLOCK), DeliveryCancelReason.SELLER_OUT_OF_STOCK));
+                ORDER_ID, BUYER, 7L, 15_000L, LocalDateTime.now(CLOCK), DeliveryCancelReason.SELLER_OUT_OF_STOCK, 1L));
+    }
+
+    @Test
+    @DisplayName("같은 판매자의 상품을 두 번 나눠 취소하면 취소 건이 두 개 생기고, 환불 이벤트마다 자기 취소 건 ID를 싣는다")
+    void cancelItems_twiceForSameSeller_createsTwoBatchesWithOwnIds() {
+        Order order = appleBananaMilkOrder();
+        given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(order));
+        givenCancelIdsFromOne();
+        LocalDateTime now = LocalDateTime.now(CLOCK);
+
+        Optional<Long> first = cancelUseCase.cancelItems(ORDER_ID, 7L, List.of(APPLE),
+                DeliveryCancelReason.SELLER_OUT_OF_STOCK, CouponMode.PROPORTIONAL);
+        Optional<Long> second = cancelUseCase.cancelItems(ORDER_ID, 7L, List.of(PEAR),
+                DeliveryCancelReason.SELLER_OUT_OF_STOCK, CouponMode.PROPORTIONAL);
+
+        assertThat(first).contains(1L);
+        assertThat(second).contains(2L);
+        then(eventPublisher).should().publish(new OrderSellerItemsCanceledEvent(
+                ORDER_ID, BUYER, 7L, 10_000L, now, DeliveryCancelReason.SELLER_OUT_OF_STOCK, 1L));
+        then(eventPublisher).should().publish(new OrderSellerItemsCanceledEvent(
+                ORDER_ID, BUYER, 7L, 5_000L, now, DeliveryCancelReason.SELLER_OUT_OF_STOCK, 2L));
+        assertThat(order.getItems()).extracting(OrderItem::getCancelId).containsExactly(1L, 2L, null);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
+    }
+
+    @Test
+    @DisplayName("이미 취소된 항목을 다시 취소하면 취소 건도 이벤트도 만들지 않는다")
+    void cancelItems_sameItemsAgain_publishesNothing() {
+        Order order = appleBananaMilkOrder();
+        given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(order));
+        givenCancelIdsFromOne();
+        cancelUseCase.cancelItems(ORDER_ID, 7L, List.of(APPLE),
+                DeliveryCancelReason.SELLER_OUT_OF_STOCK, CouponMode.PROPORTIONAL);
+
+        Optional<Long> again = cancelUseCase.cancelItems(ORDER_ID, 7L, List.of(APPLE),
+                DeliveryCancelReason.SELLER_OUT_OF_STOCK, CouponMode.PROPORTIONAL);
+
+        assertThat(again).isEmpty();
+        then(cancelRepository).should(org.mockito.Mockito.times(1)).save(any());
+        then(eventPublisher).should(org.mockito.Mockito.times(1)).publish(any());
+    }
+
+    private static final Long APPLE = 501L;
+    private static final Long PEAR = 502L;
+    private static final Long MILK = 503L;
+
+    private Order appleBananaMilkOrder() {
+        Order order = personalOrder("20261019-APPLEPEA", BUYER, List.of(
+                new Order.OrderLine(10L, 11L, 7L, "사과", null, 10_000L, 1),
+                new Order.OrderLine(20L, 21L, 7L, "배", null, 5_000L, 1),
+                new Order.OrderLine(30L, 31L, 8L, "우유", null, 3_000L, 1)), LocalDateTime.now(CLOCK));
+        org.springframework.test.util.ReflectionTestUtils.setField(order, "id", ORDER_ID);
+        org.springframework.test.util.ReflectionTestUtils.setField(order.getItems().get(0), "id", APPLE);
+        org.springframework.test.util.ReflectionTestUtils.setField(order.getItems().get(1), "id", PEAR);
+        org.springframework.test.util.ReflectionTestUtils.setField(order.getItems().get(2), "id", MILK);
+        order.markPaid(1L, LocalDateTime.now(CLOCK));
+        return order;
+    }
+
+    private void givenCancelIdsFromOne() {
+        AtomicLong seq = new AtomicLong();
+        given(cancelRepository.save(any(OrderItemCancel.class))).willAnswer(invocation -> {
+            OrderItemCancel cancel = invocation.getArgument(0);
+            org.springframework.test.util.ReflectionTestUtils.setField(cancel, "id", seq.incrementAndGet());
+            return cancel;
+        });
     }
 }

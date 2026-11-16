@@ -2,7 +2,8 @@ package com.cartmate.cartmate.boundedContext.orderService.order.app.salesstop;
 
 import com.cartmate.cartmate.shared.delivery.DeliveryCancelReason;
 import com.cartmate.cartmate.boundedContext.orderService.order.app.groupshared.SharedGroupOrderFacade;
-import com.cartmate.cartmate.boundedContext.orderService.order.app.personal.OrderFacade;
+import com.cartmate.cartmate.boundedContext.orderService.order.app.itemcancel.ItemCancelService;
+import com.cartmate.cartmate.boundedContext.orderService.order.domain.itemcancel.CouponMode;
 import com.cartmate.cartmate.boundedContext.orderService.order.domain.salesstop.SalesStopCancelRequest;
 import com.cartmate.cartmate.boundedContext.orderService.order.domain.salesstop.SalesStopCancelRequestStatus;
 import com.cartmate.cartmate.boundedContext.orderService.order.out.salesstop.SalesStopCancelRequestRepository;
@@ -40,11 +41,11 @@ class SalesStopCancelFacadeTest {
     private static final Duration RESEND_AFTER = Duration.ofMinutes(10);
 
     private final SalesStopCancelRequestRepository repository = mock(SalesStopCancelRequestRepository.class);
-    private final OrderFacade orderFacade = mock(OrderFacade.class);
+    private final ItemCancelService itemCancelService = mock(ItemCancelService.class);
     private final SharedGroupOrderFacade sharedGroupOrderFacade = mock(SharedGroupOrderFacade.class);
     private final DomainEventPublisher eventPublisher = mock(DomainEventPublisher.class);
     private final SalesStopCancelFacade facade =
-            new SalesStopCancelFacade(repository, orderFacade, sharedGroupOrderFacade, eventPublisher, CLOCK);
+            new SalesStopCancelFacade(repository, sharedGroupOrderFacade, itemCancelService, eventPublisher, CLOCK);
 
     private SalesStopCancelRequest request(PurchaseType purchaseType, SalesStopCancelRequestStatus status,
                                            LocalDateTime lastSentAt) {
@@ -96,7 +97,8 @@ class SalesStopCancelFacadeTest {
 
         facade.applyResult(result(PurchaseType.INDIVIDUAL_GROUP, SalesStopCancelResult.SELLER_CANCELED, null));
 
-        verify(orderFacade).cancelSellerItems(ORDER_ID, SELLER_ID, DeliveryCancelReason.SALES_STOPPED);
+        verify(itemCancelService).cancel(PurchaseType.INDIVIDUAL_GROUP, ORDER_ID, SELLER_ID, null,
+                DeliveryCancelReason.SALES_STOPPED, CouponMode.PROPORTIONAL);
         assertThat(request.getStatus()).isEqualTo(SalesStopCancelRequestStatus.CANCELED);
     }
 
@@ -108,7 +110,7 @@ class SalesStopCancelFacadeTest {
         facade.applyResult(result(PurchaseType.SHARED_GROUP, SalesStopCancelResult.WHOLE_CANCELED, null));
 
         verify(sharedGroupOrderFacade).cancelWholeBySalesStopResult(ORDER_ID);
-        verify(sharedGroupOrderFacade, never()).cancelSellerItems(anyLong(), anyLong(), any());
+        verifyNoInteractions(itemCancelService);
         assertThat(request.getStatus()).isEqualTo(SalesStopCancelRequestStatus.CANCELED);
     }
 
@@ -119,7 +121,8 @@ class SalesStopCancelFacadeTest {
 
         facade.applyResult(result(PurchaseType.SHARED_GROUP, SalesStopCancelResult.SELLER_CANCELED, null));
 
-        verify(sharedGroupOrderFacade).cancelSellerItems(ORDER_ID, SELLER_ID, DeliveryCancelReason.SALES_STOPPED);
+        verify(itemCancelService).cancel(PurchaseType.SHARED_GROUP, ORDER_ID, SELLER_ID, null,
+                DeliveryCancelReason.SALES_STOPPED, CouponMode.PROPORTIONAL);
     }
 
     @Test
@@ -129,7 +132,7 @@ class SalesStopCancelFacadeTest {
 
         facade.applyResult(result(PurchaseType.INDIVIDUAL_GROUP, SalesStopCancelResult.REJECTED, "409-DELIVERY_NOT_CANCELABLE"));
 
-        verifyNoInteractions(orderFacade, sharedGroupOrderFacade);
+        verifyNoInteractions(itemCancelService, sharedGroupOrderFacade);
         assertThat(request.getStatus()).isEqualTo(SalesStopCancelRequestStatus.REJECTED);
         assertThat(request.getRejectCode()).isEqualTo("409-DELIVERY_NOT_CANCELABLE");
     }
@@ -142,7 +145,7 @@ class SalesStopCancelFacadeTest {
 
         facade.applyResult(result(PurchaseType.INDIVIDUAL_GROUP, SalesStopCancelResult.SELLER_CANCELED, null));
 
-        verifyNoInteractions(orderFacade);
+        verifyNoInteractions(itemCancelService);
     }
 
     @Test

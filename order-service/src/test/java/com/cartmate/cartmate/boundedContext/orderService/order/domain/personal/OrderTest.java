@@ -7,6 +7,8 @@ import com.cartmate.cartmate.shared.order.OrderType;
 import com.cartmate.cartmate.boundedContext.orderService.order.domain.personal.Order.OrderLine;
 import com.cartmate.cartmate.boundedContext.orderService.order.exception.OrderErrorCode;
 import com.cartmate.cartmate.global.exception.ServiceException;
+import com.cartmate.cartmate.boundedContext.orderService.order.domain.itemcancel.CouponMode;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -57,6 +59,26 @@ class OrderTest {
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELED);
         assertThat(order.getCancelReason()).isEqualTo(OrderCancelReason.SALES_STOPPED);
         assertThat(order.cancelSellerItems(7L, DeliveryCancelReason.SALES_STOPPED, NOW.plusMinutes(3))).isZero();
+    }
+
+    @Test
+    @DisplayName("다른 판매자의 항목 ID를 넘기면 그 항목은 취소하지 않고 아무것도 취소되지 않는다")
+    void cancelItems_otherSellersItemIgnored() {
+        Order order = Order.createPersonal("ORD-5", BUYER, List.of(
+                new OrderLine(10L, 11L, 7L, "사과", null, 10_000L, 1),
+                new OrderLine(30L, 31L, 8L, "우유", null, 3_000L, 1)
+        ), addressWithoutDetail(), NOW);
+        ReflectionTestUtils.setField(order.getItems().get(0), "id", 501L);
+        ReflectionTestUtils.setField(order.getItems().get(1), "id", 502L);
+        order.markPaid(99L, NOW.plusMinutes(1));
+
+        ItemCancelOutcome outcome = order.cancelItems(7L, List.of(502L), DeliveryCancelReason.SELLER_OUT_OF_STOCK,
+                CouponMode.PROPORTIONAL, NOW.plusMinutes(2));
+
+        assertThat(outcome.isEmpty()).isTrue();
+        assertThat(outcome.refundAmount()).isZero();
+        assertThat(order.getItems()).noneMatch(OrderItem::isCanceled);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
     }
 
     @Test

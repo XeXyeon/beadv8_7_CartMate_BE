@@ -1,7 +1,8 @@
 package com.cartmate.cartmate.boundedContext.orderService.order.app.salesstop;
 
 import com.cartmate.cartmate.boundedContext.orderService.order.app.groupshared.SharedGroupOrderFacade;
-import com.cartmate.cartmate.boundedContext.orderService.order.app.personal.OrderFacade;
+import com.cartmate.cartmate.boundedContext.orderService.order.app.itemcancel.ItemCancelService;
+import com.cartmate.cartmate.boundedContext.orderService.order.domain.itemcancel.CouponMode;
 import com.cartmate.cartmate.boundedContext.orderService.order.domain.salesstop.SalesStopCancelRequest;
 import com.cartmate.cartmate.boundedContext.orderService.order.domain.salesstop.SalesStopCancelRequestStatus;
 import com.cartmate.cartmate.boundedContext.orderService.order.out.salesstop.SalesStopCancelRequestRepository;
@@ -31,8 +32,8 @@ import java.util.Optional;
 public class SalesStopCancelFacade {
 
     private final SalesStopCancelRequestRepository requestRepository;
-    private final OrderFacade orderFacade;
     private final SharedGroupOrderFacade sharedGroupOrderFacade;
+    private final ItemCancelService itemCancelService;
     private final DomainEventPublisher eventPublisher;
     private final Clock clock;
 
@@ -98,11 +99,9 @@ public class SalesStopCancelFacade {
         cancelSeller(event);
     }
 
+    // 판매자 사정이라 구매자 할인을 빼앗지 않도록 할인은 비율대로 나눈다
     private void cancelSeller(DeliverySalesStopCancelResultEvent event) {
-        if (event.purchaseType() == PurchaseType.SHARED_GROUP) {
-            sharedGroupOrderFacade.cancelSellerItems(event.orderId(), event.sellerId(), DeliveryCancelReason.SALES_STOPPED);
-            return;
-        }
-        orderFacade.cancelSellerItems(event.orderId(), event.sellerId(), DeliveryCancelReason.SALES_STOPPED);
+        itemCancelService.cancel(event.purchaseType(), event.orderId(), event.sellerId(), null,
+                DeliveryCancelReason.SALES_STOPPED, CouponMode.PROPORTIONAL);
     }
 }

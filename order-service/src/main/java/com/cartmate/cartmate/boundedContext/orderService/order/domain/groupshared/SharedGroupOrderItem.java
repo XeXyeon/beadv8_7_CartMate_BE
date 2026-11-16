@@ -74,6 +74,10 @@ public class SharedGroupOrderItem {
     @Column(name = "cancel_reason", columnDefinition = "varchar(30)")
     private DeliveryCancelReason cancelReason;
 
+    // 이 항목을 환불한 취소 건. 환불 없이 취소되면(환불 0원) 비어 있다
+    @Column(name = "cancel_id")
+    private Long cancelId;
+
     public boolean isCanceled() {
         return canceledAt != null;
     }
@@ -83,6 +87,12 @@ public class SharedGroupOrderItem {
         if (canceledAt == null) {
             canceledAt = now;
             cancelReason = reason;
+        }
+    }
+
+    void linkCancel(Long cancelId) {
+        if (this.cancelId == null) {
+            this.cancelId = cancelId;
         }
     }
 }

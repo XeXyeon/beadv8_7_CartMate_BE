@@ -15,7 +15,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -96,8 +98,9 @@ public class SharedGroupOrderFacade {
 
     // 판매글 내림 취소 결과나 판매자 사유 취소를 반영하는 트랜잭션에 참여한다 (Inbox·요청 장부와 함께 커밋).
     @Transactional
-    public void cancelSellerItems(Long sharedGroupOrderId, Long sellerId, DeliveryCancelReason reason) {
-        sharedGroupOrderCancelUseCase.cancelSellerItems(sharedGroupOrderId, sellerId, reason);
+    public Optional<Long> cancelItems(Long sharedGroupOrderId, Long sellerId, Collection<Long> orderItemIds,
+                                      DeliveryCancelReason reason) {
+        return sharedGroupOrderCancelUseCase.cancelItems(sharedGroupOrderId, sellerId, orderItemIds, reason);
     }
 
     @Transactional(readOnly = true)

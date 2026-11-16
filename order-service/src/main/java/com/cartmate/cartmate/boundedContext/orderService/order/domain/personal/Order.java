@@ -1,5 +1,6 @@
 package com.cartmate.cartmate.boundedContext.orderService.order.domain.personal;
 
+import java.util.Collection;
 import java.util.Map;
 import java.util.LinkedHashMap;
 import com.cartmate.cartmate.shared.coupon.dto.CouponOrderTarget;
@@ -8,6 +9,7 @@ import com.cartmate.cartmate.shared.order.OrderCancelReason;
 import com.cartmate.cartmate.shared.order.OrderStatus;
 import com.cartmate.cartmate.shared.order.OrderType;
 import com.cartmate.cartmate.boundedContext.orderService.order.domain.DeliveryAddress;
+import com.cartmate.cartmate.boundedContext.orderService.order.domain.itemcancel.CouponMode;
 import com.cartmate.cartmate.boundedContext.orderService.order.exception.OrderErrorCode;
 import com.cartmate.cartmate.global.exception.ServiceException;
 import jakarta.persistence.*;
@@ -335,31 +337,47 @@ public class Order {
         return discountAmount * itemsAmount / totalAmount;
     }
 
-    // 판매 중지(판매글 내림)나 판매자 사유 취소로 한 판매자의 남은 항목을 모두 취소하고, 그 몫의 환불 금액을 돌려준다
-    public long cancelSellerItems(Long sellerId, DeliveryCancelReason reason, LocalDateTime now) {
+    // 한 판매자의 항목 중 고른 것(null이면 남은 전부)을 취소하고 그 몫의 환불 금액을 계산한다.
+    // 다른 판매자의 항목이나 이미 취소된 항목은 건너뛴다. 모든 항목이 취소되면 주문도 취소하고 남은 결제 금액을 모두 돌려준다.
+    public ItemCancelOutcome cancelItems(Long sellerId, Collection<Long> orderItemIds, DeliveryCancelReason reason,
+                                         CouponMode couponMode, LocalDateTime now) {
         if (!isPaid()) {
-            return 0;
+            return ItemCancelOutcome.none();
         }
-        long itemsAmount = 0;
-        for (OrderItem item : items) {
-            if (sellerId.equals(item.getSellerId()) && !item.isCanceled()) {
-                item.cancel(reason, now);
-                itemsAmount += item.amount();
-            }
+        List<OrderItem> targets = items.stream()
+                .filter(item -> sellerId.equals(item.getSellerId()) && !item.isCanceled())
+                .filter(item -> orderItemIds == null || orderItemIds.contains(item.getId()))
+                .toList();
+        if (targets.isEmpty()) {
+            return ItemCancelOutcome.none();
         }
-        if (itemsAmount == 0) {
-            return 0;
-        }
+        targets.forEach(item -> item.cancel(reason, now));
+        long itemsAmount = targets.stream().mapToLong(OrderItem::amount).sum();
         long refund = itemsAmount - discountShareOf(sellerId, itemsAmount);
-        if (items.stream().allMatch(OrderItem::isCanceled)) {
-            refund = payAmount() - itemRefundedAmount;
-            cancel(reason == DeliveryCancelReason.SALES_STOPPED
-                    ? OrderCancelReason.SALES_STOPPED : OrderCancelReason.SELLER_CANCELED, now);
+        boolean orderCanceled = items.stream().allMatch(OrderItem::isCanceled);
+        boolean couponReturnable = false;
+        if (orderCanceled) {
+            refund = remainingRefundAmount();
+            couponReturnable = hasCoupon() && !partiallyCanceled;
+            cancel(orderCancelReasonOf(reason), now);
         } else {
             partiallyCanceled = true;
         }
         itemRefundedAmount += refund;
-        return refund;
+        return new ItemCancelOutcome(targets, refund, orderCanceled, couponReturnable);
+    }
+
+    // 판매 중지(판매글 내림)나 판매자 사유 취소로 한 판매자의 남은 항목을 모두 취소하고, 그 몫의 환불 금액을 돌려준다
+    public long cancelSellerItems(Long sellerId, DeliveryCancelReason reason, LocalDateTime now) {
+        return cancelItems(sellerId, null, reason, CouponMode.PROPORTIONAL, now).refundAmount();
+    }
+
+    private static OrderCancelReason orderCancelReasonOf(DeliveryCancelReason reason) {
+        return switch (reason) {
+            case BUYER_CANCELED -> OrderCancelReason.BUYER_CANCELED;
+            case SALES_STOPPED -> OrderCancelReason.SALES_STOPPED;
+            default -> OrderCancelReason.SELLER_CANCELED;
+        };
     }
 
     public boolean isBuyer(Long memberId) {
