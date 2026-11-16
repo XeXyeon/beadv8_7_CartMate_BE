@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Grafana Cloud(또는 아무 Grafana)에 CartMate 폴더 · 대시보드 · 알림 2개를 넣는다. 다시 실행해도 같은 결과(덮어씀)
+# Grafana Cloud(또는 아무 Grafana)에 CartMate 폴더 · 대시보드 · 알림(alerts/*.json)을 넣는다. 다시 실행해도 같은 결과(덮어씀)
 #
 #   GRAFANA_URL=https://<스택>.grafana.net \
 #   GRAFANA_TOKEN=<Admin 권한 서비스 계정 토큰 (Cloud는 Editor면 알림 API 403), 실행 후 지움> \
@@ -60,5 +60,14 @@ for f in "$DIR"/alerts/*.json; do
   case "$code" in 200|201) echo "알림 $uid: OK" ;; *) echo "알림 $uid 실패 ($code): $(cat "$TMP/resp.json")"; exit 1 ;; esac
 done
 
+# 4. 알림 메시지 서식 (templates/*.tmpl → 이름은 파일 이름). 연락처의 Title · Message가 이 서식을 쓴다 (k8s README 5절)
+for t in "$DIR"/templates/*.tmpl; do
+  name="$(basename "$t" .tmpl)"
+  esc="$(sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/\t/\\t/g' -e 's/\r$//' "$t" | awk '{printf "%s\\n", $0}')"
+  printf '{"template":"%s"}' "$esc" > "$TMP/tmpl.json"
+  code=$(call PUT "/api/v1/provisioning/templates/$name" "$TMP/tmpl.json")
+  case "$code" in 200|202) echo "알림 서식 $name: OK" ;; *) echo "알림 서식 $name 실패 ($code): $(cat "$TMP/resp.json")"; exit 1 ;; esac
+done
+
 # 알림 평가 주기는 새 그룹 기본값 1분을 쓴다 (그룹 PUT API는 규칙 목록까지 통째로 바꿔서 쓰지 않는다)
-echo "완료. 알림 받는 곳(Slack 등)은 Grafana에서 연락처를 만들어 알림 정책에 연결하세요 (README)"
+echo "완료. 알림 받는 곳(Discord 연락처 · 알림 정책)은 Grafana 화면에서 한 번만 설정 (observability/k8s/README.md 5절)"

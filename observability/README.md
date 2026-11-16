@@ -5,7 +5,7 @@ Alloy(수집) → **Loki**(로그 7일) · **Tempo**(trace 3일) → **Grafana**
 ```
 앱 ──OTLP(trace)──▶ Alloy :4318 ──▶ Tempo
 앱 ──JSON 로그 파일──▶ observability/logs/*.log ──▶ Alloy ──▶ Loki
-                                                     Grafana :3300 (Loki ↔ Tempo 연결, 알림 2개, 대시보드 1개)
+                                                     Grafana :3300 (Loki ↔ Tempo 연결, 알림 3개, 대시보드 1개)
 ```
 
 메트릭(Prometheus)은 아직 없다. 알림은 업무 이벤트 로그(`event=...`) 기반이다.
@@ -65,12 +65,14 @@ docker compose -f observability/docker-compose.yaml up -d
 
 ## 4. 알림 (Grafana → 알림 → 경보 규칙 → CartMate)
 
-| 경보 | 조건 (5분 안에 1건 이상) |
-|---|---|
-| 결제 보상(되돌리기) 실패 | `event=~"payment.compensate(.request)?"`, `result="FAILED"` |
-| 이벤트 전달 포기 | `event=~"outbox.failed\|inbox.failed\|kafka.dlt"` |
+| 경보 | 조건 (5분 안에) | 심각도 |
+|---|---|---|
+| 결제 보상(되돌리기) 실패 | `event=~"payment.compensate(.request)?"`, `result="FAILED"` 1건 이상 | critical |
+| 이벤트 전달 포기 | `event=~"outbox.failed\|inbox.failed\|kafka.dlt"` 1건 이상 | critical |
+| 서비스 ERROR 급증 | 서비스별 `level="ERROR"` 로그 **10건 이상** (서비스마다 따로 울림) | warning |
 
-로컬은 Grafana 화면에서만 확인한다. 운영은 연락처(Slack 웹훅 등)를 만들고 알림 정책에 연결한다 (웹훅 주소는 파일에 넣지 말 것).
+로컬은 Grafana 화면에서만 확인한다. 운영(Grafana Cloud)은 **Discord** 연락처 `discord-cartmate` + 알림 정책(`grafana_folder=CartMate` → Discord)으로 받는다 (웹훅 주소는 파일에 넣지 말 것).
+새 오류 이슈는 Sentry가 이메일 + Discord(같은 채널)로 보낸다. 단 Sentry의 Discord 연동은 유료(Team) 플랜 전용이라 **체험 기간(2026-11-30 무렵)까지만** 오고, 그 뒤에는 이메일만 온다 (Discord 알림이 끊겨도 안내가 없다).
 
 ## 5. 수집량 절약 (무료 한도 · 부하 테스트)
 
