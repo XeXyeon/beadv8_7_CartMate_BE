@@ -59,8 +59,4 @@ public class DeliveryOrderState {
     public void markCanceled() {
         this.status = DeliveryOrderStatus.CANCELED;
     }
-
-    public void markCreated() {
-        this.status = DeliveryOrderStatus.CREATED;
-    }
 }

@@ -90,7 +90,7 @@ class DeliverySellerReasonCancelTest {
     @DisplayName("구매자 취소로 이미 취소된 배송은 그 사유를 담아 알린다")
     void buyerCanceledIsRejected() {
         Delivery delivery = delivery();
-        delivery.cancelByBuyerRequest(LocalDateTime.now(), CANCELED_AT);
+        delivery.cancelItems(Set.of(11L, 12L), DeliveryCancelReason.BUYER_CANCELED, CANCELED_AT);
 
         assertThat(delivery.getCancelReason()).isEqualTo(DeliveryCancelReason.BUYER_CANCELED);
         assertThatThrownBy(() -> cancelAll(delivery, DeliveryCancelReason.SELLER_OUT_OF_STOCK, CANCELED_AT))
@@ -141,7 +141,7 @@ class DeliverySellerReasonCancelTest {
     @DisplayName("취소된 배송에 배송준비·발송을 누르면 사유를 담아 이미 취소됐다고 알린다")
     void prepareAndShipOnCanceledTellReason() {
         Delivery requested = delivery();
-        requested.cancelByBuyerRequest(LocalDateTime.now(), CANCELED_AT);
+        requested.cancelItems(Set.of(11L, 12L), DeliveryCancelReason.BUYER_CANCELED, CANCELED_AT);
         assertThatThrownBy(() -> requested.prepare("CJ", "123"))
                 .hasMessageContaining("DELIVERY_ALREADY_CANCELED")
                 .hasMessageContaining("(사유: 구매자 취소)");

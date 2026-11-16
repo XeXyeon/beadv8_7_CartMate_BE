@@ -18,13 +18,8 @@ public record OrderSalesStopCancelRequestedEvent(
         Long orderId,
         Long sellerId,
         LocalDateTime requestedAt,
-        List<Long> orderItemIds   // 그 판매자의 아직 취소되지 않은 주문 항목 전부. null이면 이 필드가 생기기 전 이벤트
+        List<Long> orderItemIds   // 그 판매자의 아직 취소되지 않은 주문 항목 전부
 ) implements DomainEvent {
-
-    public OrderSalesStopCancelRequestedEvent(PurchaseType purchaseType, Long orderId, Long sellerId,
-                                              LocalDateTime requestedAt) {
-        this(purchaseType, orderId, sellerId, requestedAt, null);
-    }
 
     @Override
     public String aggregateType() {

@@ -20,7 +20,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -53,11 +52,6 @@ public class DeliveryFacade {
     @Transactional
     public void createDelivery(DeliveryCreateCommand createCommand) {
         deliveryCreateUseCase.create(createCommand);
-    }
-
-    @Transactional
-    public void cancelByBuyerRequest(Long orderId, int requestSeq, LocalDateTime requestedAt) {
-        deliveryCancelUseCase.cancelByBuyerRequest(orderId, requestSeq, requestedAt);
     }
 
     @Transactional

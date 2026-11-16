@@ -85,7 +85,7 @@ class PaymentRefundUseCaseTest {
     void sellerItemsFirstThenGroupCancel() {
         List<Payment> payments = sharedPayments();
 
-        useCase.refundSharedSellerItems(SHARED_ORDER_ID, SELLER_A, 10_001, DeliveryCancelReason.SELLER_OUT_OF_STOCK, null);
+        useCase.refundSharedSellerItems(SHARED_ORDER_ID, SELLER_A, 10_001, DeliveryCancelReason.SELLER_OUT_OF_STOCK, 301L);
         useCase.refundCanceledSharedGroupOrder(SHARED_ORDER_ID, "SALES_STOPPED", List.of(10_001L));
 
         assertFullyRefunded(payments);
@@ -101,7 +101,7 @@ class PaymentRefundUseCaseTest {
         // 전체 취소는 참여자 몫(3,334 / 3,334 / 3,333)을 남기고 환불한다
         assertThat(payments).extracting(Payment::refundableAmount).containsExactly(3_334L, 3_333L, 3_334L);
 
-        useCase.refundSharedSellerItems(SHARED_ORDER_ID, SELLER_A, 10_001, DeliveryCancelReason.SELLER_OUT_OF_STOCK, null);
+        useCase.refundSharedSellerItems(SHARED_ORDER_ID, SELLER_A, 10_001, DeliveryCancelReason.SELLER_OUT_OF_STOCK, 302L);
 
         assertFullyRefunded(payments);
     }
@@ -111,19 +111,19 @@ class PaymentRefundUseCaseTest {
     void severalSellerItemsAroundGroupCancel() {
         List<Payment> payments = sharedPayments();
 
-        useCase.refundSharedSellerItems(SHARED_ORDER_ID, SELLER_A, 10_001, DeliveryCancelReason.SELLER_OTHER, null);
+        useCase.refundSharedSellerItems(SHARED_ORDER_ID, SELLER_A, 10_001, DeliveryCancelReason.SELLER_OTHER, 303L);
         useCase.refundCanceledSharedGroupOrder(SHARED_ORDER_ID, "SALES_STOPPED", List.of(10_001L, 5_000L));
-        useCase.refundSharedSellerItems(SHARED_ORDER_ID, 22L, 5_000, null, null);
+        useCase.refundSharedSellerItems(SHARED_ORDER_ID, 22L, 5_000, null, 304L);
 
         assertFullyRefunded(payments);
     }
 
     @Test
-    @DisplayName("공동 주문: 먼저 취소된 판매자 항목 목록이 없으면 사람마다 낸 금액 전부를 환불한다")
-    void groupCancelWithoutList() {
+    @DisplayName("공동 주문: 먼저 취소된 판매자 항목이 없으면 사람마다 낸 금액 전부를 환불한다")
+    void groupCancelWithoutSellerItems() {
         List<Payment> payments = sharedPayments();
 
-        int refunded = useCase.refundCanceledSharedGroupOrder(SHARED_ORDER_ID, "SALES_STOPPED", null);
+        int refunded = useCase.refundCanceledSharedGroupOrder(SHARED_ORDER_ID, "SALES_STOPPED", List.of());
 
         assertThat(refunded).isEqualTo(3);
         assertFullyRefunded(payments);
@@ -140,7 +140,7 @@ class PaymentRefundUseCaseTest {
                 .thenReturn(Optional.of(compensated));
         useCase.compensateCharge(PaymentType.SHARED_GROUP, SHARED_ORDER_ID, 4L);
 
-        useCase.refundSharedSellerItems(SHARED_ORDER_ID, SELLER_A, 10_001, DeliveryCancelReason.SALES_STOPPED, null);
+        useCase.refundSharedSellerItems(SHARED_ORDER_ID, SELLER_A, 10_001, DeliveryCancelReason.SALES_STOPPED, 305L);
 
         assertThat(payments.subList(0, 3)).extracting(Payment::refundableAmount)
                 .containsExactly(6_666L, 6_667L, 6_667L);
@@ -153,12 +153,12 @@ class PaymentRefundUseCaseTest {
         when(paymentRepository.findByTypeAndOrderIdAndMemberId(PaymentType.INDIVIDUAL_GROUP, 77L, 1L))
                 .thenReturn(Optional.of(payment));
 
-        useCase.refundOrderSellerItems(77L, 1L, SELLER_A, 10_000, DeliveryCancelReason.SELLER_OUT_OF_STOCK, null);
+        useCase.refundOrderSellerItems(77L, 1L, SELLER_A, 10_000, DeliveryCancelReason.SELLER_OUT_OF_STOCK, 306L);
 
         assertThat(refunds).singleElement().satisfies(r -> {
             assertThat(r.getReason()).isEqualTo(PaymentRefundReason.SELLER_CANCEL);
             assertThat(r.getMemo()).isEqualTo("판매자 사유 취소 자동 환불(품절·재고 부족)");
-            assertThat(r.getRefundKey()).isEqualTo(RefundKey.orderSellerItems(77L, SELLER_A));
+            assertThat(r.getRefundKey()).isEqualTo(RefundKey.orderItemCancel(306L));
         });
     }
 
@@ -169,30 +169,12 @@ class PaymentRefundUseCaseTest {
         when(paymentRepository.findByTypeAndOrderIdAndMemberId(eq(PaymentType.INDIVIDUAL_GROUP), any(), eq(1L)))
                 .thenReturn(Optional.of(payment));
 
-        useCase.refundOrderSellerItems(77L, 1L, SELLER_A, 10_000, DeliveryCancelReason.SALES_STOPPED, null);
-        useCase.refundOrderSellerItems(78L, 1L, SELLER_A, 10_000, null, null);
+        useCase.refundOrderSellerItems(77L, 1L, SELLER_A, 10_000, DeliveryCancelReason.SALES_STOPPED, 307L);
+        useCase.refundOrderSellerItems(78L, 1L, SELLER_A, 10_000, null, 308L);
 
         assertThat(refunds).extracting(PaymentRefund::getReason)
                 .containsExactly(PaymentRefundReason.PRODUCT_HIDDEN, PaymentRefundReason.PRODUCT_HIDDEN);
         assertThat(refunds).extracting(PaymentRefund::getMemo).containsOnly("판매 중지 상품 자동 환불");
-    }
-
-    @Test
-    @DisplayName("같은 판매자 항목이 판매 중지와 판매자 사유로 두 번 와도 한 번만 환불된다")
-    void sameSellerItemsRefundedOnce() {
-        Payment payment = payment(9L, 30_000, PaymentType.INDIVIDUAL_GROUP);
-        when(paymentRepository.findByTypeAndOrderIdAndMemberId(PaymentType.INDIVIDUAL_GROUP, 77L, 9L))
-                .thenReturn(Optional.of(payment));
-        List<Payment> shared = sharedPayments();
-
-        useCase.refundOrderSellerItems(77L, 9L, SELLER_A, 10_000, DeliveryCancelReason.SALES_STOPPED, null);
-        useCase.refundOrderSellerItems(77L, 9L, SELLER_A, 10_000, DeliveryCancelReason.SELLER_OUT_OF_STOCK, null);
-        useCase.refundSharedSellerItems(SHARED_ORDER_ID, SELLER_A, 10_001, DeliveryCancelReason.SALES_STOPPED, null);
-        useCase.refundSharedSellerItems(SHARED_ORDER_ID, SELLER_A, 10_001, DeliveryCancelReason.SELLER_OUT_OF_STOCK, null);
-
-        assertThat(payment.refundableAmount()).isEqualTo(20_000);
-        assertThat(shared.stream().mapToLong(this::refundedTo).sum()).isEqualTo(10_001);
-        assertThat(refunds).hasSize(4);
     }
 
     private Payment individualPayment(long memberId, long amount) {

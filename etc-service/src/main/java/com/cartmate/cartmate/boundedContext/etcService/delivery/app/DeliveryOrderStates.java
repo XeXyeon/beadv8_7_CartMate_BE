@@ -24,10 +24,6 @@ public class DeliveryOrderStates {
         return !lock(orderId, purchaseType, DeliveryOrderStatus.CREATED).state().isCanceled();
     }
 
-    public Locked lockForCancel(Long orderId, PurchaseType purchaseType) {
-        return lock(orderId, purchaseType, DeliveryOrderStatus.CANCELED);
-    }
-
     public Locked lockForSellerCancel(Long orderId, PurchaseType purchaseType) {
         return lock(orderId, purchaseType, DeliveryOrderStatus.CREATED);
     }

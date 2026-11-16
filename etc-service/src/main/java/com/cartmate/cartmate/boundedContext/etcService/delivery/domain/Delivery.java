@@ -164,17 +164,6 @@ public class Delivery {
         return BuyerCancelVerdict.SHIPPED_AFTER_REQUEST;
     }
 
-    public void cancelByBuyerRequest(LocalDateTime requestedAt, LocalDateTime canceledAt) {
-        if (this.status == DeliveryStatus.CANCELED) {
-            return;
-        }
-        if (buyerCancelVerdict(requestedAt) != BuyerCancelVerdict.ALLOWED) {
-            throw new ServiceException(DeliveryErrorCode.DELIVERY_NOT_CANCELABLE);
-        }
-
-        markCanceled(DeliveryCancelReason.BUYER_CANCELED, canceledAt);
-    }
-
     // 판매글 내림으로 인한 취소: 판매자가 판매를 멈춘 것이라 요청 시각과 상관없이 배송준비중(판매자 확인 후)까지 취소한다.
     // 발송(배송중) 이후면 취소할 수 없다. 이미 취소된 배송은 취소된 것으로 본다.
     public boolean isCancelableByPostHidden() {

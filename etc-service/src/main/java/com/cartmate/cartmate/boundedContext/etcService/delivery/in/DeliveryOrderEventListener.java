@@ -4,7 +4,6 @@ import com.cartmate.cartmate.boundedContext.etcService.delivery.app.DeliveryFaca
 import com.cartmate.cartmate.boundedContext.etcService.delivery.app.dto.DeliveryCreateCommand;
 import com.cartmate.cartmate.shared.delivery.PurchaseType;
 import com.cartmate.cartmate.shared.order.event.OrderBuyerCancelRequestedEvent;
-import com.cartmate.cartmate.shared.order.event.OrderCancelRequestedEvent;
 import com.cartmate.cartmate.shared.order.event.OrderSalesStopCancelRequestedEvent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.event.EventListener;
@@ -43,11 +42,6 @@ public class DeliveryOrderEventListener {
                                 item.optionName(), item.unitPrice(), item.quantity()))
                         .toList()
         )));
-    }
-
-    @EventListener
-    public void handle(OrderCancelRequestedEvent event) {
-        deliveryFacade.cancelByBuyerRequest(event.orderId(), event.requestSeq(), event.requestedAt());
     }
 
     @EventListener

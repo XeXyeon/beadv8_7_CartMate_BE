@@ -1,6 +1,5 @@
 package com.cartmate.cartmate.boundedContext.etcService.delivery.domain;
 
-import com.cartmate.cartmate.global.exception.ServiceException;
 import com.cartmate.cartmate.shared.delivery.PurchaseType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -8,7 +7,6 @@ import org.junit.jupiter.api.Test;
 import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class DeliveryBuyerCancelTest {
 
@@ -33,9 +31,6 @@ class DeliveryBuyerCancelTest {
         delivery.prepare("CJ", "123");
 
         assertThat(delivery.buyerCancelVerdict(BEFORE_PREPARE)).isEqualTo(BuyerCancelVerdict.ALLOWED);
-
-        delivery.cancelByBuyerRequest(BEFORE_PREPARE, LocalDateTime.now());
-        assertThat(delivery.getStatus()).isEqualTo(DeliveryStatus.CANCELED);
     }
 
     @Test
@@ -45,9 +40,6 @@ class DeliveryBuyerCancelTest {
         delivery.prepare("CJ", "123");
 
         assertThat(delivery.buyerCancelVerdict(AFTER_PREPARE)).isEqualTo(BuyerCancelVerdict.NOT_CANCELABLE);
-        assertThatThrownBy(() -> delivery.cancelByBuyerRequest(AFTER_PREPARE, LocalDateTime.now()))
-                .isInstanceOf(ServiceException.class);
-        assertThat(delivery.getStatus()).isEqualTo(DeliveryStatus.PREPARING);
     }
 
     @Test
@@ -63,13 +55,11 @@ class DeliveryBuyerCancelTest {
     }
 
     @Test
-    @DisplayName("이미 취소된 배송은 다시 취소해도 그대로다")
-    void canceledIsIdempotent() {
+    @DisplayName("이미 취소된 배송은 취소할 수 있는 것으로 본다")
+    void canceledIsAllowed() {
         Delivery delivery = delivery();
-        delivery.cancelByBuyerRequest(BEFORE_PREPARE, LocalDateTime.now());
-        delivery.cancelByBuyerRequest(BEFORE_PREPARE, LocalDateTime.now());
+        delivery.cancelByPostHidden(LocalDateTime.now());
 
-        assertThat(delivery.getStatus()).isEqualTo(DeliveryStatus.CANCELED);
         assertThat(delivery.buyerCancelVerdict(BEFORE_PREPARE)).isEqualTo(BuyerCancelVerdict.ALLOWED);
     }
 }

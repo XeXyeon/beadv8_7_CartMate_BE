@@ -59,11 +59,10 @@ public class PaymentRefundUseCase {
     // 남은 금액 전부를 쓰지 않는 이유: 판매자 항목 취소 환불과 전체 취소 환불은 다른 토픽으로 와서 순서를 모른다.
     // 전체 취소가 먼저 처리되면 남은 금액 전부에 판매자 항목 몫까지 들어가고, 뒤에 온 판매자 항목 취소 환불이 실패한다.
     // 이렇게 빼고 환불하면 어느 쪽이 먼저 오든 사람마다 환불 합이 낸 금액과 같아진다.
-    // canceledSellerAmounts가 없으면 먼저 취소된 판매자 항목이 없는 것으로 본다.
     public int refundCanceledSharedGroupOrder(Long sharedGroupOrderId, String cancelReason, List<Long> canceledSellerAmounts) {
         List<Payment> payments = sharedSplitTargets(sharedGroupOrderId);
         Map<Long, Long> alreadyCanceled = new HashMap<>();
-        for (long sellerAmount : canceledSellerAmounts == null ? List.<Long>of() : canceledSellerAmounts) {
+        for (long sellerAmount : canceledSellerAmounts) {
             SharedRefundSplit.split(payments, sellerAmount)
                     .forEach((paymentId, part) -> alreadyCanceled.merge(paymentId, part, Long::sum));
         }
@@ -87,16 +86,12 @@ public class PaymentRefundUseCase {
 
     // 개인 주문에서 한 판매자 상품이 취소됨(구매자 상품 취소, 판매 중지, 판매자 사유) → 그 금액만 환불.
     // 같은 판매자 몫이 여러 번 나눠 취소될 수 있어 환불 키는 주문 서버 취소 건마다 하나다.
-    // 취소 건 ID가 없는 옛 이벤트는 주문·판매자 키로 그 판매자 몫을 한 번만 환불한다.
     public void refundOrderSellerItems(Long orderId, Long memberId, Long sellerId, long amount,
                                        DeliveryCancelReason cancelReason, Long cancelId) {
         validateRefundAmount(amount);
         Payment payment = paymentRepository.findByTypeAndOrderIdAndMemberId(PaymentType.INDIVIDUAL_GROUP, orderId, memberId)
                 .orElseThrow(() -> new ServiceException(PaymentErrorCode.PAYMENT_NOT_FOUND));
-        String refundKey = cancelId != null
-                ? RefundKey.orderItemCancel(cancelId)
-                : RefundKey.orderSellerItems(orderId, sellerId);
-        refund(payment, amount, refundKey, sellerItemsRefundReason(cancelReason), sellerItemsMemo(cancelReason, ""));
+        refund(payment, amount, RefundKey.orderItemCancel(cancelId), sellerItemsRefundReason(cancelReason), sellerItemsMemo(cancelReason, ""));
     }
 
     // 확정 공동 주문에서 한 판매자 항목만 취소됨 → 결제한 사람들에게 참여자 몫으로 나눠 환불 (나누는 규칙은 SharedRefundSplit).
@@ -110,10 +105,7 @@ public class PaymentRefundUseCase {
         for (Payment payment : payments) {
             long part = parts.get(payment.getId());
             if (part > 0) {
-                String refundKey = cancelId != null
-                        ? RefundKey.sharedItemCancel(cancelId, payment.getId())
-                        : RefundKey.sharedSellerItems(sharedGroupOrderId, sellerId, payment.getId());
-                refund(payment, part, refundKey, sellerItemsRefundReason(cancelReason), sellerItemsMemo(cancelReason, "참여자 몫 "));
+                refund(payment, part, RefundKey.sharedItemCancel(cancelId, payment.getId()), sellerItemsRefundReason(cancelReason), sellerItemsMemo(cancelReason, "참여자 몫 "));
             }
         }
         log.info("공동 주문 #{} 판매자 #{} 취소 상품 {}원을 {}명에게 나눠 환불", sharedGroupOrderId, sellerId, amount, payments.size());

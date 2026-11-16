@@ -1,5 +1,6 @@
 package com.cartmate.cartmate.boundedContext.orderService.cart.app.groupindividual;
 
+import com.cartmate.cartmate.shared.delivery.DeliveryCancelReason;
 import com.cartmate.cartmate.shared.order.OrderCancelReason;
 
 import com.cartmate.cartmate.shared.order.OrderType;
@@ -91,11 +92,13 @@ class IndividualGroupPurchaseOrderReplicaIntegrationTest {
         relay(created(orderId, purchaseId, OrderType.INDIVIDUAL_GROUP));
         relay(paid(orderId, purchaseId, OrderType.INDIVIDUAL_GROUP));
 
-        relay(new OrderSellerItemsCanceledEvent(orderId, 1L, 3L, 50000L, CREATED_AT.plusHours(1)));
+        relay(new OrderSellerItemsCanceledEvent(orderId, 1L, 3L, 50000L, CREATED_AT.plusHours(1),
+                DeliveryCancelReason.SALES_STOPPED, 1L));
         assertThat(replicaRepository.findPaidLines(purchaseId))
                 .extracting(IndividualGroupPurchaseOrderLine::productId).containsExactly(8L);
 
-        relay(new OrderSellerItemsCanceledEvent(orderId, 1L, 4L, 15000L, CREATED_AT.plusHours(1)));
+        relay(new OrderSellerItemsCanceledEvent(orderId, 1L, 4L, 15000L, CREATED_AT.plusHours(1),
+                DeliveryCancelReason.SALES_STOPPED, 2L));
         assertThat(replicaRepository.findPaidLines(purchaseId)).isEmpty();
     }
 
@@ -104,7 +107,8 @@ class IndividualGroupPurchaseOrderReplicaIntegrationTest {
     void sellerItemsCanceledOfPersonalOrderIsIgnored() {
         Long orderId = newOrderId();
 
-        relay(new OrderSellerItemsCanceledEvent(orderId, 1L, 3L, 50000L, CREATED_AT));
+        relay(new OrderSellerItemsCanceledEvent(orderId, 1L, 3L, 50000L, CREATED_AT,
+                DeliveryCancelReason.SALES_STOPPED, 1L));
 
         assertThat(replicaRepository.findById(orderId)).isEmpty();
     }

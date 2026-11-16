@@ -1,5 +1,6 @@
 package com.cartmate.cartmate.boundedContext.productService.product.app;
 
+import com.cartmate.cartmate.shared.delivery.DeliveryCancelReason;
 import com.cartmate.cartmate.boundedContext.productService.post.app.SalesPostCreateUseCase;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPost;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.CreateSalesPostRequest;
@@ -173,7 +174,8 @@ class InventoryReservationEventTest {
     @DisplayName("판매자 몫 취소 → 그 판매자 재고만 재고 복구, 다른 판매자 재고는 판매 확정 그대로")
     void sellerItemsCanceledRestoresOnlyThatSeller() {
         publish(paid());
-        publish(new OrderSellerItemsCanceledEvent(ORDER_ID, 1L, OTHER_SELLER_ID, 75000L, LocalDateTime.now()));
+        publish(new OrderSellerItemsCanceledEvent(ORDER_ID, 1L, OTHER_SELLER_ID, 75000L, LocalDateTime.now(),
+                DeliveryCancelReason.SALES_STOPPED, 1L));
 
         assertThat(stockOf(ballId)).isEqualTo(20);
         assertThat(stockOf(blackId)).isEqualTo(8);

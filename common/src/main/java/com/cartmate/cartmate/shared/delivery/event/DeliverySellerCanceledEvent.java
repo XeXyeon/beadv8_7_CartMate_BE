@@ -17,13 +17,8 @@ public record DeliverySellerCanceledEvent(
         Long sellerId,
         DeliveryCancelReason cancelReason,
         LocalDateTime canceledAt,
-        List<Long> orderItemIds   // 이번에 새로 취소된 주문 항목. null이면 이 필드가 생기기 전 이벤트
+        List<Long> orderItemIds   // 이번에 새로 취소된 주문 항목
 ) implements DomainEvent {
-
-    public DeliverySellerCanceledEvent(PurchaseType purchaseType, Long orderId, Long sellerId,
-                                       DeliveryCancelReason cancelReason, LocalDateTime canceledAt) {
-        this(purchaseType, orderId, sellerId, cancelReason, canceledAt, null);
-    }
 
     @Override
     public String aggregateType() {

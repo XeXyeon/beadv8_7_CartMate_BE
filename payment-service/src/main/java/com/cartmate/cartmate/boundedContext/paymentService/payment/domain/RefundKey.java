@@ -26,16 +26,6 @@ public final class RefundKey {
         return "SHARED-CANCEL-" + paymentId;
     }
 
-    // 판매 중지·판매자 사유: 취소 건 ID가 없는 옛 이벤트용 (주문·판매자당 한 번)
-    public static String orderSellerItems(Long orderId, Long sellerId) {
-        return "SALES-STOP-O%d-S%d".formatted(orderId, sellerId);
-    }
-
-    // 판매 중지·판매자 사유: 취소 건 ID가 없는 옛 이벤트용 (공동 주문·판매자·결제당 한 번)
-    public static String sharedSellerItems(Long sharedGroupOrderId, Long sellerId, Long paymentId) {
-        return "SALES-STOP-SG%d-S%d-PAY%d".formatted(sharedGroupOrderId, sellerId, paymentId);
-    }
-
     // 개인 주문 상품 취소 (주문 서버 취소 건당 한 번). 같은 판매자 몫을 여러 번 나눠 취소해도 건마다 환불한다
     public static String orderItemCancel(Long cancelId) {
         return "ITEM-CANCEL-" + cancelId;

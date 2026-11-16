@@ -59,9 +59,6 @@ public class PaymentOrderEventListener {
 
     // 전체 취소보다 먼저 취소된 판매자 항목 금액들. 나누는 데는 금액만 필요하다.
     private static List<Long> canceledSellerAmounts(SharedGroupOrderCanceledEvent event) {
-        if (event.canceledSellerAmounts() == null) {
-            return null;
-        }
         return event.canceledSellerAmounts().stream()
                 .map(SharedGroupOrderCanceledEvent.SellerAmount::amount)
                 .toList();

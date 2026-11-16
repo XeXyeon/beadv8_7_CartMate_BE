@@ -3,7 +3,6 @@ package com.cartmate.cartmate.boundedContext.etcService.config;
 import com.cartmate.cartmate.global.kafka.InboundEventBinding;
 import com.cartmate.cartmate.global.outbox.OutboxTopics;
 import com.cartmate.cartmate.shared.order.event.OrderBuyerCancelRequestedEvent;
-import com.cartmate.cartmate.shared.order.event.OrderCancelRequestedEvent;
 import com.cartmate.cartmate.shared.order.event.OrderPaidEvent;
 import com.cartmate.cartmate.shared.order.event.OrderSalesStopCancelRequestedEvent;
 import com.cartmate.cartmate.shared.order.event.SharedGroupOrderConfirmedEvent;
@@ -25,11 +24,6 @@ public class EtcServiceKafkaConfig {
     @Bean
     public InboundEventBinding sharedGroupOrderConfirmedBinding() {
         return binding(SharedGroupOrderConfirmedEvent.class);
-    }
-
-    @Bean
-    public InboundEventBinding orderCancelRequestedBinding() {
-        return binding(OrderCancelRequestedEvent.class);
     }
 
     @Bean

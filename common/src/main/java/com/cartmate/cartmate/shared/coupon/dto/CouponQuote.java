@@ -21,9 +21,4 @@ public record CouponQuote(
         Long maxDiscountAmount,
         long minOrderAmount
 ) {
-
-    public CouponQuote(Long memberCouponId, Long couponId, String couponName, long discountAmount,
-                       boolean platformBurden, Long sellerId) {
-        this(memberCouponId, couponId, couponName, discountAmount, platformBurden, sellerId, null, 0L, null, 0L);
-    }
 }
