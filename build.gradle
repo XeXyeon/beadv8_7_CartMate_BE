@@ -6,6 +6,11 @@ plugins {
 	id 'io.spring.dependency-management' version '1.1.7' apply false
 }
 
+// Spring Boot BOM에 없는 라이브러리 버전 (배포 2주 이상 지난 것으로 고정)
+ext {
+	sentryVersion = '8.62.0'   // 2026-10-27 배포. common(compileOnly) · 서비스(스타터)가 같은 버전을 쓴다
+}
+
 subprojects {
 	apply plugin: 'java'
 	apply plugin: 'io.spring.dependency-management'

@@ -7,6 +7,11 @@ plugins {
 dependencies {
     // global(예외 · RsData · 보안 · outbox · 내부 API 클라이언트 · Redis · S3) + shared(서비스 간 이벤트 · DTO 계약)
     implementation project(':common')
+    // 관측: 분산 추적(Micrometer Tracing + OTel 브리지 + OTLP 내보내기) · health · 예외 수집(SENTRY_DSN 없으면 꺼짐)
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-opentelemetry'
+    implementation "io.sentry:sentry-spring-boot-4-starter:${sentryVersion}"
+    implementation "io.sentry:sentry-logback:${sentryVersion}"   // ERROR 로그 → Sentry
 
     // 공동구매 · 주문 · 구매확정 · wallet 결과 이벤트를 Kafka로 받는다(cartmate.kafka.enabled=true일 때만 연결)
     implementation 'org.springframework.boot:spring-boot-starter-kafka'
