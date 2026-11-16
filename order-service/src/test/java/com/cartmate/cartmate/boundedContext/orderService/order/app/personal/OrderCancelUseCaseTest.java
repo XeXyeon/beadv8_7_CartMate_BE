@@ -454,6 +454,46 @@ class OrderCancelUseCaseTest {
         then(couponClient).shouldHaveNoInteractions();
     }
 
+    @Test
+    @DisplayName("구매자가 고른 상품을 빼면 쿠폰 최소 금액이 깨져 오히려 더 내야 하면 취소 요청을 받지 않는다")
+    void startBuyerCancel_underpaid_throws() {
+        Order order = personalOrder("20261019-UNDERPAI", BUYER, List.of(
+                new Order.OrderLine(10L, 11L, 7L, "상품A", null, 10_000L, 1),
+                new Order.OrderLine(30L, 31L, 8L, "상품B", null, 1_000L, 1)), LocalDateTime.now(CLOCK));
+        org.springframework.test.util.ReflectionTestUtils.setField(order, "id", ORDER_ID);
+        org.springframework.test.util.ReflectionTestUtils.setField(order.getItems().get(0), "id", APPLE);
+        org.springframework.test.util.ReflectionTestUtils.setField(order.getItems().get(1), "id", PEAR);
+        order.applyCoupon(5L, 3_000L, true, null, OrderCouponRule.of("FIXED", 3_000L, null, 11_000L));
+        order.markPaid(1L, LocalDateTime.now(CLOCK));
+        given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(order));
+
+        assertThatThrownBy(() -> cancelUseCase.startBuyerCancel(BUYER, ORDER_ID, List.of(PEAR)))
+                .isInstanceOf(ServiceException.class)
+                .hasMessageContaining(OrderErrorCode.ORDER_CANCEL_COUPON_MINIMUM.getMsg());
+        assertThat(order.getItems()).noneMatch(OrderItem::isCanceled);
+    }
+
+    @Test
+    @DisplayName("구매자 취소 결과로 여러 판매자 상품을 취소하면 판매자마다 자기 취소 건 ID로 환불 이벤트를 하나씩 낸다")
+    void cancelItemsByBuyer_publishesEventPerSellerWithOwnCancelId() {
+        Order order = appleBananaMilkOrder();
+        given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(order));
+        givenCancelIdsFromOne();
+        java.util.Map<Long, List<Long>> bySeller = new java.util.LinkedHashMap<>();
+        bySeller.put(7L, List.of(APPLE));
+        bySeller.put(8L, List.of(MILK));
+
+        List<Long> cancelIds = cancelUseCase.cancelItemsByBuyer(ORDER_ID, bySeller);
+
+        LocalDateTime now = LocalDateTime.now(CLOCK);
+        assertThat(cancelIds).containsExactly(1L, 2L);
+        then(eventPublisher).should().publish(new OrderSellerItemsCanceledEvent(
+                ORDER_ID, BUYER, 7L, 10_000L, now, DeliveryCancelReason.BUYER_CANCELED, 1L));
+        then(eventPublisher).should().publish(new OrderSellerItemsCanceledEvent(
+                ORDER_ID, BUYER, 8L, 3_000L, now, DeliveryCancelReason.BUYER_CANCELED, 2L));
+        assertThat(order.getItems()).extracting(OrderItem::getCancelId).containsExactly(1L, null, 2L);
+    }
+
     private Order couponAppleBananaMilkOrder(OrderCouponRule rule) {
         Order order = personalOrder("20261019-COUPONAB", BUYER, List.of(
                 new Order.OrderLine(10L, 11L, 7L, "사과", null, 10_000L, 1),

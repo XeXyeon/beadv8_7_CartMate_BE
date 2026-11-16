@@ -8,6 +8,8 @@ import com.cartmate.cartmate.boundedContext.orderService.order.domain.personal.B
 import com.cartmate.cartmate.boundedContext.orderService.order.exception.OrderErrorCode;
 import com.cartmate.cartmate.boundedContext.orderService.order.out.buyercancel.BuyerCancelRequestRepository;
 import com.cartmate.cartmate.global.event.DomainEventPublisher;
+import com.cartmate.cartmate.shared.delivery.event.DeliveryBuyerCancelResultEvent;
+import com.cartmate.cartmate.shared.delivery.event.DeliveryBuyerCancelResultEvent.SellerResult;
 import com.cartmate.cartmate.global.exception.ServiceException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,7 +19,12 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * 구매자 취소: 고른 상품의 취소를 배송 서버에 먼저 요청하고, 판매자별 결과를 받은 뒤에만 그 판매자 몫을 취소·환불한다.
@@ -27,6 +34,8 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class BuyerCancelFacade {
+
+    static final String RESULT_MISSING = "RESULT_MISSING";
 
     private final BuyerCancelRequestRepository requestRepository;
     private final OrderFacade orderFacade;
@@ -47,6 +56,38 @@ public class BuyerCancelFacade {
                 BuyerCancelRequest.create(orderId, memberId, start.targets(), LocalDateTime.now(clock)));
         eventPublisher.publish(request.toEvent());
         return BuyerCancelResult.REQUESTED;
+    }
+
+    // 판매자마다 따로 취소를 확정한다. 한 판매자가 거절해도 다른 판매자 몫은 취소·환불한다.
+    @Transactional
+    public void applyResult(DeliveryBuyerCancelResultEvent event) {
+        Optional<BuyerCancelRequest> found = requestRepository.findByIdForUpdate(event.requestId());
+        if (found.isEmpty() || !found.get().isRequested() || !found.get().getOrderId().equals(event.orderId())) {
+            log.info("반영하지 않는 구매자 취소 결과: requestId={}, orderId={}, status={}", event.requestId(), event.orderId(),
+                    found.map(BuyerCancelRequest::getStatus).orElse(null));
+            return;
+        }
+        BuyerCancelRequest request = found.get();
+        Map<Long, SellerResult> bySeller = event.results().stream()
+                .collect(Collectors.toMap(SellerResult::sellerId, Function.identity(), (first, second) -> first));
+        Map<Long, List<Long>> toCancel = new LinkedHashMap<>();
+        for (Long sellerId : request.sellerIds()) {
+            SellerResult result = bySeller.get(sellerId);
+            if (result == null) {
+                log.warn("구매자 취소 결과에 판매자가 빠짐: requestId={}, sellerId={}", request.getId(), sellerId);
+                request.rejectSeller(sellerId, RESULT_MISSING);
+            } else if (result.canceled()) {
+                toCancel.put(sellerId, request.orderItemIdsOf(sellerId));
+                request.markSellerCanceled(sellerId);
+            } else {
+                request.rejectSeller(sellerId, result.failureCode());
+            }
+        }
+        // 취소된 판매자들을 한 번에 계산해야 순서와 상관없이 환불 금액이 같다
+        if (!toCancel.isEmpty()) {
+            orderFacade.cancelItemsByBuyer(request.getOrderId(), toCancel);
+        }
+        request.complete();
     }
 
     @Transactional(readOnly = true)

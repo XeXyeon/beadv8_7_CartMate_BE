@@ -83,6 +83,30 @@ public class BuyerCancelRequest {
         return true;
     }
 
+    public List<Long> sellerIds() {
+        return items.stream().map(BuyerCancelRequestItem::getSellerId).distinct().toList();
+    }
+
+    public List<Long> orderItemIdsOf(Long sellerId) {
+        return itemsOf(sellerId).stream().map(BuyerCancelRequestItem::getOrderItemId).toList();
+    }
+
+    public void markSellerCanceled(Long sellerId) {
+        itemsOf(sellerId).forEach(BuyerCancelRequestItem::markCanceled);
+    }
+
+    public void rejectSeller(Long sellerId, String failureCode) {
+        itemsOf(sellerId).forEach(item -> item.reject(failureCode));
+    }
+
+    public void complete() {
+        this.status = BuyerCancelRequestStatus.DONE;
+    }
+
+    private List<BuyerCancelRequestItem> itemsOf(Long sellerId) {
+        return items.stream().filter(item -> item.getSellerId().equals(sellerId)).toList();
+    }
+
     // 재발행해도 처음 요청 시각과 같은 항목을 싣는다. 배송 서버는 요청 시각 기준으로 판정한다
     public OrderBuyerCancelRequestedEvent toEvent() {
         return new OrderBuyerCancelRequestedEvent(id, orderId, buyerMemberId, requestedAt, items.stream()

@@ -28,6 +28,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -108,6 +109,12 @@ public class OrderFacade {
     @Transactional
     public BuyerCancelStart startBuyerCancel(Long memberId, Long orderId, Collection<Long> orderItemIds) {
         return orderCancelUseCase.startBuyerCancel(memberId, orderId, orderItemIds);
+    }
+
+    // 구매자 취소 결과를 반영하는 트랜잭션에 참여한다 (Inbox·요청 장부와 함께 커밋).
+    @Transactional
+    public List<Long> cancelItemsByBuyer(Long orderId, Map<Long, List<Long>> itemIdsBySeller) {
+        return orderCancelUseCase.cancelItemsByBuyer(orderId, itemIdsBySeller);
     }
 
     @Transactional(readOnly = true)

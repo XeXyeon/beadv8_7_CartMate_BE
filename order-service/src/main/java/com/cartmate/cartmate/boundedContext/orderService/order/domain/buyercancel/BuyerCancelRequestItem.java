@@ -50,6 +50,15 @@ public class BuyerCancelRequestItem {
         this.sellerId = sellerId;
     }
 
+    void markCanceled() {
+        this.result = BuyerCancelItemResult.CANCELED;
+    }
+
+    void reject(String failureCode) {
+        this.result = BuyerCancelItemResult.REJECTED;
+        this.failureCode = failureCode;
+    }
+
     static BuyerCancelRequestItem create(BuyerCancelRequest request, Long orderItemId, Long sellerId) {
         return new BuyerCancelRequestItem(request, orderItemId, sellerId);
     }

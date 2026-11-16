@@ -11,6 +11,16 @@ import com.cartmate.cartmate.boundedContext.orderService.order.out.buyercancel.B
 import com.cartmate.cartmate.global.event.DomainEventPublisher;
 import com.cartmate.cartmate.global.exception.ServiceException;
 import com.cartmate.cartmate.shared.order.event.OrderBuyerCancelRequestedEvent;
+import com.cartmate.cartmate.shared.delivery.event.DeliveryBuyerCancelResultEvent;
+import com.cartmate.cartmate.shared.delivery.event.DeliveryBuyerCancelResultEvent.SellerResult;
+import com.cartmate.cartmate.boundedContext.orderService.order.domain.buyercancel.BuyerCancelItemResult;
+import com.cartmate.cartmate.boundedContext.orderService.order.domain.buyercancel.BuyerCancelRequestItem;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.Mockito.times;
+import static org.assertj.core.groups.Tuple.tuple;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -87,6 +97,88 @@ class BuyerCancelFacadeTest {
 
         assertThat(result).isEqualTo(BuyerCancelResult.CANCELED);
         verifyNoInteractions(repository, eventPublisher);
+    }
+
+    // 사과(501)·배(502)는 판매자 7, 우유(503)는 판매자 8
+    private BuyerCancelRequest givenPendingRequest() {
+        BuyerCancelRequest request = BuyerCancelRequest.create(ORDER_ID, BUYER,
+                List.of(new Target(501L, 7L), new Target(502L, 7L), new Target(503L, 8L)), NOW.minusMinutes(1));
+        ReflectionTestUtils.setField(request, "id", REQUEST_ID);
+        when(repository.findByIdForUpdate(REQUEST_ID)).thenReturn(Optional.of(request));
+        return request;
+    }
+
+    private static DeliveryBuyerCancelResultEvent result(SellerResult... results) {
+        return new DeliveryBuyerCancelResultEvent(REQUEST_ID, ORDER_ID, List.of(results));
+    }
+
+    @Test
+    @DisplayName("판매자 A는 취소, B는 거절이면 A 상품만 취소하고 B 상품에는 거절 코드를 남기고 요청을 닫는다")
+    void applyResult_partial_cancelsOnlyCanceledSeller() {
+        BuyerCancelRequest request = givenPendingRequest();
+
+        facade.applyResult(result(new SellerResult(7L, true, null), new SellerResult(8L, false, "409-X")));
+
+        verify(orderFacade).cancelItemsByBuyer(ORDER_ID, Map.of(7L, List.of(501L, 502L)));
+        assertThat(request.getItems()).extracting(BuyerCancelRequestItem::getResult, BuyerCancelRequestItem::getFailureCode)
+                .containsExactly(tuple(BuyerCancelItemResult.CANCELED, null), tuple(BuyerCancelItemResult.CANCELED, null),
+                        tuple(BuyerCancelItemResult.REJECTED, "409-X"));
+        assertThat(request.getStatus()).isEqualTo(BuyerCancelRequestStatus.DONE);
+    }
+
+    @Test
+    @DisplayName("같은 결과가 두 번 와도 한 번만 취소한다")
+    void applyResult_twice_cancelsOnce() {
+        givenPendingRequest();
+        DeliveryBuyerCancelResultEvent event = result(new SellerResult(7L, true, null), new SellerResult(8L, true, null));
+
+        facade.applyResult(event);
+        facade.applyResult(event);
+
+        verify(orderFacade, times(1)).cancelItemsByBuyer(anyLong(), anyMap());
+    }
+
+    @Test
+    @DisplayName("모르는 요청, 이미 닫힌 요청, 주문이 다른 결과는 반영하지 않는다")
+    void applyResult_unknownOrDoneRequest_ignored() {
+        when(repository.findByIdForUpdate(REQUEST_ID)).thenReturn(Optional.empty());
+        facade.applyResult(result(new SellerResult(7L, true, null)));
+
+        BuyerCancelRequest done = givenPendingRequest();
+        done.complete();
+        facade.applyResult(result(new SellerResult(7L, true, null)));
+
+        BuyerCancelRequest pending = givenPendingRequest();
+        facade.applyResult(new DeliveryBuyerCancelResultEvent(REQUEST_ID, 999L, List.of(new SellerResult(7L, true, null))));
+
+        verifyNoInteractions(orderFacade);
+        assertThat(pending.isRequested()).isTrue();
+    }
+
+    @Test
+    @DisplayName("여러 판매자가 취소되면 한 번에 계산하도록 함께 넘긴다")
+    void applyResult_canceledSellersCanceledTogether() {
+        givenPendingRequest();
+
+        facade.applyResult(result(new SellerResult(8L, true, null), new SellerResult(7L, true, null)));
+
+        Map<Long, List<Long>> expected = new LinkedHashMap<>();
+        expected.put(7L, List.of(501L, 502L));
+        expected.put(8L, List.of(503L));
+        verify(orderFacade, times(1)).cancelItemsByBuyer(ORDER_ID, expected);
+    }
+
+    @Test
+    @DisplayName("결과에 빠진 판매자의 상품은 취소하지 않고 결과 없음으로 거절 처리한다")
+    void applyResult_missingSeller_rejectedAsMissing() {
+        BuyerCancelRequest request = givenPendingRequest();
+
+        facade.applyResult(result(new SellerResult(7L, true, null)));
+
+        verify(orderFacade).cancelItemsByBuyer(ORDER_ID, Map.of(7L, List.of(501L, 502L)));
+        assertThat(request.getItems().get(2).getResult()).isEqualTo(BuyerCancelItemResult.REJECTED);
+        assertThat(request.getItems().get(2).getFailureCode()).isEqualTo(BuyerCancelFacade.RESULT_MISSING);
+        assertThat(request.getStatus()).isEqualTo(BuyerCancelRequestStatus.DONE);
     }
 
     @Test

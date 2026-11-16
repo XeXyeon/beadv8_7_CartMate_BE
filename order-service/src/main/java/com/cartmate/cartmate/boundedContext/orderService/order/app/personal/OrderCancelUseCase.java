@@ -36,7 +36,9 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Collection;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Slf4j
@@ -70,6 +72,7 @@ class OrderCancelUseCase {
             cancelByBuyer(memberId, orderId);
             return BuyerCancelStart.canceled();
         }
+        order.previewBuyerCancel(memberId, orderItemIds);
         return BuyerCancelStart.request(order.buyerCancelTargets(memberId, orderItemIds).stream()
                 .map(item -> new BuyerCancelRequest.Target(item.getId(), item.getSellerId()))
                 .toList());
@@ -151,23 +154,38 @@ class OrderCancelUseCase {
         Order order = orderSupport.getOrderForUpdate(orderId);
         LocalDateTime now = LocalDateTime.now(clock);
         ItemCancelOutcome outcome = order.cancelItems(sellerId, orderItemIds, reason, couponMode, now);
-        if (outcome.isEmpty()) {
-            return Optional.empty();
-        }
-        Long cancelId = null;
-        if (outcome.refundAmount() > 0 || outcome.orderCanceled()) {
-            cancelId = orderItemCancelRepository.save(OrderItemCancel.of(PurchaseType.INDIVIDUAL_GROUP,
-                    orderId, sellerId, reason, outcome.refundAmount(), now)).getId();
-            outcome.linkCancel(cancelId);
-        }
-        if (outcome.refundAmount() > 0) {
-            eventPublisher.publish(new OrderSellerItemsCanceledEvent(orderId, order.getBuyerMemberId(), sellerId,
-                    outcome.refundAmount(), now, reason, cancelId));
+        return recordCancels(order, outcome, reason, now).stream().findFirst();
+    }
+
+    // 구매자 취소 결과 하나로 취소된 판매자들의 상품을 한 번에 취소한다
+    List<Long> cancelItemsByBuyer(Long orderId, Map<Long, List<Long>> itemIdsBySeller) {
+        Order order = orderSupport.getOrderForUpdate(orderId);
+        LocalDateTime now = LocalDateTime.now(clock);
+        ItemCancelOutcome outcome = order.cancelItems(itemIdsBySeller, DeliveryCancelReason.BUYER_CANCELED,
+                CouponMode.RECALCULATE, now);
+        return recordCancels(order, outcome, DeliveryCancelReason.BUYER_CANCELED, now);
+    }
+
+    // 판매자 몫마다 환불이 있거나 주문을 끝낸 취소면 취소 건으로 남기고, 환불이 있으면 환불 이벤트를 낸다
+    private List<Long> recordCancels(Order order, ItemCancelOutcome outcome, DeliveryCancelReason reason, LocalDateTime now) {
+        List<Long> cancelIds = new ArrayList<>();
+        for (ItemCancelOutcome.SellerPart part : outcome.parts()) {
+            if (part.refundAmount() == 0 && !outcome.orderCanceled()) {
+                continue;
+            }
+            Long cancelId = orderItemCancelRepository.save(OrderItemCancel.of(PurchaseType.INDIVIDUAL_GROUP,
+                    order.getId(), part.sellerId(), reason, part.refundAmount(), now)).getId();
+            part.linkCancel(cancelId);
+            cancelIds.add(cancelId);
+            if (part.refundAmount() > 0) {
+                eventPublisher.publish(new OrderSellerItemsCanceledEvent(order.getId(), order.getBuyerMemberId(),
+                        part.sellerId(), part.refundAmount(), now, reason, cancelId));
+            }
         }
         if (outcome.couponReturnable()) {
-            orderCouponClient.restore(order.getBuyerMemberId(), order.getMemberCouponId(), orderId);
+            orderCouponClient.restore(order.getBuyerMemberId(), order.getMemberCouponId(), order.getId());
         }
-        return Optional.ofNullable(cancelId);
+        return cancelIds;
     }
 
     List<Long> findIdsByStatusAndProductIds(OrderStatus status, Collection<Long> productIds) {
