@@ -66,9 +66,14 @@ public class DeliveryCancelUseCase {
 
     // 판매글 내림으로 인한 취소 요청을 판정하고 결과를 회신한다.
     // 공동구매는 모든 배송이 취소 가능하면 전부 취소하고, 아니면 그 판매자 몫만 취소한다. 그 판매자 배송이 발송됐으면 거절한다.
-    // 배송이 아직 없는 판매자 몫은 메모를 남겨 나중에 온 배송 생성이 만들지 않게 한다.
+    // 배송이 아직 없는 판매자 상품은 메모를 남겨 나중에 온 배송 생성이 만들지 않게 한다.
     // 같은 요청을 다시 받아도 같은 결과를 돌려준다.
-    public void cancelBySalesStop(PurchaseType purchaseType, Long orderId, Long sellerId) {
+    public void cancelBySalesStop(PurchaseType purchaseType, Long orderId, Long sellerId, List<Long> orderItemIds) {
+        // 목록이 없으면 배송이 아직 없는 판매자 몫을 메모할 수 없어, 나중에 만들어진 배송으로 취소된 상품이 나간다.
+        if (orderItemIds == null) {
+            throw new IllegalStateException(
+                    "판매글 내림 요청에 주문 항목 목록이 없다: orderId=" + orderId + ", sellerId=" + sellerId);
+        }
         DeliveryOrderState state = deliveryOrderStates.lockForSellerCancel(orderId, purchaseType).state();
         if (state.isCanceled()) {
             publishResult(purchaseType, orderId, sellerId, canceledResultOf(purchaseType), null);
@@ -94,7 +99,7 @@ public class DeliveryCancelUseCase {
             return;
         }
         cancelAll(sellerDeliveries, canceledAt);
-        deliveryOrderStates.markSellerCanceled(orderId, purchaseType, sellerId);
+        deliveryOrderStates.markItemsCanceled(orderId, purchaseType, orderItemIds);
         publishResult(purchaseType, orderId, sellerId, SalesStopCancelResult.SELLER_CANCELED, null);
     }
 

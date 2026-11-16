@@ -15,7 +15,9 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Entity
 @Table(name = "delivery")
@@ -193,29 +195,41 @@ public class Delivery {
         markCanceled(DeliveryCancelReason.SALES_STOPPED, canceledAt);
     }
 
-    // 판매자가 품절 같은 사정으로 자기 배송을 취소한다. 물건이 나가기 전(배송요청·배송준비중)까지만 된다.
+    // 판매자가 품절 같은 사정으로 고른 상품을 취소한다. 물건이 나가기 전(배송요청·배송준비중)까지만 된다. 전부 고르면 배송도 취소된다.
     // 송장 정보는 지우지 않는다. 송장을 발급한 뒤 취소된 배송인지 나중에 확인할 수 있게 남긴다.
-    // 같은 사유로 다시 누르면(더블클릭 등) 아무것도 바꾸지 않는다. 실제로 취소했으면 true를 돌려준다.
+    // 고른 상품이 모두 같은 사유로 이미 취소됐으면(더블클릭 등) 아무것도 바꾸지 않고 빈 목록을 돌려준다.
     // 사유는 한 번 정하면 바꾸지 않는다. 이미 주문 서버와 구매자 화면에 퍼졌기 때문이다.
-    public boolean cancelBySeller(DeliveryCancelReason reason, LocalDateTime canceledAt) {
+    public List<DeliveryItem> cancelItemsBySeller(Set<Long> deliveryItemIds, DeliveryCancelReason reason,
+                                                  LocalDateTime canceledAt) {
         if (reason == null) {
             throw new ServiceException(DeliveryErrorCode.DELIVERY_CANCEL_REASON_REQUIRED);
         }
         if (!reason.isSellerReason()) {
             throw new ServiceException(DeliveryErrorCode.DELIVERY_CANCEL_REASON_NOT_ALLOWED);
         }
-        if (this.status == DeliveryStatus.CANCELED) {
-            if (reason == this.cancelReason) {
-                return false;
-            }
-            throw alreadyCanceled();
+        if (deliveryItemIds == null || deliveryItemIds.isEmpty()) {
+            throw new ServiceException(DeliveryErrorCode.DELIVERY_CANCEL_ITEMS_REQUIRED);
+        }
+        List<DeliveryItem> selected = items.stream()
+                .filter(item -> item.getId() != null && deliveryItemIds.contains(item.getId()))
+                .toList();
+        if (selected.size() != deliveryItemIds.size()) {
+            throw new ServiceException(DeliveryErrorCode.DELIVERY_ITEM_NOT_FOUND);
+        }
+        Optional<DeliveryItem> canceledByOther = selected.stream()
+                .filter(item -> item.isCanceled() && item.getCancelReason() != reason)
+                .findFirst();
+        if (canceledByOther.isPresent()) {
+            throw alreadyCanceled(canceledByOther.get().getCancelReason());
+        }
+        if (selected.stream().allMatch(DeliveryItem::isCanceled)) {
+            return List.of();
         }
         if (this.status != DeliveryStatus.REQUESTED && this.status != DeliveryStatus.PREPARING) {
             throw new ServiceException(DeliveryErrorCode.DELIVERY_NOT_CANCELABLE_BY_SELLER);
         }
-
-        markCanceled(reason, canceledAt);
-        return true;
+        Set<Long> orderItemIds = selected.stream().map(DeliveryItem::getOrderItemId).collect(Collectors.toSet());
+        return cancelItems(orderItemIds, reason, canceledAt);
     }
 
     void addItem(DeliveryItem item) {
@@ -252,21 +266,21 @@ public class Delivery {
         items.forEach(item -> item.cancel(reason, canceledAt));
     }
 
-    // 판매자가 이미 취소된 배송을 누르면 왜 취소됐는지 알려 준다. 사유가 없는 예전 취소는 문구만 보낸다.
-    private ServiceException alreadyCanceled() {
+    // 이미 취소된 배송이나 상품을 다시 다루려 하면 왜 취소됐는지 알려 준다. 사유가 없는 예전 취소는 문구만 보낸다.
+    private ServiceException alreadyCanceled(DeliveryCancelReason reason) {
         DeliveryErrorCode code = DeliveryErrorCode.DELIVERY_ALREADY_CANCELED;
-        if (this.cancelReason == null) {
+        if (reason == null) {
             return new ServiceException(code);
         }
         return new ServiceException(code.resultCode(),
-                code.getMsg() + " (사유: " + this.cancelReason.getLabel() + ")");
+                code.getMsg() + " (사유: " + reason.getLabel() + ")");
     }
 
     // 택배사와 송장번호를 등록하고 배송요청을 배송준비로 바꾼다.
     // 이미 같은 송장 정보로 준비 처리된 경우에는 아무것도 하지 않아 재요청해도 안전하다.
     public void prepare(String carrier, String trackingNumber) {
         if (this.status == DeliveryStatus.CANCELED) {
-            throw alreadyCanceled();
+            throw alreadyCanceled(this.cancelReason);
         }
         if (carrier == null || carrier.isBlank()) {
             throw new ServiceException(DeliveryErrorCode.DELIVERY_CARRIER_REQUIRED);
@@ -296,7 +310,7 @@ public class Delivery {
     // 배송준비를 배송중으로 바꾸고 출발 시각을 기록한다. 이미 배송중이면 아무것도 하지 않아 재요청해도 안전하다.
     public void ship() {
         if (this.status == DeliveryStatus.CANCELED) {
-            throw alreadyCanceled();
+            throw alreadyCanceled(this.cancelReason);
         }
         if (this.status == DeliveryStatus.SHIPPING) {
             return;

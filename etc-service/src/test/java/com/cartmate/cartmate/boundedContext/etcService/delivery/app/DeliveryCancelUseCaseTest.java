@@ -17,6 +17,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
@@ -27,6 +28,7 @@ import static org.mockito.Mockito.when;
 class DeliveryCancelUseCaseTest {
 
     private static final long ORDER_ID = 100L;
+    private static final List<Long> ITEM_IDS = List.of(11L, 12L);
     private static final LocalDateTime BEFORE_PREPARE = LocalDateTime.now().minusMinutes(1);
     private static final LocalDateTime AFTER_PREPARE = LocalDateTime.now().plusMinutes(1);
 
@@ -147,11 +149,11 @@ class DeliveryCancelUseCaseTest {
         Delivery other = delivery(1009L);
         givenSalesStopState(PurchaseType.INDIVIDUAL_GROUP, false, List.of(seller, other));
 
-        useCase.cancelBySalesStop(PurchaseType.INDIVIDUAL_GROUP, ORDER_ID, 1007L);
+        useCase.cancelBySalesStop(PurchaseType.INDIVIDUAL_GROUP, ORDER_ID, 1007L, ITEM_IDS);
 
         assertThat(seller.getStatus()).isEqualTo(DeliveryStatus.CANCELED);
         assertThat(other.getStatus()).isEqualTo(DeliveryStatus.REQUESTED);
-        verify(deliveryOrderStates).markSellerCanceled(ORDER_ID, PurchaseType.INDIVIDUAL_GROUP, 1007L);
+        verify(deliveryOrderStates).markItemsCanceled(ORDER_ID, PurchaseType.INDIVIDUAL_GROUP, ITEM_IDS);
         verify(state, never()).markCanceled();
         verifyResult(PurchaseType.INDIVIDUAL_GROUP, 1007L, SalesStopCancelResult.SELLER_CANCELED, null);
     }
@@ -163,7 +165,7 @@ class DeliveryCancelUseCaseTest {
         prepared.prepare("CJ", "123");
         givenSalesStopState(PurchaseType.INDIVIDUAL_GROUP, false, List.of(prepared));
 
-        useCase.cancelBySalesStop(PurchaseType.INDIVIDUAL_GROUP, ORDER_ID, 1007L);
+        useCase.cancelBySalesStop(PurchaseType.INDIVIDUAL_GROUP, ORDER_ID, 1007L, ITEM_IDS);
 
         assertThat(prepared.getStatus()).isEqualTo(DeliveryStatus.CANCELED);
         verifyResult(PurchaseType.INDIVIDUAL_GROUP, 1007L, SalesStopCancelResult.SELLER_CANCELED, null);
@@ -175,21 +177,21 @@ class DeliveryCancelUseCaseTest {
         Delivery seller = shipped(delivery(1007L));
         givenSalesStopState(PurchaseType.INDIVIDUAL_GROUP, false, List.of(seller));
 
-        useCase.cancelBySalesStop(PurchaseType.INDIVIDUAL_GROUP, ORDER_ID, 1007L);
+        useCase.cancelBySalesStop(PurchaseType.INDIVIDUAL_GROUP, ORDER_ID, 1007L, ITEM_IDS);
 
         assertThat(seller.getStatus()).isEqualTo(DeliveryStatus.SHIPPING);
-        verify(deliveryOrderStates, never()).markSellerCanceled(anyLong(), any(), anyLong());
+        verify(deliveryOrderStates, never()).markItemsCanceled(anyLong(), any(), any());
         verifyResult(PurchaseType.INDIVIDUAL_GROUP, 1007L, SalesStopCancelResult.REJECTED, "409-DELIVERY_NOT_CANCELABLE");
     }
 
     @Test
     @DisplayName("판매글 내림: 배송이 아직 없으면 메모만 남겨 나중에 만들지 않게 하고 취소됨을 보낸다")
-    void salesStopBeforeDeliveryCreatedLeavesMemo() {
+    void cancelBySalesStop_sellerCanceled_memosGivenItems() {
         givenSalesStopState(PurchaseType.INDIVIDUAL_GROUP, false, List.of());
 
-        useCase.cancelBySalesStop(PurchaseType.INDIVIDUAL_GROUP, ORDER_ID, 1007L);
+        useCase.cancelBySalesStop(PurchaseType.INDIVIDUAL_GROUP, ORDER_ID, 1007L, ITEM_IDS);
 
-        verify(deliveryOrderStates).markSellerCanceled(ORDER_ID, PurchaseType.INDIVIDUAL_GROUP, 1007L);
+        verify(deliveryOrderStates).markItemsCanceled(ORDER_ID, PurchaseType.INDIVIDUAL_GROUP, ITEM_IDS);
         verifyResult(PurchaseType.INDIVIDUAL_GROUP, 1007L, SalesStopCancelResult.SELLER_CANCELED, null);
     }
 
@@ -200,7 +202,7 @@ class DeliveryCancelUseCaseTest {
         Delivery other = sharedDelivery(1009L);
         givenSalesStopState(PurchaseType.SHARED_GROUP, false, List.of(seller, other));
 
-        useCase.cancelBySalesStop(PurchaseType.SHARED_GROUP, ORDER_ID, 1007L);
+        useCase.cancelBySalesStop(PurchaseType.SHARED_GROUP, ORDER_ID, 1007L, ITEM_IDS);
 
         assertThat(seller.getStatus()).isEqualTo(DeliveryStatus.CANCELED);
         assertThat(other.getStatus()).isEqualTo(DeliveryStatus.CANCELED);
@@ -215,12 +217,12 @@ class DeliveryCancelUseCaseTest {
         Delivery other = shipped(sharedDelivery(1009L));
         givenSalesStopState(PurchaseType.SHARED_GROUP, false, List.of(seller, other));
 
-        useCase.cancelBySalesStop(PurchaseType.SHARED_GROUP, ORDER_ID, 1007L);
+        useCase.cancelBySalesStop(PurchaseType.SHARED_GROUP, ORDER_ID, 1007L, ITEM_IDS);
 
         assertThat(seller.getStatus()).isEqualTo(DeliveryStatus.CANCELED);
         assertThat(other.getStatus()).isEqualTo(DeliveryStatus.SHIPPING);
         verify(state, never()).markCanceled();
-        verify(deliveryOrderStates).markSellerCanceled(ORDER_ID, PurchaseType.SHARED_GROUP, 1007L);
+        verify(deliveryOrderStates).markItemsCanceled(ORDER_ID, PurchaseType.SHARED_GROUP, ITEM_IDS);
         verifyResult(PurchaseType.SHARED_GROUP, 1007L, SalesStopCancelResult.SELLER_CANCELED, null);
     }
 
@@ -229,9 +231,17 @@ class DeliveryCancelUseCaseTest {
     void salesStopOnCanceledSharedOrderRepliesWhole() {
         givenSalesStopState(PurchaseType.SHARED_GROUP, true, List.of());
 
-        useCase.cancelBySalesStop(PurchaseType.SHARED_GROUP, ORDER_ID, 1007L);
+        useCase.cancelBySalesStop(PurchaseType.SHARED_GROUP, ORDER_ID, 1007L, ITEM_IDS);
 
         verify(deliveryRepository, never()).findAllByOrderIdAndPurchaseTypeForUpdate(anyLong(), any());
         verifyResult(PurchaseType.SHARED_GROUP, 1007L, SalesStopCancelResult.WHOLE_CANCELED, null);
+    }
+
+    @Test
+    @DisplayName("판매글 내림 요청에 주문 항목 목록이 없으면 메모를 남길 수 없어 실패시킨다")
+    void salesStopWithoutItemIdsFails() {
+        assertThatThrownBy(() -> useCase.cancelBySalesStop(PurchaseType.INDIVIDUAL_GROUP, ORDER_ID, 1007L, null))
+                .isInstanceOf(IllegalStateException.class);
+        verify(eventPublisher, never()).publish(any());
     }
 }

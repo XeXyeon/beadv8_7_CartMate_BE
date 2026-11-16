@@ -5,8 +5,10 @@ import com.cartmate.cartmate.shared.delivery.DeliveryCancelReason;
 import com.cartmate.cartmate.shared.delivery.PurchaseType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -16,8 +18,21 @@ class DeliverySellerReasonCancelTest {
     private static final LocalDateTime CANCELED_AT = LocalDateTime.of(2026, 11, 11, 10, 0);
 
     private Delivery delivery() {
-        return Delivery.create(7L, 1007L, 100L, "O-100", PurchaseType.INDIVIDUAL_GROUP,
+        Delivery delivery = Delivery.create(7L, 1007L, 100L, "O-100", PurchaseType.INDIVIDUAL_GROUP,
                 "수령인", "010", "00000", "서울", "101호", "key-100", "hash");
+        item(delivery, 501L, 11L);
+        item(delivery, 502L, 12L);
+        return delivery;
+    }
+
+    private void item(Delivery delivery, long id, long orderItemId) {
+        DeliveryItem item = DeliveryItem.create(delivery, orderItemId, "상품", 1000L, 1L);
+        ReflectionTestUtils.setField(item, "id", id);
+    }
+
+    // 판매자가 배송의 상품을 전부 골라 취소한다. 실제로 취소한 상품이 있으면 true.
+    private boolean cancelAll(Delivery delivery, DeliveryCancelReason reason, LocalDateTime canceledAt) {
+        return !delivery.cancelItemsBySeller(Set.of(501L, 502L), reason, canceledAt).isEmpty();
     }
 
     @Test
@@ -25,7 +40,7 @@ class DeliverySellerReasonCancelTest {
     void requestedIsCanceled() {
         Delivery delivery = delivery();
 
-        boolean canceled = delivery.cancelBySeller(DeliveryCancelReason.SELLER_OUT_OF_STOCK, CANCELED_AT);
+        boolean canceled = cancelAll(delivery, DeliveryCancelReason.SELLER_OUT_OF_STOCK, CANCELED_AT);
 
         assertThat(canceled).isTrue();
         assertThat(delivery.getStatus()).isEqualTo(DeliveryStatus.CANCELED);
@@ -39,7 +54,7 @@ class DeliverySellerReasonCancelTest {
         Delivery delivery = delivery();
         delivery.prepare("CJ", "123");
 
-        assertThat(delivery.cancelBySeller(DeliveryCancelReason.SELLER_PRODUCT_ISSUE, CANCELED_AT)).isTrue();
+        assertThat(cancelAll(delivery, DeliveryCancelReason.SELLER_PRODUCT_ISSUE, CANCELED_AT)).isTrue();
 
         assertThat(delivery.getStatus()).isEqualTo(DeliveryStatus.CANCELED);
         assertThat(delivery.getCarrier()).isEqualTo("CJ");
@@ -50,9 +65,9 @@ class DeliverySellerReasonCancelTest {
     @DisplayName("같은 사유로 다시 누르면 아무것도 바꾸지 않고 성공한다")
     void sameReasonAgainIsNoop() {
         Delivery delivery = delivery();
-        delivery.cancelBySeller(DeliveryCancelReason.SELLER_OUT_OF_STOCK, CANCELED_AT);
+        cancelAll(delivery, DeliveryCancelReason.SELLER_OUT_OF_STOCK, CANCELED_AT);
 
-        boolean canceled = delivery.cancelBySeller(DeliveryCancelReason.SELLER_OUT_OF_STOCK, CANCELED_AT.plusMinutes(1));
+        boolean canceled = cancelAll(delivery, DeliveryCancelReason.SELLER_OUT_OF_STOCK, CANCELED_AT.plusMinutes(1));
 
         assertThat(canceled).isFalse();
         assertThat(delivery.getCanceledAt()).isEqualTo(CANCELED_AT);
@@ -62,9 +77,9 @@ class DeliverySellerReasonCancelTest {
     @DisplayName("다른 사유로 다시 누르면 처음 사유를 담아 이미 취소됐다고 알린다")
     void differentReasonIsRejectedWithFirstReason() {
         Delivery delivery = delivery();
-        delivery.cancelBySeller(DeliveryCancelReason.SELLER_OUT_OF_STOCK, CANCELED_AT);
+        cancelAll(delivery, DeliveryCancelReason.SELLER_OUT_OF_STOCK, CANCELED_AT);
 
-        assertThatThrownBy(() -> delivery.cancelBySeller(DeliveryCancelReason.SELLER_OTHER, CANCELED_AT))
+        assertThatThrownBy(() -> cancelAll(delivery, DeliveryCancelReason.SELLER_OTHER, CANCELED_AT))
                 .isInstanceOf(ServiceException.class)
                 .hasMessageContaining("DELIVERY_ALREADY_CANCELED")
                 .hasMessageContaining("(사유: 품절·재고 부족)");
@@ -78,7 +93,7 @@ class DeliverySellerReasonCancelTest {
         delivery.cancelByBuyerRequest(LocalDateTime.now(), CANCELED_AT);
 
         assertThat(delivery.getCancelReason()).isEqualTo(DeliveryCancelReason.BUYER_CANCELED);
-        assertThatThrownBy(() -> delivery.cancelBySeller(DeliveryCancelReason.SELLER_OUT_OF_STOCK, CANCELED_AT))
+        assertThatThrownBy(() -> cancelAll(delivery, DeliveryCancelReason.SELLER_OUT_OF_STOCK, CANCELED_AT))
                 .isInstanceOf(ServiceException.class)
                 .hasMessageContaining("DELIVERY_ALREADY_CANCELED")
                 .hasMessageContaining("(사유: 구매자 취소)");
@@ -91,7 +106,7 @@ class DeliverySellerReasonCancelTest {
         delivery.cancelByPostHidden(CANCELED_AT);
 
         assertThat(delivery.getCancelReason()).isEqualTo(DeliveryCancelReason.SALES_STOPPED);
-        assertThatThrownBy(() -> delivery.cancelBySeller(DeliveryCancelReason.SELLER_OTHER, CANCELED_AT))
+        assertThatThrownBy(() -> cancelAll(delivery, DeliveryCancelReason.SELLER_OTHER, CANCELED_AT))
                 .hasMessageContaining("(사유: 판매 중지)");
     }
 
@@ -102,7 +117,7 @@ class DeliverySellerReasonCancelTest {
         delivery.prepare("CJ", "123");
         delivery.ship();
 
-        assertThatThrownBy(() -> delivery.cancelBySeller(DeliveryCancelReason.SELLER_OUT_OF_STOCK, CANCELED_AT))
+        assertThatThrownBy(() -> cancelAll(delivery, DeliveryCancelReason.SELLER_OUT_OF_STOCK, CANCELED_AT))
                 .isInstanceOf(ServiceException.class)
                 .hasMessageContaining("DELIVERY_NOT_CANCELABLE_BY_SELLER");
         assertThat(delivery.getStatus()).isEqualTo(DeliveryStatus.SHIPPING);
@@ -113,11 +128,11 @@ class DeliverySellerReasonCancelTest {
     void invalidReasonIsRejected() {
         Delivery delivery = delivery();
 
-        assertThatThrownBy(() -> delivery.cancelBySeller(DeliveryCancelReason.BUYER_CANCELED, CANCELED_AT))
+        assertThatThrownBy(() -> cancelAll(delivery, DeliveryCancelReason.BUYER_CANCELED, CANCELED_AT))
                 .hasMessageContaining("DELIVERY_CANCEL_REASON_NOT_ALLOWED");
-        assertThatThrownBy(() -> delivery.cancelBySeller(DeliveryCancelReason.SALES_STOPPED, CANCELED_AT))
+        assertThatThrownBy(() -> cancelAll(delivery, DeliveryCancelReason.SALES_STOPPED, CANCELED_AT))
                 .hasMessageContaining("DELIVERY_CANCEL_REASON_NOT_ALLOWED");
-        assertThatThrownBy(() -> delivery.cancelBySeller(null, CANCELED_AT))
+        assertThatThrownBy(() -> cancelAll(delivery, null, CANCELED_AT))
                 .hasMessageContaining("DELIVERY_CANCEL_REASON_REQUIRED");
         assertThat(delivery.getStatus()).isEqualTo(DeliveryStatus.REQUESTED);
     }
@@ -133,7 +148,7 @@ class DeliverySellerReasonCancelTest {
 
         Delivery preparing = delivery();
         preparing.prepare("CJ", "123");
-        preparing.cancelBySeller(DeliveryCancelReason.SELLER_PRODUCT_ISSUE, CANCELED_AT);
+        cancelAll(preparing, DeliveryCancelReason.SELLER_PRODUCT_ISSUE, CANCELED_AT);
         assertThatThrownBy(preparing::ship)
                 .hasMessageContaining("DELIVERY_ALREADY_CANCELED")
                 .hasMessageContaining("(사유: 상품 문제 발견)");

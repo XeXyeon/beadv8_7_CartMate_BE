@@ -29,8 +29,7 @@ public class DeliveryCreateUseCase {
     public void create(DeliveryCreateCommand createCommand) {
         validatedCreate(createCommand);
 
-        if (!deliveryOrderStates.acceptCreation(
-                createCommand.orderId(), createCommand.purchaseType(), createCommand.sellerId())) {
+        if (!deliveryOrderStates.acceptCreation(createCommand.orderId(), createCommand.purchaseType())) {
             return;
         }
 

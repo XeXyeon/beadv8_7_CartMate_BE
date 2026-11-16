@@ -3,6 +3,7 @@ package com.cartmate.cartmate.boundedContext.etcService.delivery.in;
 import com.cartmate.cartmate.boundedContext.etcService.delivery.app.DeliveryFacade;
 import com.cartmate.cartmate.boundedContext.etcService.delivery.app.dto.DeliveryCreateCommand;
 import com.cartmate.cartmate.shared.delivery.PurchaseType;
+import com.cartmate.cartmate.shared.order.event.OrderBuyerCancelRequestedEvent;
 import com.cartmate.cartmate.shared.order.event.OrderCancelRequestedEvent;
 import com.cartmate.cartmate.shared.order.event.OrderSalesStopCancelRequestedEvent;
 import lombok.RequiredArgsConstructor;
@@ -50,8 +51,13 @@ public class DeliveryOrderEventListener {
     }
 
     @EventListener
+    public void handle(OrderBuyerCancelRequestedEvent event) {
+        deliveryFacade.cancelBuyerItems(event);
+    }
+
+    @EventListener
     public void handle(OrderSalesStopCancelRequestedEvent event) {
-        deliveryFacade.cancelBySalesStop(event.purchaseType(), event.orderId(), event.sellerId());
+        deliveryFacade.cancelBySalesStop(event.purchaseType(), event.orderId(), event.sellerId(), event.orderItemIds());
     }
 
     // 공동물품 확정 이벤트를 받아 판매자별 배송을 생성한다. 생성 실패 시 마지막 결제도 함께 롤백된다.

@@ -4,7 +4,6 @@ import com.cartmate.cartmate.boundedContext.etcService.delivery.domain.DeliveryO
 import com.cartmate.cartmate.boundedContext.etcService.delivery.domain.DeliveryOrderStatus;
 import com.cartmate.cartmate.boundedContext.etcService.delivery.out.DeliveryItemCancelMemoRepository;
 import com.cartmate.cartmate.boundedContext.etcService.delivery.out.DeliveryOrderStateRepository;
-import com.cartmate.cartmate.boundedContext.etcService.delivery.out.DeliverySellerCancelRepository;
 import com.cartmate.cartmate.shared.delivery.PurchaseType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -19,14 +18,10 @@ import java.util.Set;
 public class DeliveryOrderStates {
 
     private final DeliveryOrderStateRepository deliveryOrderStateRepository;
-    private final DeliverySellerCancelRepository deliverySellerCancelRepository;
     private final DeliveryItemCancelMemoRepository deliveryItemCancelMemoRepository;
 
-    public boolean acceptCreation(Long orderId, PurchaseType purchaseType, Long sellerId) {
-        if (lock(orderId, purchaseType, DeliveryOrderStatus.CREATED).state().isCanceled()) {
-            return false;
-        }
-        return !deliverySellerCancelRepository.existsByOrderIdAndPurchaseTypeAndSellerId(orderId, purchaseType, sellerId);
+    public boolean acceptCreation(Long orderId, PurchaseType purchaseType) {
+        return !lock(orderId, purchaseType, DeliveryOrderStatus.CREATED).state().isCanceled();
     }
 
     public Locked lockForCancel(Long orderId, PurchaseType purchaseType) {
@@ -35,10 +30,6 @@ public class DeliveryOrderStates {
 
     public Locked lockForSellerCancel(Long orderId, PurchaseType purchaseType) {
         return lock(orderId, purchaseType, DeliveryOrderStatus.CREATED);
-    }
-
-    public void markSellerCanceled(Long orderId, PurchaseType purchaseType, Long sellerId) {
-        deliverySellerCancelRepository.insertIfAbsent(orderId, purchaseType.name(), sellerId, LocalDateTime.now());
     }
 
     public Set<Long> memoedOrderItemIds(Long orderId, PurchaseType purchaseType) {

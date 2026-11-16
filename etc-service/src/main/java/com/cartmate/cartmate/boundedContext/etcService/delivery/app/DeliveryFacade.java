@@ -13,6 +13,7 @@ import com.cartmate.cartmate.boundedContext.etcService.delivery.domain.DeliveryS
 import com.cartmate.cartmate.global.lock.DistributedLock;
 import com.cartmate.cartmate.shared.delivery.DeliveryCancelReason;
 import com.cartmate.cartmate.shared.delivery.PurchaseType;
+import com.cartmate.cartmate.shared.order.event.OrderBuyerCancelRequestedEvent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -35,6 +36,7 @@ public class DeliveryFacade {
     private final DeliveryQueryUseCase deliveryQueryUseCase;
     private final DeliveryReadyUseCase deliveryReadyUseCase;
     private final DeliveryCancelUseCase deliveryCancelUseCase;
+    private final DeliveryBuyerItemCancelUseCase deliveryBuyerItemCancelUseCase;
     private final DeliveryShipUseCase deliveryShipUseCase;
     private final DeliverySellerReasonCancelUseCase deliverySellerReasonCancelUseCase;
     private final DeliveryDeliverUseCase deliveryDeliverUseCase;
@@ -59,8 +61,13 @@ public class DeliveryFacade {
     }
 
     @Transactional
-    public void cancelBySalesStop(PurchaseType purchaseType, Long orderId, Long sellerId) {
-        deliveryCancelUseCase.cancelBySalesStop(purchaseType, orderId, sellerId);
+    public void cancelBuyerItems(OrderBuyerCancelRequestedEvent event) {
+        deliveryBuyerItemCancelUseCase.handle(event);
+    }
+
+    @Transactional
+    public void cancelBySalesStop(PurchaseType purchaseType, Long orderId, Long sellerId, List<Long> orderItemIds) {
+        deliveryCancelUseCase.cancelBySalesStop(purchaseType, orderId, sellerId, orderItemIds);
     }
 
     @DistributedLock(key = "'delivery:' + #deliveryId")
@@ -77,8 +84,9 @@ public class DeliveryFacade {
 
     @DistributedLock(key = "'delivery:' + #deliveryId")
     @Transactional
-    public DeliveryResponse cancelDeliveryBySeller(Long deliveryId, Long memberId, DeliveryCancelReason reason) {
-        return deliverySellerReasonCancelUseCase.cancel(deliveryId, memberId, reason);
+    public DeliveryResponse cancelDeliveryBySeller(Long deliveryId, Long memberId, DeliveryCancelReason reason,
+                                                   List<Long> deliveryItemIds) {
+        return deliverySellerReasonCancelUseCase.cancel(deliveryId, memberId, reason, deliveryItemIds);
     }
 
     @DistributedLock(key = "'delivery:' + #deliveryId")

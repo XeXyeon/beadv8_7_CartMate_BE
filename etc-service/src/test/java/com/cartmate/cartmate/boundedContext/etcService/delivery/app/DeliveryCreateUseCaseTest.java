@@ -43,7 +43,7 @@ class DeliveryCreateUseCaseTest {
     }
 
     private void given(boolean accepted, Set<Long> memoed) {
-        when(deliveryOrderStates.acceptCreation(ORDER_ID, PurchaseType.INDIVIDUAL_GROUP, SELLER_ID)).thenReturn(accepted);
+        when(deliveryOrderStates.acceptCreation(ORDER_ID, PurchaseType.INDIVIDUAL_GROUP)).thenReturn(accepted);
         when(deliveryOrderStates.memoedOrderItemIds(ORDER_ID, PurchaseType.INDIVIDUAL_GROUP)).thenReturn(memoed);
         when(deliveryRepository.findByIdempotencyKey(any())).thenReturn(Optional.empty());
     }
