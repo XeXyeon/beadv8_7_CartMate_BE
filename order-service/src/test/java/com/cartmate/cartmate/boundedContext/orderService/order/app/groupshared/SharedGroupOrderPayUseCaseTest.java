@@ -36,6 +36,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 
@@ -291,8 +292,10 @@ class SharedGroupOrderPayUseCaseTest {
     }
 
     private SharedGroupOrderPaymentUseCase useCase(OrderProductClient productClient) {
+        // 재고 선점 단계(상품 서버 호출 · 별도 트랜잭션)는 SharedGroupOrderStockReservationTest에서 확인한다
         return new SharedGroupOrderPaymentUseCase(sharedGroupOrderRepository,
-                new SharedGroupOrderSupport(sharedGroupOrderRepository), eventPublisher, productClient, paymentClient);
+                new SharedGroupOrderSupport(sharedGroupOrderRepository), eventPublisher, productClient, paymentClient,
+                mock(SharedGroupOrderStockReserver.class));
     }
 
     private static List<OrderProductInfo> allOnSale(Collection<Long> inventoryIds) {

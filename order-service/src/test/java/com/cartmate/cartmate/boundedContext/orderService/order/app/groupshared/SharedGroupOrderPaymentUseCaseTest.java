@@ -63,6 +63,10 @@ class SharedGroupOrderPaymentUseCaseTest {
     @Mock
     private OrderPaymentClient orderPaymentClient;
 
+    // 재고 선점 단계(상품 서버 호출 · 별도 트랜잭션)는 SharedGroupOrderStockReservationTest에서 확인한다
+    @Mock
+    private SharedGroupOrderStockReserver sharedGroupOrderStockReserver;
+
     @InjectMocks
     private SharedGroupOrderPaymentUseCase paymentUseCase;
 

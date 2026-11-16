@@ -34,6 +34,7 @@ class SharedGroupOrderPaymentUseCase {
     private final DomainEventPublisher eventPublisher;
     private final OrderProductClient orderProductClient;
     private final OrderPaymentClient orderPaymentClient;
+    private final SharedGroupOrderStockReserver sharedGroupOrderStockReserver;
 
     SharedGroupOrderPaymentInfo getPaymentInfo(Long sharedGroupOrderId, Long memberId, LocalDateTime now) {
         SharedGroupOrder order = sharedGroupOrderRepository.findById(sharedGroupOrderId)
@@ -139,6 +140,10 @@ class SharedGroupOrderPaymentUseCase {
                 .orElseThrow(() -> new ServiceException(OrderErrorCode.ORDER_NOT_FOUND));
         validatePurchasable(order.getItems().stream().map(SharedGroupOrderItem::getInventoryId).toList());
         if (info.needsStockReservation()) {
+            // 첫 결제: 상품 서버 재고 선점 + "선점함" 표시를 별도 트랜잭션으로 먼저 커밋한다
+            // (이 결제가 실패해도 선점은 유지). 재고가 부족하면 ORDER_OUT_OF_STOCK — 차감하지 않는다
+            sharedGroupOrderStockReserver.reserve(sharedGroupOrderId);
+            // 위에서 커밋된 표시를 이 트랜잭션이 들고 있는 주문에도 반영한다(아래 결제 반영이 표시를 확인한다)
             markStockReserved(sharedGroupOrderId);
         }
         PaymentResult payment = orderPaymentClient.charge(
