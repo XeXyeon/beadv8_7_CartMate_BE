@@ -42,6 +42,12 @@ spec:
                 name: cartmate-app-secret
             - secretRef:
                 name: member-service-secret
+          env:
+            # 메일 발송을 끈다: 운영 설정(application-prod.yaml)은 cartmate.mail.enabled=true지만 아직 메일(SMTP) 계정이 없다
+            # 끄면 인증번호 · 보안 알림을 메일 대신 로그로 남긴다(LogVerificationMailSender). 로그를 볼 수 있는 사람은 인증번호를 볼 수 있다
+            # 메일 계정을 받으면 이 env를 지우고 member-service-secret에 MAIL_HOST · MAIL_PORT · MAIL_USERNAME · MAIL_PASSWORD · MAIL_SMTP_AUTH · MAIL_STARTTLS를 넣는다
+            - name: CARTMATE_MAIL_ENABLED
+              value: "false"
           resources:
             requests:
               cpu: 250m

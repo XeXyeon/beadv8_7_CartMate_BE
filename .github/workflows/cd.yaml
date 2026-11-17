@@ -101,6 +101,8 @@ jobs:
           printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
 
       # 바뀌지 않은 서비스는 지금 클러스터에서 돌고 있는 이미지를 그대로 쓴다(매니페스트가 같으면 Pod가 재시작되지 않는다)
+      # 서버의 kubectl(k3s 내장)은 KUBECONFIG가 없으면 관리자 설정(/etc/rancher/k3s/k3s.yaml, root만 읽음)을 읽는다
+      # 그래서 deploy 계정의 최소 권한 설정(~/.kube/config, k8s/rbac/cd-deployer.yaml)을 직접 지정한다
       - name: Read running images
         if: steps.plan.outputs.targets != ''
         env:
@@ -109,7 +111,7 @@ jobs:
         run: |
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new \
             "$SERVER_USER@$SERVER_HOST" \
-            "kubectl -n cartmate get deployments -o jsonpath='{range .items[*]}{.metadata.name}={.spec.template.spec.containers[0].image}{\"\n\"}{end}'" \
+            "KUBECONFIG=\$HOME/.kube/config kubectl -n cartmate get deployments -o jsonpath='{range .items[*]}{.metadata.name}={.spec.template.spec.containers[0].image}{\"\n\"}{end}'" \
             > running-images.txt
           echo "지금 돌고 있는 이미지:"
           cat running-images.txt
@@ -163,6 +165,7 @@ jobs:
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new \
             "$SERVER_USER@$SERVER_HOST" "
               set -e
+              export KUBECONFIG=\$HOME/.kube/config
               kubectl apply -f ~/cartmate/cartmate.yaml
               for service in $TARGETS; do
                 kubectl -n cartmate rollout status deployment/\$service --timeout=5m
