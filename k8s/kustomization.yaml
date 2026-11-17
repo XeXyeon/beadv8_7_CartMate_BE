@@ -26,7 +26,7 @@
 #       --docker-server=https://index.docker.io/v1/ --docker-username=... --docker-password=<Docker Hub 토큰>
 #
 # MySQL · Redis · Kafka는 infra/ 에 따로 있다(CD가 적용하지 않음). 서비스보다 먼저 적용한다
-# order 첫 배포 전에 주문 MySQL에 order-service/db/schema.sql → db/before-first-deploy.sql을 한 번 실행한다
+# 서비스 5개 모두 운영 ddl-auto가 update라 빈 DB로 첫 배포하면 테이블을 직접 만든다
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
