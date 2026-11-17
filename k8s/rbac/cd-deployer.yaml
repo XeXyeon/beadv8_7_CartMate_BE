@@ -1,0 +1,76 @@
+# CD(.github/workflows/cd.yaml) 전용 쿠버네티스 계정과 최소 권한
+#
+# CD가 서버에서 실행하는 명령은 세 가지뿐이다
+#   kubectl -n cartmate get deployments ...        지금 돌고 있는 이미지 조회
+#   kubectl apply -f cartmate.yaml                  Deployment · Service · ConfigMap · Ingress 적용
+#   kubectl -n cartmate rollout status deployment/  새 Pod가 준비될 때까지 대기
+# 그래서 cartmate 네임스페이스의 이 네 종류만 조회 · 생성 · 수정할 수 있게 한다
+#   삭제 권한 없음, Secret 읽기 없음, 다른 네임스페이스(인프라 · 모니터링 · kube-system) 접근 없음
+#   네임스페이스 생성은 클러스터 전체 권한이라 주지 않는다. cartmate 네임스페이스는 서버에서 한 번 만든다
+#
+# CD가 적용하지 않는다. 서버에서 관리자 권한으로 한 번 적용한다
+#   sudo kubectl apply -f k8s/namespace.yaml
+#   sudo kubectl apply -f k8s/rbac/cd-deployer.yaml
+#
+# 서버의 CD 전용 OS 계정(deploy, sudo 없음)에 이 계정의 kubeconfig를 만든다 (값은 파일 · 채팅에 남기지 않는다)
+#   TOKEN=$(sudo kubectl -n cartmate get secret cd-deployer-token -o jsonpath='{.data.token}' | base64 -d)
+#   CA=$(sudo kubectl config view --raw -o jsonpath='{.clusters[0].cluster.certificate-authority-data}')
+#   sudo -u deploy mkdir -p /home/deploy/.kube
+#   sudo -u deploy tee /home/deploy/.kube/config > /dev/null <<EOF
+#   apiVersion: v1
+#   kind: Config
+#   clusters: [{ name: k3s, cluster: { server: https://127.0.0.1:6443, certificate-authority-data: $CA } }]
+#   users: [{ name: cd-deployer, user: { token: $TOKEN } }]
+#   contexts: [{ name: cd, context: { cluster: k3s, user: cd-deployer, namespace: cartmate } }]
+#   current-context: cd
+#   EOF
+#   sudo chmod 600 /home/deploy/.kube/config
+# 확인: sudo -u deploy kubectl auth can-i --list -n cartmate
+#
+# 토큰은 만료되지 않는다. 바꾸려면 cd-deployer-token Secret을 지우고 이 파일을 다시 적용한 뒤 kubeconfig를 다시 만든다
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cd-deployer
+  namespace: cartmate
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cd-deployer
+  namespace: cartmate
+rules:
+  # get · list: 돌고 있는 이미지 조회, watch: rollout status 대기, create · update · patch: apply
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["services", "configmaps"]
+    verbs: ["get", "list", "create", "update", "patch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "create", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cd-deployer
+  namespace: cartmate
+subjects:
+  - kind: ServiceAccount
+    name: cd-deployer
+    namespace: cartmate
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cd-deployer
+---
+# 만료되지 않는 토큰. 쿠버네티스가 토큰 값을 채운다(저장소에는 값이 없다)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: cd-deployer-token
+  namespace: cartmate
+  annotations:
+    kubernetes.io/service-account.name: cd-deployer
+type: kubernetes.io/service-account-token

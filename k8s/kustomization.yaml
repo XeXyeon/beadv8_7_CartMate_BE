@@ -1,6 +1,10 @@
 # CartMate 백엔드 서비스 5개 (k3s, cartmate 네임스페이스)
 #
 # 배포는 CD(.github/workflows/cd.yaml)가 이미지 이름 · 태그를 바꿔서 적용한다
+#   CD는 cartmate 네임스페이스의 최소 권한 계정(rbac/cd-deployer.yaml)으로 적용한다
+#   그래서 네임스페이스(namespace.yaml)와 RBAC는 이 목록에 넣지 않고, 서버에서 관리자 권한으로 한 번 적용한다
+#     sudo kubectl apply -f k8s/namespace.yaml
+#     sudo kubectl apply -f k8s/rbac/cd-deployer.yaml
 #
 # Secret은 저장소에 두지 않는다. 처음 한 번 서버에서 만든다 (값은 파일 · 채팅에 남기지 않는다)
 #   공통 (서비스 5개 모두):
@@ -29,7 +33,6 @@ kind: Kustomization
 namespace: cartmate
 
 resources:
-  - namespace.yaml
   - config.yaml
   - ingress.yaml
   - member-service.yaml
