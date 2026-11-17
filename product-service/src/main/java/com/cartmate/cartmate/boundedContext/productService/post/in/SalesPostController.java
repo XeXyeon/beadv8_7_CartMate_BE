@@ -8,6 +8,7 @@ import com.cartmate.cartmate.boundedContext.productService.post.dto.CreateSalesP
 import com.cartmate.cartmate.boundedContext.productService.post.dto.CreateSalesPostReviewRequest;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.CreateSalesPostReviewResponse;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.SalesPostCommentResponse;
+import com.cartmate.cartmate.boundedContext.productService.post.dto.SalesPostProductWishResponse;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.SalesPostReviewResponse;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.SalesPostReviewSellerReplyRequest;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.SelectSalesPostRequest;
@@ -160,6 +161,38 @@ public class SalesPostController {
             @AuthenticationPrincipal SecurityUser user) {
         salesPostFacade.deleteComment(postId, commentId, memberIdOf(user));
         return new RsData<>("200-1", "댓글을 삭제했습니다.");
+    }
+
+    // ===== 찜 =====
+
+    // 내 찜 목록. 찜한 순서(최근 찜 먼저)로 한 페이지에 20개. 삭제된 상품은 빠지고, 나머지는 표시 상태를 붙여 보여준다
+    @GetMapping("/wishes")
+    @Operation(operationId = "selectMySalesPostProductWishes", summary = "내 찜 목록")
+    public RsData<PageResponse<SalesPostProductWishResponse>> selectMyWishes(
+            @RequestParam(defaultValue = "0") int page,
+            @AuthenticationPrincipal SecurityUser user) {
+        PageResponse<SalesPostProductWishResponse> response = salesPostFacade.selectMyWishes(memberIdOf(user), page);
+        return new RsData<>("200-1", "찜 목록을 조회했습니다.", response);
+    }
+
+    // 판매글 상품 찜하기. 이미 찜한 상품이어도 성공한다
+    @PutMapping("/products/{productId}/wish")
+    @Operation(operationId = "wishSalesPostProduct", summary = "판매글 상품 찜하기")
+    public RsData<Void> wishProduct(
+            @PathVariable Long productId,
+            @AuthenticationPrincipal SecurityUser user) {
+        salesPostFacade.wishProduct(memberIdOf(user), productId);
+        return new RsData<>("200-1", "찜했습니다.");
+    }
+
+    // 판매글 상품 찜 해제. 찜하지 않은 상품이어도 성공한다
+    @DeleteMapping("/products/{productId}/wish")
+    @Operation(operationId = "unwishSalesPostProduct", summary = "판매글 상품 찜 해제")
+    public RsData<Void> unwishProduct(
+            @PathVariable Long productId,
+            @AuthenticationPrincipal SecurityUser user) {
+        salesPostFacade.unwishProduct(memberIdOf(user), productId);
+        return new RsData<>("200-1", "찜을 해제했습니다.");
     }
 
     // ===== 리뷰 =====

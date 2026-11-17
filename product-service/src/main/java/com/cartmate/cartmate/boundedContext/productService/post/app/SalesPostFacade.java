@@ -22,6 +22,7 @@ import com.cartmate.cartmate.shared.product.event.ProductDeletedEvent;
 import com.cartmate.cartmate.shared.product.event.ProductsDeletedByPostEvent;
 import com.cartmate.cartmate.shared.trust.event.SellerTrustScoreChangedEvent;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -67,6 +68,7 @@ public class SalesPostFacade {
     private final SalesPostReviewSellerReplyUseCase salesPostReviewSellerReplyUseCase;
     private final SalesPostPurchaseRecordUseCase salesPostPurchaseRecordUseCase;
     private final SalesPostMemberClient salesPostMemberClient;
+    private final SalesPostProductWishUseCase salesPostProductWishUseCase;
 
     @Transactional
     public SalesPostSeller syncSeller(SellerRegisteredEvent seller) {
@@ -414,6 +416,35 @@ public class SalesPostFacade {
     public void confirmPurchases(PurchaseType purchaseType, Long orderId, List<Long> orderItemIds,
                                  LocalDateTime confirmedAt) {
         salesPostPurchaseRecordUseCase.confirmPurchases(purchaseType, orderId, orderItemIds, confirmedAt);
+    }
+
+    // 판매글 상품 찜하기. 같은 찜 요청이 동시에 들어와 다른 요청이 먼저 저장했으면(유니크 키 위반)
+    // 이미 찜한 것과 같으므로 성공으로 본다. 유니크 키 위반은 찜 쓰기 트랜잭션이 끝난 뒤 여기서 받는다
+    public void wishProduct(Long memberId, Long productId) {
+        requireWishLogin(memberId);
+        try {
+            salesPostProductWishUseCase.wish(memberId, productId);
+        } catch (DataIntegrityViolationException e) {
+            // 동시에 들어온 같은 찜 요청이 먼저 저장됨
+        }
+    }
+
+    // 판매글 상품 찜 해제
+    public void unwishProduct(Long memberId, Long productId) {
+        requireWishLogin(memberId);
+        salesPostProductWishUseCase.unwish(memberId, productId);
+    }
+
+    // 내 찜 목록
+    public PageResponse<SalesPostProductWishResponse> selectMyWishes(Long memberId, int page) {
+        requireWishLogin(memberId);
+        return salesPostProductWishUseCase.selectMyWishes(memberId, page);
+    }
+
+    private void requireWishLogin(Long memberId) {
+        if (memberId == null) {
+            throw new ServiceException(SalesPostErrorCode.WISH_LOGIN_REQUIRED);
+        }
     }
 
     private void requireLogin(Long memberId) {
