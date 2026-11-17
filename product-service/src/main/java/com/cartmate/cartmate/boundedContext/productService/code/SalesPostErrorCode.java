@@ -51,7 +51,13 @@ public enum SalesPostErrorCode implements ErrorCode {
     REVIEW_SELLER_REPLY_DENIED(HttpStatus.FORBIDDEN, "REVIEW_SELLER_REPLY_DENIED", "이 판매글의 판매자만 리뷰에 답글을 달 수 있습니다."),
     REVIEW_SELLER_REPLY_ALREADY_EXISTS(HttpStatus.CONFLICT, "REVIEW_SELLER_REPLY_ALREADY_EXISTS", "이미 답글을 단 리뷰입니다."),
     REVIEW_SELLER_REPLY_NOT_FOUND(HttpStatus.NOT_FOUND, "REVIEW_SELLER_REPLY_NOT_FOUND", "판매자 답글을 찾을 수 없습니다."),
-    REVIEW_SELLER_REPLY_INVALID_CONTENT(HttpStatus.BAD_REQUEST, "REVIEW_SELLER_REPLY_INVALID_CONTENT", "답글 내용을 1~1000자로 입력해 주세요.");
+    REVIEW_SELLER_REPLY_INVALID_CONTENT(HttpStatus.BAD_REQUEST, "REVIEW_SELLER_REPLY_INVALID_CONTENT", "답글 내용을 1~1000자로 입력해 주세요."),
+
+    // 찜
+    WISH_LOGIN_REQUIRED(HttpStatus.UNAUTHORIZED, "WISH_LOGIN_REQUIRED", "로그인이 필요합니다."),
+    // 판매글 상품이 없거나 삭제됨, 또는 판매글이 다른 사용자에게 보이지 않는 상태
+    WISH_PRODUCT_NOT_FOUND(HttpStatus.NOT_FOUND, "WISH_PRODUCT_NOT_FOUND", "상품을 찾을 수 없습니다."),
+    WISH_NOT_ALLOWED(HttpStatus.CONFLICT, "WISH_NOT_ALLOWED", "판매 중이거나 판매 중지된 상품만 찜할 수 있습니다.");
 
     private final HttpStatus status;
     private final String code;

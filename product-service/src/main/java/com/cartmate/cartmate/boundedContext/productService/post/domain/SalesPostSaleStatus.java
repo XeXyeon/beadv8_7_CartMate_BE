@@ -26,4 +26,9 @@ public enum SalesPostSaleStatus {
     public boolean isCommentWritable() {
         return this == ON_SALE || this == PAUSED;
     }
+
+    // 판매글 상품을 새로 찜할 수 있는 상태. 판매 종료는 보이지만 새로 찜할 수는 없다 (이미 한 찜은 해제할 수 있다)
+    public boolean isWishable() {
+        return this == ON_SALE || this == PAUSED;
+    }
 }
