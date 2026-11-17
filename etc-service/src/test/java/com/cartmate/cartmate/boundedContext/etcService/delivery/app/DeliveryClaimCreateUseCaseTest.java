@@ -2,6 +2,7 @@ package com.cartmate.cartmate.boundedContext.etcService.delivery.app;
 
 import com.cartmate.cartmate.boundedContext.etcService.delivery.app.dto.DeliveryClaimCreateCommand;
 import com.cartmate.cartmate.boundedContext.etcService.delivery.app.dto.DeliveryClaimResponse;
+import com.cartmate.cartmate.boundedContext.etcService.delivery.app.dto.DeliveryOrderRef;
 import com.cartmate.cartmate.boundedContext.etcService.delivery.domain.ClaimItemResult;
 import com.cartmate.cartmate.boundedContext.etcService.delivery.domain.ClaimReason;
 import com.cartmate.cartmate.boundedContext.etcService.delivery.domain.ClaimStatus;
@@ -85,6 +86,7 @@ class DeliveryClaimCreateUseCaseTest {
         delivery.ship();
         delivery.deliver();
         when(deliveryRepository.findByIdForClaim(DELIVERY_ID)).thenReturn(Optional.of(delivery));
+        when(deliveryRepository.findById(DELIVERY_ID)).thenReturn(Optional.of(delivery));
         when(deliveryItemRepository.findByDeliveryId(DELIVERY_ID)).thenReturn(List.of(apple));
         when(claimItemRepository.findApprovedReturnedDeliveryItemIds(
                 eq(DELIVERY_ID), eq(ClaimType.REFUND), anyCollection(), eq(ClaimItemResult.APPROVED)))
@@ -175,6 +177,23 @@ class DeliveryClaimCreateUseCaseTest {
                 ArgumentCaptor.forClass(DeliveryClaimReturnRequestedEvent.class);
         verify(eventPublisher).publish(captor.capture());
         assertThat(captor.getValue().pendingReturns()).containsExactly(new PendingReturn(true, List.of(602L)));
+    }
+
+    @Test
+    @DisplayName("접수 락을 잡으려고 배송의 주문과 구매 유형을 조회한다")
+    void orderRefOf_returnsOrderAndPurchaseType() {
+        deliveredApple(false);
+
+        assertThat(useCase.orderRefOf(DELIVERY_ID))
+                .isEqualTo(new DeliveryOrderRef(100L, PurchaseType.INDIVIDUAL_GROUP));
+    }
+
+    @Test
+    @DisplayName("없는 배송이면 접수와 같은 오류로 거절한다")
+    void orderRefOf_unknownDelivery_throwsNotFound() {
+        when(deliveryRepository.findById(DELIVERY_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> useCase.orderRefOf(DELIVERY_ID)).hasMessageContaining("DELIVERY_NOT_FOUND");
     }
 
     @Test

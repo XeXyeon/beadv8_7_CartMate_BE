@@ -4,6 +4,7 @@ import com.cartmate.cartmate.boundedContext.etcService.delivery.app.dto.Delivery
 import com.cartmate.cartmate.boundedContext.etcService.delivery.app.dto.DeliveryClaimCreateCommand;
 import com.cartmate.cartmate.boundedContext.etcService.delivery.app.dto.DeliveryClaimDecideRequest;
 import com.cartmate.cartmate.boundedContext.etcService.delivery.app.dto.DeliveryClaimResponse;
+import com.cartmate.cartmate.boundedContext.etcService.delivery.app.dto.DeliveryOrderRef;
 import com.cartmate.cartmate.boundedContext.etcService.delivery.app.dto.DeliveryDetailResponse;
 import com.cartmate.cartmate.boundedContext.etcService.delivery.app.dto.DeliveryResponse;
 import com.cartmate.cartmate.boundedContext.etcService.delivery.app.dto.SellerClaimResponse;
@@ -88,6 +89,12 @@ public class DeliveryFacade {
     @Transactional
     public DeliveryResponse confirmDelivery(Long deliveryId, Long memberId) {
         return deliveryConfirmUseCase.confirm(deliveryId, memberId);
+    }
+
+    // 반품 접수의 주문 락 키를 만들려고 배송의 주문을 먼저 조회한다. DeliveryClaimLockService가 이 조회 → 락 → createClaim 순서로 부른다.
+    @Transactional(readOnly = true)
+    public DeliveryOrderRef getDeliveryOrderRef(Long deliveryId) {
+        return deliveryClaimCreateUseCase.orderRefOf(deliveryId);
     }
 
     @DistributedLock(key = "'delivery:' + #command.deliveryId()")

@@ -89,6 +89,6 @@ public class ClaimController {
             @Valid @RequestBody DeliveryClaimCreateRequest request
     ) {
         return new RsData<>("201-1", "교환·환불이 접수되었습니다.",
-                deliveryFacade.createClaim(request.toCommand(user.memberId())));
+                deliveryClaimLockService.create(request.toCommand(user.memberId())));
     }
 }

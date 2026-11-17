@@ -2,6 +2,7 @@ package com.cartmate.cartmate.boundedContext.etcService.delivery.app;
 
 import com.cartmate.cartmate.boundedContext.etcService.delivery.app.dto.DeliveryClaimCreateCommand;
 import com.cartmate.cartmate.boundedContext.etcService.delivery.app.dto.DeliveryClaimResponse;
+import com.cartmate.cartmate.boundedContext.etcService.delivery.app.dto.DeliveryOrderRef;
 import com.cartmate.cartmate.boundedContext.etcService.delivery.domain.ClaimItemResult;
 import com.cartmate.cartmate.boundedContext.etcService.delivery.domain.ClaimStatus;
 import com.cartmate.cartmate.boundedContext.etcService.delivery.domain.ClaimType;
@@ -43,6 +44,13 @@ public class DeliveryClaimCreateUseCase {
     private final DeliveryClaimRepository deliveryClaimRepository;
     private final DeliveryClaimItemRepository deliveryClaimItemRepository;
     private final DomainEventPublisher eventPublisher;
+
+    // 접수 락을 잡으려고 배송의 주문을 조회한다. 없는 배송이면 접수할 때와 같은 오류를 낸다.
+    public DeliveryOrderRef orderRefOf(Long deliveryId) {
+        Delivery delivery = deliveryRepository.findById(deliveryId)
+                .orElseThrow(() -> new ServiceException(DeliveryErrorCode.DELIVERY_NOT_FOUND));
+        return new DeliveryOrderRef(delivery.getOrderId(), delivery.getPurchaseType());
+    }
 
     // 수령인(구매자) 본인이 배송완료된 배송에서 상품을 골라 교환·환불을 접수한다. 구매확정 이후에는 접수할 수 없다.
     public DeliveryClaimResponse create(DeliveryClaimCreateCommand command) {
