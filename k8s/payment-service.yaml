@@ -51,13 +51,14 @@ spec:
               memory: 768Mi
             limits:
               memory: 768Mi
-          # 기동이 끝날 때까지(최대 5초 × 36 = 3분) liveness · readiness 검사를 하지 않는다
+          # 기동이 끝날 때까지(최대 5초 × 60 = 5분) liveness · readiness 검사를 하지 않는다
+          # server 노드는 JVM 4개가 CPU 2코어를 나눠 쓰며 동시에 시작하면 3분을 넘겨 재시작됐다(첫 배포, 2026-11-18)
           startupProbe:
             httpGet:
               path: /actuator/health/liveness
               port: http
             periodSeconds: 5
-            failureThreshold: 36
+            failureThreshold: 60
           readinessProbe:
             httpGet:
               path: /actuator/health/readiness
