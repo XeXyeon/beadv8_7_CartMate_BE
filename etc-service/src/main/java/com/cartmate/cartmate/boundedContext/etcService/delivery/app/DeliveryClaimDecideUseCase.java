@@ -90,25 +90,38 @@ public class DeliveryClaimDecideUseCase {
             List<DeliveryClaimDecideRequest.Item> decisions, List<DeliveryClaimItem> claimItems
     ) {
         if (decisions == null || decisions.isEmpty()) {
-            throw new ServiceException(DeliveryErrorCode.DELIVERY_CLAIM_DECISION_ITEMS_MISMATCH);
+            throw mismatch();
         }
         Map<Long, DeliveryClaimDecideRequest.Item> byItem = new HashMap<>();
         for (DeliveryClaimDecideRequest.Item decision : decisions) {
-            if (decision == null || decision.deliveryItemId() == null || decision.result() == null
-                    || byItem.put(decision.deliveryItemId(), decision) != null) {
-                throw new ServiceException(DeliveryErrorCode.DELIVERY_CLAIM_DECISION_ITEMS_MISMATCH);
+            validateDecision(decision);
+            // 같은 상품을 두 번 정할 수 없다
+            if (byItem.containsKey(decision.deliveryItemId())) {
+                throw mismatch();
             }
-            if (decision.result() == ClaimItemResult.REJECTED) {
-                validateRejectReason(decision.rejectReason());
-            }
+            byItem.put(decision.deliveryItemId(), decision);
         }
         Set<Long> claimItemIds = claimItems.stream()
                 .map(claimItem -> claimItem.getDeliveryItem().getId())
                 .collect(Collectors.toSet());
         if (!claimItemIds.equals(byItem.keySet())) {
-            throw new ServiceException(DeliveryErrorCode.DELIVERY_CLAIM_DECISION_ITEMS_MISMATCH);
+            throw mismatch();
         }
         return byItem;
+    }
+
+    // 결정 한 줄의 모양: 상품과 결과가 있어야 하고, 거절이면 사유가 있어야 한다.
+    private void validateDecision(DeliveryClaimDecideRequest.Item decision) {
+        if (decision == null || decision.deliveryItemId() == null || decision.result() == null) {
+            throw mismatch();
+        }
+        if (decision.result() == ClaimItemResult.REJECTED) {
+            validateRejectReason(decision.rejectReason());
+        }
+    }
+
+    private static ServiceException mismatch() {
+        return new ServiceException(DeliveryErrorCode.DELIVERY_CLAIM_DECISION_ITEMS_MISMATCH);
     }
 
     private void validateRejectReason(String reason) {
