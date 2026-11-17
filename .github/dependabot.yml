@@ -1,0 +1,32 @@
+# 고정해 둔 버전(액션 커밋 해시 · 베이스 이미지 digest)의 새 버전이 나오면 올리는 PR을 자동으로 만든다. 머지는 사람이 판단한다
+# 나온 지 14일이 안 된 버전은 제안하지 않는다(문제 있는 릴리스가 바로 들어오지 않게)
+version: 2
+updates:
+  # .github/workflows/*.yaml의 uses: 줄(해시와 뒤의 버전 주석을 같이 바꾼다)
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: dev
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 14
+    groups:
+      github-actions:
+        patterns: [ '*' ]
+    commit-message:
+      prefix: ci
+
+  # Dockerfile의 FROM eclipse-temurin:<버전>@sha256:...
+  - package-ecosystem: docker
+    directory: /
+    target-branch: dev
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 14
+    ignore:
+      # Java 메이저 버전(25 → 26 등)은 자동으로 올리지 않는다. 25 안의 패치만 제안한다
+      - dependency-name: eclipse-temurin
+        update-types: [ 'version-update:semver-major' ]
+    commit-message:
+      prefix: build
