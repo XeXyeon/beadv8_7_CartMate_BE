@@ -1,0 +1,30 @@
+# CartMate 백엔드 서비스 5개 (k3s, cartmate 네임스페이스)
+#
+# 배포는 CD(.github/workflows/cd.yaml)가 이미지 이름 · 태그를 바꿔서 적용한다
+#
+# Secret은 저장소에 두지 않는다. 처음 한 번 서버에서 만든다 (값은 파일 · 채팅에 남기지 않는다)
+#   공통 (서비스 5개 모두):
+#     kubectl -n cartmate create secret generic cartmate-app-secret \
+#       --from-literal=JWT_SECRET=... --from-literal=INTERNAL_API_KEY=... \
+#       --from-literal=REDIS_PASSWORD=... --from-literal=SENTRY_DSN=... --from-literal=TOSS_SECRET_KEY=...
+#   서비스별 DB (member · product · payment · etc 키 이름: DB_URL · DB_USERNAME · DB_PASSWORD):
+#     kubectl -n cartmate create secret generic product-service-secret \
+#       --from-literal=DB_URL='jdbc:mysql://<호스트>:3306/<DB>?serverTimezone=Asia/Seoul' \
+#       --from-literal=DB_USERNAME=... --from-literal=DB_PASSWORD=...
+#   order만 키 이름이 다르다: ORDER_DB_URL · ORDER_DB_USERNAME · ORDER_DB_PASSWORD
+#   member는 DB 키에 더해: MFA_CODE_SECRET · MFA_OTP_ENCRYPTION_KEY · MAIL_FROM (메일을 보내면 MAIL_ENABLED=true · MAIL_HOST · MAIL_USERNAME · MAIL_PASSWORD 등)
+#   product는 S3 접근 키가 필요하면: AWS_ACCESS_KEY_ID · AWS_SECRET_ACCESS_KEY (EC2 IAM 역할을 쓰면 넣지 않는다)
+#
+# order 첫 배포 전에 주문 MySQL에 order-service/db/schema.sql → db/before-first-deploy.sql을 한 번 실행한다
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: cartmate
+
+resources:
+  - config.yaml
+  - member-service.yaml
+  - product-service.yaml
+  - order-service.yaml
+  - payment-service.yaml
+  - etc-service.yaml
