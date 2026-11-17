@@ -2,6 +2,9 @@
 # 이 서비스에 필요 없는 항목은 담당자가 정리한다. 로컬 DB 등 개인 설정은 application-dev.yaml(커밋 안 함)에 둔다.
 server:
   port: ${MEMBER_SERVICE_PORT:8981}
+  tomcat:
+    threads:
+      max: ${TOMCAT_MAX_THREADS:50}   # 기본 200. 응답이 늦어질 때 요청 스레드가 쌓이는 최대치를 제한한다(동시 처리 = TPS × 응답 시간)
 spring:
   application:
     name: member-service

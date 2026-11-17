@@ -5,6 +5,7 @@ import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.reflect.MethodSignature;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.expression.ExpressionParser;
@@ -12,8 +13,10 @@ import org.springframework.expression.spel.standard.SpelExpressionParser;
 import org.springframework.expression.spel.support.StandardEvaluationContext;
 import org.springframework.stereotype.Component;
 
+// 락 실행기(DistributedLockExecutor)와 같은 조건. Redisson이 없는 서비스에서는 Aspect도 만들지 않는다
 @Aspect
 @Component
+@ConditionalOnClass(name = "org.redisson.api.RedissonClient")
 // @Transactional(LOWEST_PRECEDENCE)보다 바깥에서 실행되어, 커밋이 끝난 뒤에 락이 풀린다.
 @Order(Ordered.LOWEST_PRECEDENCE - 10)
 @RequiredArgsConstructor
