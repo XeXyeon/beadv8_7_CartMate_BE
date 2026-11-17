@@ -70,20 +70,23 @@ kubectl -n monitoring create secret generic alloy-targets \
   --from-literal=MYSQL_PRODUCT_DSN='exporter:<비번>@(mysql-product.cartmate.svc:3306)/' \
   --from-literal=MYSQL_ORDER_DSN=... --from-literal=MYSQL_MEMBER_DSN=... --from-literal=MYSQL_PAYMENT_DSN=... \
   --from-literal=MYSQL_ETC_DSN=... --from-literal=MYSQL_AI_DSN=... \
-  --from-literal=REDIS_CACHE_ADDR=redis-1.cartmate.svc:6379 --from-literal=REDIS_CORE_ADDR=redis-2.cartmate.svc:6379 \
-  --from-literal=REDIS_PASSWORD=... --from-literal=ES_URL=http://elasticsearch.cartmate.svc:9200
+  --from-literal=REDIS_CACHE_ADDR=redis-cache.cartmate.svc:6379 --from-literal=REDIS_CORE_ADDR=redis-core.cartmate.svc:6379 \
+  --from-literal=REDIS_PASSWORD=... --from-literal=ES_URL='http://elastic:<비번>@elasticsearch.cartmate.svc:9200'
 kubectl -n monitoring create secret generic kafka-ui-auth \
-  --from-literal=KAFKA_BOOTSTRAP=kafka.cartmate.svc:9092 \
+  --from-literal=KAFKA_BOOTSTRAP=cartmate-kafka-bootstrap.cartmate.svc:9092 \
   --from-literal=USERNAME=admin --from-literal=PASSWORD=...
 
-# (서버1에 고정하려면) 노드 라벨 → alloy.yaml · kafka-ui.yaml의 nodeSelector 주석 해제
-kubectl label node <서버1 노드 이름> cartmate/role=app
+# (서버1에 고정하려면) alloy.yaml · kafka-ui.yaml의 nodeSelector 주석 해제
+#   서버1(k3s server 노드)에는 앱 배포 때 cartmate/node=server 라벨을 붙인다 (k8s/infra/kustomization.yaml 참고)
+#   붙어 있는지 확인: kubectl get nodes -L cartmate/node
 
 kubectl apply -k observability/k8s
 kubectl -n monitoring get pods          # alloy · kafka-ui · kafka-exporter Running
 ```
 
 - 주소(서비스 이름 · 네임스페이스)는 실제 배포에 맞게 바꾼다. 앱 네임스페이스가 `cartmate`가 아니면 `alloy.yaml`의 `APP_NAMESPACES`
+- Elasticsearch는 비밀번호 인증이 켜져 있어서(`k8s/infra/elasticsearch.yaml`) `ES_URL`에 계정을 넣는다. 지표 조회만 하므로 `elastic` 대신 `monitor` 권한만 있는 계정을 만들어 쓰는 게 안전하다
+- ai-service는 아직 배포하지 않아 `MYSQL_AI_DSN`은 접속에 실패한다(ai MySQL 지표만 비고 나머지 수집에는 영향 없음)
 - Alloy 설정만 바꿀 땐 `observability/k8s/alloy/config.alloy` 수정 후 `kubectl apply -k observability/k8s` (ConfigMap 이름이 바뀌어 자동 재시작)
 - Kafka가 죽어 있어도 Alloy는 뜬다 (Kafka 지표만 kafka-exporter가 따로 실패). MySQL · Redis · ES는 조회할 때만 접속
 

@@ -1,0 +1,105 @@
+# product-service 전용 MySQL. 다른 서비스는 이 DB에 접속하지 않는다
+#   접속 주소(DB_URL): jdbc:mysql://mysql-product:3306/cartmate_product?serverTimezone=Asia/Seoul
+#   앱 계정은 product-service-secret의 DB_USERNAME · DB_PASSWORD로 처음 기동할 때 만들어진다(cartmate_product 권한만)
+#   root 비밀번호는 cartmate-mysql-root Secret. 앱 Pod에는 넘기지 않는다
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-product
+  labels:
+    app: mysql-product
+spec:
+  clusterIP: None
+  selector:
+    app: mysql-product
+  ports:
+    - name: mysql
+      port: 3306
+      targetPort: mysql
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql-product
+  labels:
+    app: mysql-product
+spec:
+  serviceName: mysql-product
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql-product
+  template:
+    metadata:
+      labels:
+        app: mysql-product
+    spec:
+      nodeSelector:
+        cartmate/node: agent   # 상품 서버와 같은 노드
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: mysql
+          image: mysql:8.4.13@sha256:a81d043930e51745522bd5c430961cf8286f0a23f0a9a2a6e0108f7ea71b0902
+          ports:
+            - name: mysql
+              containerPort: 3306
+          env:
+            - name: TZ
+              value: Asia/Seoul
+            - name: MYSQL_DATABASE
+              value: cartmate_product
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: cartmate-mysql-root
+                  key: MYSQL_ROOT_PASSWORD
+            - name: MYSQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: product-service-secret
+                  key: DB_USERNAME
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: product-service-secret
+                  key: DB_PASSWORD
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 384Mi   # 측정 최대 206~245MiB(서비스별 부하 측정). 설정은 mysql-config.yaml
+          # 처음 기동(데이터 디렉터리 초기화)은 1~2분 걸린다. 그동안 다른 검사를 하지 않는다
+          startupProbe:
+            tcpSocket:
+              port: mysql
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            tcpSocket:
+              port: mysql
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: mysql
+            periodSeconds: 20
+            failureThreshold: 3
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+            - name: config
+              mountPath: /etc/mysql/conf.d   # mysql-config.yaml의 cartmate.cnf
+      volumes:
+        - name: config
+          configMap:
+            name: mysql-config
+  # k3s 기본 local-path(노드 디스크)에 만든다. StatefulSet을 지워도 PVC는 남는다
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ ReadWriteOnce ]
+        storageClassName: local-path
+        resources:
+          requests:
+            storage: 5Gi

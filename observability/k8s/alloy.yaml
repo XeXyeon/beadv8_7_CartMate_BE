@@ -51,9 +51,9 @@ spec:
         app: alloy
     spec:
       serviceAccountName: alloy
-      # 서버1에 두려면 노드 라벨을 붙이고 주석을 푼다:  kubectl label node <서버1> cartmate/role=app
+      # 서버1(k3s server 노드)에 두려면 주석을 푼다. 라벨 cartmate/node=server는 앱 배포 때 붙인다
       # nodeSelector:
-      #   cartmate/role: app
+      #   cartmate/node: server
       containers:
         - name: alloy
           image: grafana/alloy:v1.21.3            # 2026-10-28

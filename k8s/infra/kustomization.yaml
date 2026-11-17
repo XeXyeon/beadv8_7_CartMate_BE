@@ -1,0 +1,30 @@
+# MySQL 5개 · Redis 2개 · Kafka · Elasticsearch (cartmate 네임스페이스)
+#   노드 배치(cartmate/node 라벨): server = k3s server 노드, agent = k3s agent 노드
+#     server: mysql-member · mysql-order · mysql-payment · mysql-etc · redis-core · elasticsearch
+#     agent: mysql-product · redis-cache · kafka
+#   redis-cache와 redis-core는 서로 다른 노드에 둔다
+#   데이터가 노드 디스크(local-path)에 묶이므로 처음 뜬 노드에서 옮기려면 백업 · 복원이 필요하다
+#
+# CD는 이 폴더를 적용하지 않는다. 앱 배포 때마다 DB가 다시 적용되지 않도록 서버에서 직접 적용한다
+#   kubectl apply -k k8s/infra
+# 먼저 필요한 것: cartmate 네임스페이스, 노드 라벨(cartmate/node=server · agent),
+#   Secret cartmate-mysql-root · cartmate-app-secret · <서비스>-service-secret · es-secret
+#
+# 값은 기존 서버(개발용 infra 네임스페이스) 설정을 따르되, MySQL은 서비스별로 나눴다
+# 로컬 개발용으로 노드 포트를 연다: redis-cache 6379(agent) · redis-core 6380(server) · elasticsearch 9200(server) · kafka 30094(모든 노드)
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: cartmate
+
+resources:
+  - mysql-config.yaml
+  - mysql-member.yaml
+  - mysql-product.yaml
+  - mysql-order.yaml
+  - mysql-payment.yaml
+  - mysql-etc.yaml
+  - redis-cache.yaml
+  - redis-core.yaml
+  - kafka.yaml
+  - elasticsearch.yaml
