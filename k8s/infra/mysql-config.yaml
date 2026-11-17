@@ -1,0 +1,22 @@
+# MySQL 5개(mysql-<서비스>)가 같이 쓰는 설정. 각 StatefulSet이 /etc/mysql/conf.d에 붙인다
+# 값은 서비스별 부하 측정(2026-11-17~18, 로컬 Docker, 서비스별 전용 MySQL 384MiB)에서 쓴 설정이다
+#   측정 최대 메모리 206~245MiB. product MySQL은 CPU를 다 쓴 상태에서도 233MiB였다
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysql-config
+data:
+  cartmate.cnf: |
+    [mysqld]
+    # 메모리: 버퍼 풀 64M, performance_schema 끔(켜 두면 수백 MB를 더 쓴다)
+    innodb_buffer_pool_size=64M
+    performance_schema=OFF
+    # 서비스 하나의 커넥션 풀(HikariCP 최대 10) 기준으로 충분하다
+    max_connections=30
+    # 메모리 임시 테이블 상한 (기본 1G)
+    temptable_max_ram=32M
+    tmp_table_size=16M
+    skip-name-resolve
+    character-set-server=utf8mb4
+    collation-server=utf8mb4_unicode_ci
+    default-time-zone='+09:00'
