@@ -22,13 +22,16 @@ public interface DeliveryClaimItemRepository extends JpaRepository<DeliveryClaim
             @Param("statuses") Collection<ClaimStatus> statuses);
 
     // 배송에서 지정한 유형·상태의 클레임으로 처리된 수량을 배송상품별로 합산한다. 클레임이 없는 배송상품은 결과에 나오지 않는다.
+    // 판매자가 거절한 상품은 돌려받지 않았으므로 빼고, 결과가 비어 있는 상품은 상품별 결정 이전의 승인으로 본다.
     @Query("select ci.deliveryItem.id as deliveryItemId, sum(ci.quantity) as quantity from DeliveryClaimItem ci "
             + "where ci.claim.delivery.id = :deliveryId and ci.claim.claimType = :claimType and ci.claim.status = :status "
+            + "and (ci.result is null or ci.result = :approved) "
             + "group by ci.deliveryItem.id")
     List<ClaimedQuantity> sumQuantityByDeliveryItem(
             @Param("deliveryId") Long deliveryId,
             @Param("claimType") ClaimType claimType,
-            @Param("status") ClaimStatus status);
+            @Param("status") ClaimStatus status,
+            @Param("approved") ClaimItemResult approved);
 
     // 승인·처리 완료된 클레임에서 거절되지 않은 상품의 배송상품 ID. 이 상품은 이미 돌려보냈다.
     // 결과가 비어 있는 상품도 센다: 승인·처리 완료 상태에서 결과가 비는 경우는 상품별 결정 이전의 승인뿐이라 승인으로 본다.

@@ -47,6 +47,7 @@ public class DeliveryFacade {
     private final DeliveryClaimDecideUseCase deliveryClaimDecideUseCase;
     private final DeliveryClaimCompleteUseCase deliveryClaimCompleteUseCase;
     private final DeliveryClaimRefundResultUseCase deliveryClaimRefundResultUseCase;
+    private final DeliveryClaimVerificationUseCase deliveryClaimVerificationUseCase;
     private final DeliveryWithdrawalQueryUseCase deliveryWithdrawalQueryUseCase;
 
     @Transactional
@@ -121,6 +122,11 @@ public class DeliveryFacade {
     @Transactional
     public SellerClaimResponse completeClaim(Long claimId, Long memberId) {
         return deliveryClaimCompleteUseCase.complete(claimId, memberId);
+    }
+
+    @Transactional
+    public void applyClaimReturnVerified(Long claimId, boolean accepted, String rejectCode) {
+        deliveryClaimVerificationUseCase.apply(claimId, accepted, rejectCode);
     }
 
     @Transactional
