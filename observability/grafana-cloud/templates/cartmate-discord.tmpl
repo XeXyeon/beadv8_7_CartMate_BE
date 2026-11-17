@@ -1,0 +1,19 @@
+{{/* CartMate Discord 알림 서식 (한국어). Grafana Cloud 알림 → 연락처 discord-cartmate 의 Title · Message 에서 쓴다 */}}
+{{/* 시각은 한국 시간(UTC+9)으로 보여 준다 */}}
+
+{{ define "cartmate.discord.title" -}}
+{{ if eq .Status "firing" }}🔴 [발생]{{ else }}✅ [해결]{{ end }} {{ .CommonLabels.alertname }}{{ if .CommonLabels.service }} · {{ .CommonLabels.service }}{{ end }}{{ if gt (len .Alerts) 1 }} 외 {{ len .Alerts }}건{{ end }}
+{{- end }}
+
+{{ define "cartmate.discord.message" -}}
+{{ range .Alerts -}}
+{{ if eq .Status "firing" }}🔴 **발생**{{ else }}✅ **해결**{{ end }} · {{ .Labels.alertname }}{{ if .Labels.service }} · `{{ .Labels.service }}`{{ end }}
+{{ if .Annotations.summary }}{{ .Annotations.summary }}
+{{ end -}}
+{{ if eq .Status "firing" }}{{ if .Annotations.description }}🔎 확인 방법: {{ .Annotations.description }}
+{{ end }}{{ end -}}
+⏱ 시작 {{ (.StartsAt.Add 32400000000000).Format "01-02 15:04" }}{{ if eq .Status "resolved" }} · 해결 {{ (.EndsAt.Add 32400000000000).Format "01-02 15:04" }}{{ end }} (KST) · 심각도 {{ .Labels.severity }}
+{{ if .GeneratorURL }}🔗 [알림 규칙]({{ .GeneratorURL }}){{ end }}{{ if .DashboardURL }} · [대시보드]({{ .DashboardURL }}){{ end }}
+
+{{ end -}}
+{{- end }}

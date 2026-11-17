@@ -1,0 +1,216 @@
+package com.cartmate.cartmate.boundedContext.orderService.order.app.personal;
+
+import com.cartmate.cartmate.shared.delivery.DeliveryCancelReason;
+import com.cartmate.cartmate.boundedContext.orderService.order.domain.itemcancel.CouponMode;
+import com.cartmate.cartmate.shared.coupon.dto.CouponOption;
+import com.cartmate.cartmate.shared.order.OrderStatus;
+import com.cartmate.cartmate.boundedContext.orderService.order.dto.personal.IndividualGroupOrderCreateRequest;
+import com.cartmate.cartmate.boundedContext.orderService.order.dto.personal.OrderCreateRequest;
+import com.cartmate.cartmate.boundedContext.orderService.order.dto.personal.OrderCreateResponse;
+import com.cartmate.cartmate.boundedContext.orderService.order.dto.personal.OrderDetailResponse;
+import com.cartmate.cartmate.boundedContext.orderService.order.dto.personal.OrderPaymentPreviewResponse;
+import com.cartmate.cartmate.boundedContext.orderService.order.dto.personal.OrderSummaryResponse;
+import com.cartmate.cartmate.shared.cart.event.IndividualGroupPurchaseClosedEvent;
+import com.cartmate.cartmate.shared.cart.event.IndividualGroupPurchaseOpenedEvent;
+import com.cartmate.cartmate.shared.cart.event.IndividualGroupPurchaseUpdatedEvent;
+import com.cartmate.cartmate.shared.order.dto.OrderPaymentInfo;
+import com.cartmate.cartmate.shared.payment.dto.PaymentResult;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.cartmate.cartmate.boundedContext.orderService.order.domain.personal.OrderCancelPreview;
+import com.cartmate.cartmate.boundedContext.orderService.order.domain.personal.OrderReturnPreview;
+import com.cartmate.cartmate.shared.delivery.event.DeliveryClaimReturnApprovedEvent;
+import com.cartmate.cartmate.shared.delivery.event.DeliveryClaimReturnRequestedEvent;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+@Service
+@RequiredArgsConstructor
+public class OrderFacade {
+
+    private final OrderCreateUseCase orderCreateUseCase;
+    private final OrderQueryUseCase orderQueryUseCase;
+    private final OrderPaymentUseCase orderPaymentUseCase;
+    private final OrderCancelUseCase orderCancelUseCase;
+    private final OrderReturnUseCase orderReturnUseCase;
+    private final IndividualGroupPurchaseReplicaUseCase individualGroupPurchaseReplicaUseCase;
+    private final OrderPurchaseConfirmationUseCase orderPurchaseConfirmationUseCase;
+    private final Clock clock;
+
+    @Transactional
+    public OrderCreateResponse createPersonal(Long memberId, OrderCreateRequest request) {
+        return orderCreateUseCase.createPersonal(memberId, request.cartItemIds(),
+                request.deliveryAddress().toDeliveryAddress(), LocalDateTime.now(clock));
+    }
+
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public OrderCreateResponse createIndividualGroup(Long memberId, IndividualGroupOrderCreateRequest request) {
+        return orderCreateUseCase.createIndividualGroup(memberId, request.individualGroupPurchaseId(), request.items(),
+                request.deliveryAddress().toDeliveryAddress(), LocalDateTime.now(clock));
+    }
+
+    @Transactional(readOnly = true)
+    public List<OrderSummaryResponse> getMyList(Long memberId) {
+        return orderQueryUseCase.getMyList(memberId);
+    }
+
+    @Transactional(readOnly = true)
+    public OrderDetailResponse getDetail(Long memberId, Long orderId) {
+        return orderQueryUseCase.getDetail(memberId, orderId);
+    }
+
+    @Transactional(readOnly = true)
+    public OrderPaymentInfo getPaymentInfo(Long orderId, Long memberId, LocalDateTime now) {
+        return orderPaymentUseCase.getPaymentInfo(orderId, memberId, now);
+    }
+
+    @Transactional
+    public PaymentResult payOrder(Long memberId, Long orderId) {
+        return payOrder(memberId, orderId, null);
+    }
+
+    @Transactional
+    public PaymentResult payOrder(Long memberId, Long orderId, Long memberCouponId) {
+        return orderPaymentUseCase.pay(orderId, memberId, memberCouponId, LocalDateTime.now(clock));
+    }
+
+    @Transactional(readOnly = true)
+    public OrderPaymentPreviewResponse getPaymentPreview(Long memberId, Long orderId) {
+        return getPaymentPreview(memberId, orderId, null);
+    }
+
+    @Transactional(readOnly = true)
+    public OrderPaymentPreviewResponse getPaymentPreview(Long memberId, Long orderId, Long memberCouponId) {
+        return orderPaymentUseCase.preview(orderId, memberId, memberCouponId, LocalDateTime.now(clock));
+    }
+
+    @Transactional(readOnly = true)
+    public List<CouponOption> getCouponOptions(Long memberId, Long orderId) {
+        return orderPaymentUseCase.couponOptions(orderId, memberId);
+    }
+
+    @Transactional
+    public void applyPayment(Long orderId, Long memberId, Long paymentId, LocalDateTime paidAt) {
+        orderPaymentUseCase.applyPayment(orderId, memberId, paymentId, paidAt);
+    }
+
+    // 주문 행을 잠그므로 구매자 취소 요청 장부와 같은 트랜잭션에서 부른다
+    @Transactional
+    public BuyerCancelStart startBuyerCancel(Long memberId, Long orderId, Collection<Long> orderItemIds) {
+        return orderCancelUseCase.startBuyerCancel(memberId, orderId, orderItemIds);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Long> findUncanceledItemIds(Long orderId, Long sellerId) {
+        return orderCancelUseCase.findUncanceledItemIds(orderId, sellerId);
+    }
+
+    // 구매자 취소 결과를 반영하는 트랜잭션에 참여한다 (Inbox·요청 장부와 함께 커밋).
+    @Transactional
+    public List<Long> cancelItemsByBuyer(Long orderId, Map<Long, List<Long>> itemIdsBySeller) {
+        return orderCancelUseCase.cancelItemsByBuyer(orderId, itemIdsBySeller);
+    }
+
+    @Transactional(readOnly = true)
+    public OrderCancelPreview previewBuyerCancel(Long memberId, Long orderId, Collection<Long> orderItemIds) {
+        return orderCancelUseCase.previewBuyerCancel(memberId, orderId, orderItemIds);
+    }
+
+    @Transactional(readOnly = true)
+    public OrderReturnPreview previewBuyerReturn(Long memberId, Long orderId, Collection<Long> orderItemIds,
+                                                 boolean sellerFault) {
+        return orderReturnUseCase.previewBuyerReturn(memberId, orderId, orderItemIds, sellerFault);
+    }
+
+    // 반품 접수 검사와 승인된 반품 반영은 Inbox와 함께 커밋되는 트랜잭션에 참여한다.
+    @Transactional
+    public void verifyReturn(DeliveryClaimReturnRequestedEvent event) {
+        orderReturnUseCase.verifyReturn(event);
+    }
+
+    @Transactional
+    public void applyReturn(DeliveryClaimReturnApprovedEvent event) {
+        orderReturnUseCase.applyReturn(event);
+    }
+
+    @Transactional
+    public void cancelByDeadline(Long orderId) {
+        orderCancelUseCase.cancelByDeadline(orderId);
+    }
+
+    @Transactional
+    public void cancelByOutOfStock(Long orderId) {
+        orderCancelUseCase.cancelByOutOfStock(orderId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Long> findIdsToCancelByDeadline(LocalDateTime now) {
+        return orderCancelUseCase.findIdsToCancelByDeadline(now);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Long> findPendingIdsByProductIds(List<Long> productIds) {
+        return orderCancelUseCase.findIdsByStatusAndProductIds(OrderStatus.PAYMENT_PENDING, productIds);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Long> findPaidIdsByProductIds(List<Long> productIds) {
+        return orderCancelUseCase.findPaidIdsByProductIds(productIds);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void cancelBySalesStopped(Long orderId) {
+        orderCancelUseCase.cancelBySalesStopped(orderId);
+    }
+
+    // 판매글 내림·판매자 사유·구매자 취소 결과를 반영하는 트랜잭션에 참여한다 (Inbox·요청 장부와 함께 커밋).
+    @Transactional
+    public Optional<Long> cancelItems(Long orderId, Long sellerId, Collection<Long> orderItemIds,
+                                      DeliveryCancelReason reason, CouponMode couponMode) {
+        return orderCancelUseCase.cancelItems(orderId, sellerId, orderItemIds, reason, couponMode);
+    }
+
+    @Transactional
+    public void applyIndividualGroupPurchaseOpened(IndividualGroupPurchaseOpenedEvent event) {
+        individualGroupPurchaseReplicaUseCase.applyOpened(event);
+    }
+
+    @Transactional
+    public void applyIndividualGroupPurchaseUpdated(IndividualGroupPurchaseUpdatedEvent event) {
+        individualGroupPurchaseReplicaUseCase.applyUpdated(event);
+    }
+
+    @Transactional
+    public void applyIndividualGroupPurchaseClosed(IndividualGroupPurchaseClosedEvent event) {
+        individualGroupPurchaseReplicaUseCase.applyClosed(event);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void recordPurchaseConfirmed(Long orderId, LocalDateTime confirmedAt) {
+        orderPurchaseConfirmationUseCase.record(orderId, confirmedAt);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Long> findPendingIdsOfIndividualGroupPurchase(Long individualGroupPurchaseId) {
+        return orderCancelUseCase.findPendingIdsOfIndividualGroupPurchase(individualGroupPurchaseId);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void cancelByGroupPurchaseClosed(Long orderId) {
+        orderCancelUseCase.cancelByGroupPurchaseClosed(orderId);
+    }
+
+    @Transactional(readOnly = true)
+    public long countPaymentPendingOfBuyer(Long buyerMemberId) {
+        return orderQueryUseCase.countPaymentPendingOfBuyer(buyerMemberId);
+    }
+}

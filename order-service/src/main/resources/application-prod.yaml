@@ -1,0 +1,42 @@
+spring:
+  datasource:
+    url: ${ORDER_DB_URL}
+    username: ${ORDER_DB_USERNAME}
+    password: ${ORDER_DB_PASSWORD}
+  jpa:
+    hibernate:
+      # 다른 서비스와 같이 update: 빈 DB로 첫 배포할 때 Hibernate가 테이블을 만든다(수동 schema.sql 실행 없이)
+      # update는 컬럼을 지우거나 이름 · 타입을 바꾸지 않는다. 엔티티에서 컬럼을 빼거나 바꾸는 배포는 변경 SQL을 따로 실행한다
+      # (Flyway 도입 전 임시 정책, ARCH-14. 2026-11-18 validate 고정에서 바꿈)
+      ddl-auto: ${JPA_DDL_AUTO:update}
+
+logging:
+  level:
+    com.cartmate: INFO
+  structured:
+    format:
+      console: logstash   # 운영 로그는 JSON 한 줄 (traceId · event 등이 필드로 → Alloy가 Loki로)
+
+sentry:
+  environment: ${SENTRY_ENVIRONMENT:prod}
+
+# 운영에서는 API 문서(/v3/api-docs)와 Swagger UI를 끈다 → springdoc 빈과 클래스를 만들지 않는다. dev 프로필에서는 그대로 쓴다
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+custom:
+  jwt:
+    secret: ${JWT_SECRET}
+
+cartmate:
+  payment:
+    base-url: ${PAYMENT_BASE_URL}
+  product-service:
+    base-url: ${PRODUCT_SERVICE_BASE_URL}
+  member-service:
+    base-url: ${MEMBER_SERVICE_BASE_URL}
+  internal:
+    api-key: ${INTERNAL_API_KEY}   # 기본값 없음 → 빠뜨리면 앱이 뜨지 않음

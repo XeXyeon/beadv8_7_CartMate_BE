@@ -1,0 +1,50 @@
+# 외부 입구. k3s 기본 Traefik이 서버의 80번 포트로 요청을 받아 경로 접두어로 서비스를 고른다
+#   로컬 FE: API_BASE_URL=http://<앱 서버 IP>
+#
+# /api/** 만 연결한다. 서비스 간 내부 API(/internal/**)와 actuator는 밖으로 열지 않는다
+# 경로 목록은 각 컨트롤러의 클래스 @RequestMapping 접두어다. 컨트롤러 접두어를 새로 만들면 여기와
+# FE src/api/service-map.json에 같이 추가한다
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cartmate-api
+spec:
+  ingressClassName: traefik
+  rules:
+    - http:
+        paths:
+          # member-service
+          - { path: /api/auth, pathType: Prefix, backend: { service: { name: member-service, port: { name: http } } } }
+          - { path: /api/members, pathType: Prefix, backend: { service: { name: member-service, port: { name: http } } } }
+          - { path: /api/admin/members, pathType: Prefix, backend: { service: { name: member-service, port: { name: http } } } }
+          - { path: /api/admin/dashboard, pathType: Prefix, backend: { service: { name: member-service, port: { name: http } } } }
+
+          # product-service
+          - { path: /api/products, pathType: Prefix, backend: { service: { name: product-service, port: { name: http } } } }
+          - { path: /api/sales-posts, pathType: Prefix, backend: { service: { name: product-service, port: { name: http } } } }
+          - { path: /api/coupons, pathType: Prefix, backend: { service: { name: product-service, port: { name: http } } } }
+          - { path: /api/admin/products, pathType: Prefix, backend: { service: { name: product-service, port: { name: http } } } }
+          - { path: /api/admin/sales-posts, pathType: Prefix, backend: { service: { name: product-service, port: { name: http } } } }
+          - { path: /api/admin/coupons, pathType: Prefix, backend: { service: { name: product-service, port: { name: http } } } }
+          - { path: /api/admin/paybacks, pathType: Prefix, backend: { service: { name: product-service, port: { name: http } } } }
+
+          # payment-service (/api/wallets/webhooks/toss: Toss가 외부에서 호출하는 웹훅도 여기로 들어온다)
+          - { path: /api/payments, pathType: Prefix, backend: { service: { name: payment-service, port: { name: http } } } }
+          - { path: /api/wallets, pathType: Prefix, backend: { service: { name: payment-service, port: { name: http } } } }
+          - { path: /api/settlements, pathType: Prefix, backend: { service: { name: payment-service, port: { name: http } } } }
+          - { path: /api/admin/payments, pathType: Prefix, backend: { service: { name: payment-service, port: { name: http } } } }
+
+          # etc-service
+          - { path: /api/notices, pathType: Prefix, backend: { service: { name: etc-service, port: { name: http } } } }
+          - { path: /api/claims, pathType: Prefix, backend: { service: { name: etc-service, port: { name: http } } } }
+          - { path: /api/deliveries, pathType: Prefix, backend: { service: { name: etc-service, port: { name: http } } } }
+          - { path: /api/sellers, pathType: Prefix, backend: { service: { name: etc-service, port: { name: http } } } }
+          - { path: /api/admin/notices, pathType: Prefix, backend: { service: { name: etc-service, port: { name: http } } } }
+
+          # order-service
+          - { path: /api/carts, pathType: Prefix, backend: { service: { name: order-service, port: { name: http } } } }
+          - { path: /api/orders, pathType: Prefix, backend: { service: { name: order-service, port: { name: http } } } }
+          - { path: /api/group-purchases, pathType: Prefix, backend: { service: { name: order-service, port: { name: http } } } }
+          - { path: /api/group-orders, pathType: Prefix, backend: { service: { name: order-service, port: { name: http } } } }
+          - { path: /api/admin/carts, pathType: Prefix, backend: { service: { name: order-service, port: { name: http } } } }
+          - { path: /api/admin/abuse, pathType: Prefix, backend: { service: { name: order-service, port: { name: http } } } }

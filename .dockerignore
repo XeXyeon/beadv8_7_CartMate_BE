@@ -1,10 +1,8 @@
-build/
-bin/
+**/build/
+**/bin/
 /out/
-!**/src/main/**/out/
-!**/src/test/**/out/
 .gradle/
-/.uploads/
+**/uploads/
 
 .idea/
 *.iml
@@ -15,16 +13,17 @@ bin/
 .settings/
 .vscode/
 
+# 비밀값이 든 로컬 설정은 이미지에 넣지 않는다
 .env
-/src/main/resources/application-dev.yml
+.env.*
+**/src/main/resources/application-dev.yaml
 
+# 이미지에 필요 없는 것
+**/src/test/
 .git
-.gitignore
-.gitattributes
-
-thumbal.db
-Thumbs.db
-.DS_Store
-
+.github/
+docs/
+observability/
+tools/
 *.log
-README.md
+**/*.md

@@ -1,0 +1,78 @@
+# CartMate 관측 스택 (로컬): Alloy(수집) → Loki(로그) · Tempo(trace) → Grafana(화면 · 알림)
+#   실행: docker compose -f observability/docker-compose.yaml up -d   →   http://localhost:3300
+#   (3000 · 3001은 프론트 개발 서버가 쓰므로 Grafana는 3300. 바꾸려면 GRAFANA_PORT)
+#   앱 연결 방법은 observability/README.md
+# 이미지 버전은 배포 2주 이상 지난 것으로 고정한다. 메트릭(Prometheus)은 아직 없다.
+name: cartmate-observability
+
+services:
+  loki:
+    image: grafana/loki:3.7.9            # 2026-10-20
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    volumes:
+      - ./loki/loki.yaml:/etc/loki/loki.yaml:ro
+      - loki-data:/loki
+    ports:
+      - "3100:3100"
+    mem_limit: 512m
+    restart: unless-stopped
+
+  tempo:
+    image: grafana/tempo:2.10.10         # 2026-10-21 (3.x는 구조가 바뀌어 단일 실행 구성이 다름)
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    user: "0"                            # 이름 있는 볼륨이 root 소유로 만들어져 tempo 기본 사용자(10001)가 쓰지 못함
+    volumes:
+      - ./tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo-data:/var/tempo
+    ports:
+      - "3200:3200"
+    mem_limit: 512m
+    restart: unless-stopped
+
+  alloy:
+    image: grafana/alloy:v1.21.3         # 2026-10-28
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    environment:
+      # 수집량 절약 설정 (README 5절). 부하 테스트 때는 아래 값을 바꿔 alloy만 다시 띄운다 (앱 재시작 없음)
+      OBS_TRACE_SAMPLE_PERCENT: ${OBS_TRACE_SAMPLE_PERCENT:-10}
+      OBS_SLOW_TRACE_MS: ${OBS_SLOW_TRACE_MS:-1000}
+      OBS_DROP_PLAIN_LOG_LEVELS: ${OBS_DROP_PLAIN_LOG_LEVELS:-DEBUG|TRACE}
+      OBS_LOG_RATE_LIMIT: ${OBS_LOG_RATE_LIMIT:-200}
+    volumes:
+      - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - ./logs:/var/log/cartmate:ro      # 로컬 앱이 쓰는 JSON 로그 파일
+      - alloy-data:/var/lib/alloy/data
+    ports:
+      - "4317:4317"                      # OTLP gRPC (앱 → trace)
+      - "4318:4318"                      # OTLP HTTP (앱 → trace)
+      - "12345:12345"                    # Alloy 상태 화면
+    mem_limit: 256m
+    depends_on: [loki, tempo]
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:13.3.0        # 2026-10-27
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}   # 로컬 기본값. 운영은 반드시 환경 변수로
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_USERS_DEFAULT_LANGUAGE: ko-KR
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "${GRAFANA_PORT:-3300}:3000"     # 3000은 프론트 개발 서버 포트라 피함
+    mem_limit: 512m                      # 13.x는 256M면 메모리가 차서 CPU를 다 쓰고 같은 VM의 Loki까지 느려짐
+    depends_on: [loki, tempo]
+    restart: unless-stopped
+
+volumes:
+  loki-data:
+  tempo-data:
+  alloy-data:
+  grafana-data:

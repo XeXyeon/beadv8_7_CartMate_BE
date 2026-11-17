@@ -1,0 +1,135 @@
+# Alloy 1개 (서버1): 로그 · trace · 메트릭 수집 → Grafana Cloud
+# Prometheus · Grafana · node-exporter · mysqld/redis/es exporter를 대신한다 (kube-state-metrics · kafka-exporter는 따로 유지)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: alloy
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cartmate-alloy
+rules:
+  # Pod 찾기 · Pod 로그 읽기 (로그를 쿠버네티스 API로 읽으므로 hostPath 불필요)
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "nodes", "services", "endpoints", "namespaces"]
+    verbs: ["get", "list", "watch"]
+  # kubelet 지표 (API 서버 프록시 경유)
+  - apiGroups: [""]
+    resources: ["nodes/proxy", "nodes/metrics"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cartmate-alloy
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cartmate-alloy
+subjects:
+  - kind: ServiceAccount
+    name: alloy
+    namespace: monitoring
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alloy
+  labels:
+    app: alloy
+spec:
+  replicas: 1                      # 반드시 1개: trace를 한곳에 모아야 tail sampling이 맞다
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: alloy
+  template:
+    metadata:
+      labels:
+        app: alloy
+    spec:
+      serviceAccountName: alloy
+      # 서버1(k3s server 노드)에 두려면 주석을 푼다. 라벨 cartmate/node=server는 앱 배포 때 붙인다
+      # nodeSelector:
+      #   cartmate/node: server
+      containers:
+        - name: alloy
+          image: grafana/alloy:v1.21.3            # 2026-10-28
+          args:
+            - run
+            - --server.http.listen-addr=0.0.0.0:12345
+            - --storage.path=/var/lib/alloy/data
+            - /etc/alloy/config.alloy
+          env:
+            - name: GOMEMLIMIT                    # Go GC가 limit 안에서 메모리를 돌려주게
+              value: "200MiB"
+            - name: ENV_NAME
+              value: prod
+            - name: APP_NAMESPACES                # 앱 Pod가 있는 네임스페이스 (쉼표로 여러 개)
+              value: cartmate
+            - name: APP_SERVICE_REGEX             # 로그를 보낼 서비스(Pod app 라벨 또는 컨테이너 이름)
+              value: ".*-service"
+            # 수집량 절약 — 평시 값. 부하 테스트 때: 1 / 3000 / INFO|DEBUG|TRACE / 50 (README)
+            - name: OBS_TRACE_SAMPLE_PERCENT
+              value: "10"
+            - name: OBS_SLOW_TRACE_MS
+              value: "1000"
+            - name: OBS_DROP_PLAIN_LOG_LEVELS
+              value: "DEBUG|TRACE"
+            - name: OBS_LOG_RATE_LIMIT
+              value: "200"
+          envFrom:
+            - secretRef:
+                name: alloy-grafana-cloud         # GC_TOKEN, GC_LOKI_URL/USER, GC_OTLP_URL/USER, GC_PROM_URL/USER
+            - secretRef:
+                name: alloy-targets               # MYSQL_*_DSN, REDIS_*_ADDR, REDIS_PASSWORD, ES_URL, KSM_ADDR, KAFKA_EXPORTER_ADDR
+                optional: true
+          ports:
+            - name: otlp-grpc
+              containerPort: 4317
+            - name: otlp-http
+              containerPort: 4318
+            - name: http
+              containerPort: 12345
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: 12345
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 192Mi
+            limits:
+              memory: 256Mi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/alloy
+            - name: data
+              mountPath: /var/lib/alloy/data
+      volumes:
+        - name: config
+          configMap:
+            name: alloy-config
+        - name: data
+          emptyDir:
+            sizeLimit: 512Mi                      # 전송 실패 시 잠깐 쌓아 두는 WAL
+---
+# 앱은 http://alloy.monitoring.svc:4318/v1/traces 로 trace를 보낸다
+apiVersion: v1
+kind: Service
+metadata:
+  name: alloy
+spec:
+  type: ClusterIP
+  selector:
+    app: alloy
+  ports:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318

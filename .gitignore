@@ -5,7 +5,7 @@ build/
 bin/
 .gradle/
 /.link/
-/.uploads/
+uploads/
 
 .idea/
 *.iml
@@ -22,10 +22,11 @@ Thumbs.db
 db.properties
 log/
 *.log
+observability/logs/
 
 .env
 .env.*
 !.env.example
-src/main/resources/application-dev.yaml
+**/src/main/resources/application-dev.yaml
 ### Spring Initializr ###
 HELP.md

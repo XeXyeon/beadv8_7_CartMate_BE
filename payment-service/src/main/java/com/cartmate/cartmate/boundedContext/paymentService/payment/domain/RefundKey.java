@@ -1,0 +1,48 @@
+package com.cartmate.cartmate.boundedContext.paymentService.payment.domain;
+
+/**
+ * 환불 중복 방지 키를 만드는 곳.
+ *
+ * <p>같은 원인으로 같은 결제를 두 번 환불하지 않도록, 환불마다 "원인 + 대상"으로 키를 정하고 DB에 UNIQUE로 저장한다.
+ * 키 형식을 여기 한곳에서만 정해서, 문자열이 여러 곳에 흩어지거나 형식이 어긋나지 않게 한다.
+ */
+public final class RefundKey {
+
+    private RefundKey() {
+    }
+
+    // 판매자가 승인한 취소·반품 요청
+    public static String claim(Long claimId) {
+        return "CLAIM-" + claimId;
+    }
+
+    // 결제 후 구매자 주문 취소 (전액)
+    public static String orderCancel(Long paymentId) {
+        return "ORDER-CANCEL-" + paymentId;
+    }
+
+    // 공동 주문 무산·취소 (결제한 사람마다 전액)
+    public static String sharedGroupCancel(Long paymentId) {
+        return "SHARED-CANCEL-" + paymentId;
+    }
+
+    // 개인 주문 상품 취소 (주문 서버 취소 건당 한 번). 같은 판매자 몫을 여러 번 나눠 취소해도 건마다 환불한다
+    public static String orderItemCancel(Long cancelId) {
+        return "ITEM-CANCEL-" + cancelId;
+    }
+
+    // 공동 주문 상품 취소 (취소 건마다, 결제한 사람마다 한 번)
+    public static String sharedItemCancel(Long cancelId, Long paymentId) {
+        return "ITEM-CANCEL-%d-PAY%d".formatted(cancelId, paymentId);
+    }
+
+    // 관리자 수동 환불: 같은 결제를 여러 번 나눠 환불할 수 있어 시각을 붙인다
+    public static String admin(Long paymentId, long requestedAtMillis) {
+        return "ADMIN-%d-%d".formatted(paymentId, requestedAtMillis);
+    }
+
+    // 차감은 됐는데 주문 반영이 실패해 되돌림 (결제당 한 번)
+    public static String chargeCompensation(Long paymentId) {
+        return "CHARGE-COMPENSATION-" + paymentId;
+    }
+}
