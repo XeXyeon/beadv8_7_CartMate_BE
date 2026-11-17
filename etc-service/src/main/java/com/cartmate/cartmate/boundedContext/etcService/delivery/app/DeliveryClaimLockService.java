@@ -35,7 +35,7 @@ public class DeliveryClaimLockService {
             return deliveryFacade.createClaim(command);
         }
         DeliveryOrderRef order = deliveryFacade.getDeliveryOrderRef(command.deliveryId());
-        return lockExecutor.get(ORDER_LOCK_KEY_PREFIX + order.purchaseType() + ":" + order.orderId(),
+        return lockExecutor.get(ORDER_LOCK_KEY_PREFIX + order.purchaseType().name() + ":" + order.orderId(),
                 () -> deliveryFacade.createClaim(command));
     }
 
