@@ -23,6 +23,12 @@ spec:
     spec:
       # 종료 순서: preStop 5초(Service 대상에서 빠질 시간) → 처리 중인 요청 마무리(Spring Boot graceful shutdown 기본, 최대 30초). 합 35초 < 45초
       terminationGracePeriodSeconds: 45
+      # 띄울 노드(cartmate/node 라벨). server = k3s server 노드(member · order · payment · etc), agent = k3s agent 노드(트래픽이 가장 많은 상품 서버를 떼어 둔다)
+      nodeSelector:
+        cartmate/node: server
+      # Docker Hub에서 이미지를 받을 로그인 정보. 서버에서 한 번 만든다(Secret 이름 dockerhub-pull)
+      imagePullSecrets:
+        - name: dockerhub-pull
       containers:
         - name: member-service
           image: cartmate-member-service   # 실제 이미지 이름 · 태그는 CD가 kustomize로 바꾼다

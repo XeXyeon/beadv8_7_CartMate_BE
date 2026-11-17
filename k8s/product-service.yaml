@@ -23,6 +23,12 @@ spec:
     spec:
       # 종료 순서: preStop 5초(Service 대상에서 빠질 시간) → 처리 중인 요청 마무리(Spring Boot graceful shutdown 기본, 최대 30초). 합 35초 < 45초
       terminationGracePeriodSeconds: 45
+      # 띄울 노드. 트래픽이 가장 많은 상품 서버는 다른 서비스와 CPU를 나눠 쓰지 않게 agent 노드에 따로 둔다(자기 DB와 같은 노드)
+      nodeSelector:
+        cartmate/node: agent
+      # Docker Hub에서 이미지를 받을 로그인 정보. 서버에서 한 번 만든다(Secret 이름 dockerhub-pull)
+      imagePullSecrets:
+        - name: dockerhub-pull
       containers:
         - name: product-service
           image: cartmate-product-service   # 실제 이미지 이름 · 태그는 CD가 kustomize로 바꾼다
@@ -36,6 +42,12 @@ spec:
                 name: cartmate-app-secret
             - secretRef:
                 name: product-service-secret
+          env:
+            # 판매글이 상품 API를 부르는 주소. 같은 Pod의 내부 전용 포트(product.internal-server.port, 9982)로 바로 부른다
+            # 바깥 요청 포트(8982)와 스레드 풀을 나눠 자기 호출 교착상태를 막는다. 9982는 Service · Ingress에 열지 않는다
+            # env가 envFrom(cartmate-app-config의 PRODUCT_URL)보다 우선한다
+            - name: PRODUCT_URL
+              value: http://localhost:9982
           resources:
             requests:
               cpu: 250m

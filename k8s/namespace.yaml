@@ -1,0 +1,5 @@
+# 백엔드 서비스 5개와 MySQL · Redis · Kafka가 들어가는 네임스페이스
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cartmate
