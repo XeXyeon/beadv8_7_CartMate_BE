@@ -3,7 +3,7 @@ package com.cartmate.cartmate.boundedContext.etcService.delivery.in;
 import com.cartmate.cartmate.boundedContext.etcService.delivery.app.DeliveryClaimLockService;
 import com.cartmate.cartmate.boundedContext.etcService.delivery.app.DeliveryFacade;
 import com.cartmate.cartmate.boundedContext.etcService.delivery.app.dto.DeliveryClaimCreateRequest;
-import com.cartmate.cartmate.boundedContext.etcService.delivery.app.dto.DeliveryClaimRejectRequest;
+import com.cartmate.cartmate.boundedContext.etcService.delivery.app.dto.DeliveryClaimDecideRequest;
 import com.cartmate.cartmate.boundedContext.etcService.delivery.app.dto.DeliveryClaimResponse;
 import com.cartmate.cartmate.boundedContext.etcService.delivery.app.dto.SellerClaimResponse;
 import com.cartmate.cartmate.boundedContext.etcService.delivery.domain.ClaimStatus;
@@ -60,25 +60,15 @@ public class ClaimController {
                 deliveryFacade.getSellerClaims(user.memberId(), status, claimType, pageable));
     }
 
-    // 판매자가 접수된 교환·환불을 수락한다.
-    @PatchMapping("/{claimId}/approve")
-    public RsData<SellerClaimResponse> approveClaim(
-            @AuthenticationPrincipal SecurityUser user,
-            @PathVariable Long claimId
-    ) {
-        return new RsData<>("200-1", "교환·환불이 수락되었습니다.",
-                deliveryClaimLockService.approve(claimId, user.memberId()));
-    }
-
-    // 판매자가 접수된 교환·환불을 사유와 함께 거절한다.
-    @PatchMapping("/{claimId}/reject")
-    public RsData<SellerClaimResponse> rejectClaim(
+    // 판매자가 접수된 교환·환불의 모든 상품에 승인이나 거절을 한 번에 정해 처리한다. 거절하는 상품은 사유가 필수다.
+    @PatchMapping("/{claimId}/decide")
+    public RsData<SellerClaimResponse> decideClaim(
             @AuthenticationPrincipal SecurityUser user,
             @PathVariable Long claimId,
-            @Valid @RequestBody DeliveryClaimRejectRequest request
+            @Valid @RequestBody DeliveryClaimDecideRequest request
     ) {
-        return new RsData<>("200-1", "교환·환불이 거절되었습니다.",
-                deliveryClaimLockService.reject(claimId, user.memberId(), request.reason()));
+        return new RsData<>("200-1", "교환·환불이 처리되었습니다.",
+                deliveryClaimLockService.decide(claimId, user.memberId(), request.items()));
     }
 
     // 판매자가 수락한 교환·환불을 처리 완료로 바꾼다.

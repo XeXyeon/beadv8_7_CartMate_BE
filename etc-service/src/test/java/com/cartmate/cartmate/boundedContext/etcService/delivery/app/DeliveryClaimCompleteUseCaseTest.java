@@ -45,7 +45,7 @@ class DeliveryClaimCompleteUseCaseTest {
         when(delivery.getSellerId()).thenReturn(SELLER_ID);
         DeliveryClaim claim = DeliveryClaim.create(delivery, 1L, ClaimType.EXCHANGE, reason, null);
         ReflectionTestUtils.setField(claim, "id", CLAIM_ID);
-        claim.approve(false);
+        claim.decide(true);
         when(claimRepository.findById(CLAIM_ID)).thenReturn(Optional.of(claim));
         when(sellerQuery.isSellerOwner(SELLER_MEMBER_ID, SELLER_ID)).thenReturn(true);
         when(claimItemRepository.findAllWithDeliveryItemByClaimIds(anyList()))

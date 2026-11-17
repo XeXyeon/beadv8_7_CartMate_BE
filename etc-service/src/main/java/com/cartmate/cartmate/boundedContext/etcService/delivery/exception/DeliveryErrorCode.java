@@ -62,6 +62,7 @@ public enum DeliveryErrorCode implements ErrorCode {
 
     // 클레임 접수
     DELIVERY_CLAIM_ITEM_CANCELED("DELIVERY_CLAIM_ITEM_CANCELED", "취소된 상품은 교환·환불을 접수할 수 없습니다.", HttpStatus.CONFLICT),
+    DELIVERY_CLAIM_DECISION_ITEMS_MISMATCH("DELIVERY_CLAIM_DECISION_ITEMS_MISMATCH", "클레임의 모든 상품에 승인이나 거절을 한 번씩 정해야 합니다.", HttpStatus.BAD_REQUEST),
     DELIVERY_CLAIM_ITEM_ALREADY_RETURNED("DELIVERY_CLAIM_ITEM_ALREADY_RETURNED", "이미 반품된 상품은 교환·환불을 접수할 수 없습니다.", HttpStatus.CONFLICT),
     DELIVERY_CLAIM_ALREADY_EXISTS("DELIVERY_CLAIM_ALREADY_EXISTS", "이미 처리 중인 교환·환불 요청이 있습니다.", HttpStatus.CONFLICT),
     DELIVERY_CLAIM_IN_PROGRESS("DELIVERY_CLAIM_IN_PROGRESS", "처리 중인 교환·환불 요청이 있어 구매확정할 수 없습니다.", HttpStatus.CONFLICT),
