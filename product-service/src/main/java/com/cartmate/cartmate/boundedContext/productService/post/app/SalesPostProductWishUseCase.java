@@ -18,7 +18,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collection;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 판매글 상품 찜하기 · 찜 해제. 둘 다 같은 요청을 다시 보내도 결과가 같다.
@@ -57,6 +59,12 @@ public class SalesPostProductWishUseCase {
         Map<Long, String> thumbnails = salesPostProductWishRepository.findThumbnailS3Keys(
                 rows.getContent().stream().map(WishRow::productId).toList());
         return PageResponse.of(rows.map(row -> toResponse(row, thumbnails.get(row.productId()))));
+    }
+
+    // 판매글 상세의 찜 표시: 주어진 판매글 상품들 중 이 회원이 찜한 상품 id
+    @Transactional(readOnly = true)
+    public Set<Long> findWishedProductIds(Long memberId, Collection<Long> productIds) {
+        return salesPostProductWishRepository.findWishedProductIds(memberId, productIds);
     }
 
     // 볼 수 없는 상품(운영 중지)은 상품 내용을 비우고 id만 준다

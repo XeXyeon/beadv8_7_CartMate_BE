@@ -36,6 +36,7 @@ import com.cartmate.cartmate.boundedContext.productService.post.dto.admin.AdminS
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -141,8 +142,9 @@ public class SalesPostFacade {
     }
 
     // 판매글 · 복제본은 DB(읽기 트랜잭션)에서, 상품별 선택 목록 · 재고는 상품 서버(2초 캐시)에서 가져와 붙인다.
-    // 상품 서버 호출 동안 DB 연결을 잡고 있지 않도록 이 메서드에는 트랜잭션을 걸지 않는다
-    public RsData<SelectSalesPostResponse> selectSalesPostDetail(Long postId) {
+    // 상품 서버 호출 동안 DB 연결을 잡고 있지 않도록 이 메서드에는 트랜잭션을 걸지 않는다.
+    // 로그인했으면(memberId가 있으면) 상품마다 찜 여부를 붙인다. 상세 응답은 캐시하지 않아 회원마다 따로 붙여도 섞이지 않는다
+    public RsData<SelectSalesPostResponse> selectSalesPostDetail(Long postId, Long memberId) {
         SelectSalesPostResponse detail = salesPostSelectUseCase.selectSalesPostDetail(postId);
 
         Map<Long, SalesPostDetailInventories.ProductInventories> inventoriesByProduct =
@@ -153,6 +155,7 @@ public class SalesPostFacade {
                 product.attachInventories(found.optionGroups(), found.inventories());
             }
         });
+        markWished(detail, memberId);
 
         return new RsData<>("200-2", "판매글 상세조회에 성공했습니다.", detail);
     }
@@ -433,6 +436,16 @@ public class SalesPostFacade {
     public void unwishProduct(Long memberId, Long productId) {
         requireWishLogin(memberId);
         salesPostProductWishUseCase.unwish(memberId, productId);
+    }
+
+    // 판매글 상세의 상품마다 찜 여부를 붙인다. 비로그인이면 조회하지 않고 모두 false로 둔다
+    private void markWished(SelectSalesPostResponse detail, Long memberId) {
+        if (memberId == null) {
+            return;
+        }
+        List<Long> productIds = detail.getProductList().stream().map(SelectSalesPostProduct::getId).toList();
+        Set<Long> wished = salesPostProductWishUseCase.findWishedProductIds(memberId, productIds);
+        detail.getProductList().forEach(product -> product.markWished(wished.contains(product.getId())));
     }
 
     // 내 찜 목록

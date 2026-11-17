@@ -108,7 +108,8 @@ public class SalesPostSelectUseCase {
                 List.of(),   // 선택 목록 · 재고는 상세 조회에서만 붙인다(SalesPostFacade.selectSalesPostDetail)
                 List.of(),
                 product.getCreateDate(),
-                product.getModifyDate()
+                product.getModifyDate(),
+                false        // 찜 여부는 상세 조회에서만 로그인한 회원 기준으로 붙인다(SalesPostFacade.selectSalesPostDetail)
         );
     }
 

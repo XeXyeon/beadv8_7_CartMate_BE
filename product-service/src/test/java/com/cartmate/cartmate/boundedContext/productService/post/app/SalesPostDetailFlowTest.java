@@ -178,7 +178,7 @@ class SalesPostDetailFlowTest {
     }
 
     private SelectSalesPostProduct detailProduct() {
-        return salesPostFacade.selectSalesPostDetail(postId).getData().getProductList().stream()
+        return salesPostFacade.selectSalesPostDetail(postId, null).getData().getProductList().stream()
                 .filter(product -> product.getId().equals(productId))
                 .findFirst()
                 .orElseThrow();

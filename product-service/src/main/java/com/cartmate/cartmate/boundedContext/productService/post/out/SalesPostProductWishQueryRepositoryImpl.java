@@ -13,8 +13,10 @@ import org.springframework.data.support.PageableExecutionUtils;
 
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static com.cartmate.cartmate.boundedContext.productService.post.domain.QSalesPost.salesPost;
 import static com.cartmate.cartmate.boundedContext.productService.post.domain.QSalesPostProduct.salesPostProduct;
@@ -82,6 +84,19 @@ public class SalesPostProductWishQueryRepositoryImpl implements SalesPostProduct
                     image.get(salesPostProductImage.s3Key));
         }
         return thumbnails;
+    }
+
+    @Override
+    public Set<Long> findWishedProductIds(Long memberId, Collection<Long> productIds) {
+        if (productIds.isEmpty()) {
+            return Set.of();
+        }
+        return new HashSet<>(queryFactory
+                .select(salesPostProductWish.salesPostProductId)
+                .from(salesPostProductWish)
+                .where(salesPostProductWish.memberId.eq(memberId),
+                        salesPostProductWish.salesPostProductId.in(productIds))
+                .fetch());
     }
 
     // 이 회원의 찜 중 목록에 보일 것

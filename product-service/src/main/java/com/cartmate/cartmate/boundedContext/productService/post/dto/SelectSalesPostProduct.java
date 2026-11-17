@@ -25,6 +25,14 @@ public class SelectSalesPostProduct {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
+    // 로그인한 회원이 이 판매글 상품을 찜했는지. 상세 조회에서만 붙이고, 목록 조회 · 비로그인은 false
+    private boolean wished;
+
+    // 상세 조회에서만 로그인한 회원의 찜 여부를 붙인다
+    public void markWished(boolean wished) {
+        this.wished = wished;
+    }
+
     // 상세 조회에서만 상품 서버의 선택 목록 · 재고를 붙인다
     public void attachInventories(List<SelectSalesPostOptionGroup> optionGroups, List<SelectSalesPostInventory> inventoryList) {
         this.optionGroups = optionGroups;

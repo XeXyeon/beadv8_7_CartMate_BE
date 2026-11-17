@@ -55,9 +55,12 @@ public class SalesPostController {
         return ResponseEntity.ok(result);
     }
 
+    // 로그인 없이도 볼 수 있다. 로그인 정보는 상품마다 찜 여부(wished)를 붙이는 데만 쓴다
     @GetMapping("/detail/{postId}")
-    public ResponseEntity<RsData<SelectSalesPostResponse>> selectSalesPostDetail(@PathVariable Long postId) {
-        RsData<SelectSalesPostResponse> result = salesPostFacade.selectSalesPostDetail(postId);
+    public ResponseEntity<RsData<SelectSalesPostResponse>> selectSalesPostDetail(
+            @PathVariable Long postId,
+            @AuthenticationPrincipal SecurityUser user) {
+        RsData<SelectSalesPostResponse> result = salesPostFacade.selectSalesPostDetail(postId, memberIdOf(user));
         return ResponseEntity.ok(result);
     }
 
