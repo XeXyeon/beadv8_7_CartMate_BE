@@ -1,5 +1,6 @@
 package com.cartmate.cartmate.boundedContext.etcService.delivery.app;
 
+import com.cartmate.cartmate.boundedContext.etcService.delivery.domain.ClaimItemResult;
 import com.cartmate.cartmate.boundedContext.etcService.delivery.domain.ClaimStatus;
 import com.cartmate.cartmate.boundedContext.etcService.delivery.domain.ClaimType;
 import com.cartmate.cartmate.boundedContext.etcService.delivery.domain.Delivery;
@@ -45,10 +46,10 @@ public class DeliveryConfirmedEventPublisher {
         ));
     }
 
-    // 완료된 환불 클레임의 수량을 배송상품별로 모은다. 교환은 판매가 유지되므로 포함하지 않는다.
+    // 완료된 환불 클레임에서 승인된 상품의 수량을 배송상품별로 모은다(거절된 상품은 정산에서 빼지 않는다). 교환은 판매가 유지되므로 포함하지 않는다.
     private Map<Long, Long> refundedQuantities(Long deliveryId) {
         return deliveryClaimItemRepository
-                .sumQuantityByDeliveryItem(deliveryId, ClaimType.REFUND, ClaimStatus.COMPLETED).stream()
+                .sumQuantityByDeliveryItem(deliveryId, ClaimType.REFUND, ClaimStatus.COMPLETED, ClaimItemResult.APPROVED).stream()
                 .collect(Collectors.toMap(
                         DeliveryClaimItemRepository.ClaimedQuantity::getDeliveryItemId,
                         DeliveryClaimItemRepository.ClaimedQuantity::getQuantity));

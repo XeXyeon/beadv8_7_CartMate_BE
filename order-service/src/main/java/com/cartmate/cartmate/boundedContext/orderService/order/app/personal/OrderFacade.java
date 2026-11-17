@@ -22,6 +22,9 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.cartmate.cartmate.boundedContext.orderService.order.domain.personal.OrderCancelPreview;
+import com.cartmate.cartmate.boundedContext.orderService.order.domain.personal.OrderReturnPreview;
+import com.cartmate.cartmate.shared.delivery.event.DeliveryClaimReturnApprovedEvent;
+import com.cartmate.cartmate.shared.delivery.event.DeliveryClaimReturnRequestedEvent;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -38,6 +41,7 @@ public class OrderFacade {
     private final OrderQueryUseCase orderQueryUseCase;
     private final OrderPaymentUseCase orderPaymentUseCase;
     private final OrderCancelUseCase orderCancelUseCase;
+    private final OrderReturnUseCase orderReturnUseCase;
     private final IndividualGroupPurchaseReplicaUseCase individualGroupPurchaseReplicaUseCase;
     private final OrderPurchaseConfirmationUseCase orderPurchaseConfirmationUseCase;
     private final Clock clock;
@@ -119,6 +123,23 @@ public class OrderFacade {
     @Transactional(readOnly = true)
     public OrderCancelPreview previewBuyerCancel(Long memberId, Long orderId, Collection<Long> orderItemIds) {
         return orderCancelUseCase.previewBuyerCancel(memberId, orderId, orderItemIds);
+    }
+
+    @Transactional(readOnly = true)
+    public OrderReturnPreview previewBuyerReturn(Long memberId, Long orderId, Collection<Long> orderItemIds,
+                                                 boolean sellerFault) {
+        return orderReturnUseCase.previewBuyerReturn(memberId, orderId, orderItemIds, sellerFault);
+    }
+
+    // 반품 접수 검사와 승인된 반품 반영은 Inbox와 함께 커밋되는 트랜잭션에 참여한다.
+    @Transactional
+    public void verifyReturn(DeliveryClaimReturnRequestedEvent event) {
+        orderReturnUseCase.verifyReturn(event);
+    }
+
+    @Transactional
+    public void applyReturn(DeliveryClaimReturnApprovedEvent event) {
+        orderReturnUseCase.applyReturn(event);
     }
 
     @Transactional

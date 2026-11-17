@@ -2,7 +2,9 @@ package com.cartmate.cartmate.boundedContext.etcService.delivery.app;
 
 import com.cartmate.cartmate.boundedContext.etcService.delivery.app.dto.DeliveryCreateCommand;
 import com.cartmate.cartmate.boundedContext.etcService.delivery.app.dto.DeliveryClaimCreateCommand;
+import com.cartmate.cartmate.boundedContext.etcService.delivery.app.dto.DeliveryClaimDecideRequest;
 import com.cartmate.cartmate.boundedContext.etcService.delivery.app.dto.DeliveryClaimResponse;
+import com.cartmate.cartmate.boundedContext.etcService.delivery.app.dto.DeliveryOrderRef;
 import com.cartmate.cartmate.boundedContext.etcService.delivery.app.dto.DeliveryDetailResponse;
 import com.cartmate.cartmate.boundedContext.etcService.delivery.app.dto.DeliveryResponse;
 import com.cartmate.cartmate.boundedContext.etcService.delivery.app.dto.SellerClaimResponse;
@@ -43,10 +45,10 @@ public class DeliveryFacade {
     private final DeliveryAutoConfirmUseCase deliveryAutoConfirmUseCase;
     private final DeliveryClaimCreateUseCase deliveryClaimCreateUseCase;
     private final DeliveryClaimQueryUseCase deliveryClaimQueryUseCase;
-    private final DeliveryClaimApproveUseCase deliveryClaimApproveUseCase;
-    private final DeliveryClaimRejectUseCase deliveryClaimRejectUseCase;
+    private final DeliveryClaimDecideUseCase deliveryClaimDecideUseCase;
     private final DeliveryClaimCompleteUseCase deliveryClaimCompleteUseCase;
     private final DeliveryClaimRefundResultUseCase deliveryClaimRefundResultUseCase;
+    private final DeliveryClaimVerificationUseCase deliveryClaimVerificationUseCase;
     private final DeliveryWithdrawalQueryUseCase deliveryWithdrawalQueryUseCase;
 
     @Transactional
@@ -89,6 +91,12 @@ public class DeliveryFacade {
         return deliveryConfirmUseCase.confirm(deliveryId, memberId);
     }
 
+    // 반품 접수의 주문 락 키를 만들려고 배송의 주문을 먼저 조회한다. DeliveryClaimLockService가 이 조회 → 락 → createClaim 순서로 부른다.
+    @Transactional(readOnly = true)
+    public DeliveryOrderRef getDeliveryOrderRef(Long deliveryId) {
+        return deliveryClaimCreateUseCase.orderRefOf(deliveryId);
+    }
+
     @DistributedLock(key = "'delivery:' + #command.deliveryId()")
     @Transactional
     public DeliveryClaimResponse createClaim(DeliveryClaimCreateCommand command) {
@@ -106,7 +114,7 @@ public class DeliveryFacade {
         deliveryDeliverUseCase.deliver(deliveryId);
     }
 
-    // 클레임 승인·거절·완료는 클레임의 배송 키로 잠근다. 락을 잡기 전에 배송 ID를 알아야 해서
+    // 클레임 처리·완료는 클레임의 배송 키로 잠근다. 락을 잡기 전에 배송 ID를 알아야 해서
     // DeliveryClaimLockService가 이 조회 → 락 → 아래 메서드 순서로 부른다.
     @Transactional(readOnly = true)
     public Long getClaimDeliveryId(Long claimId) {
@@ -114,18 +122,18 @@ public class DeliveryFacade {
     }
 
     @Transactional
-    public SellerClaimResponse approveClaim(Long claimId, Long memberId) {
-        return deliveryClaimApproveUseCase.approve(claimId, memberId);
-    }
-
-    @Transactional
-    public SellerClaimResponse rejectClaim(Long claimId, Long memberId, String reason) {
-        return deliveryClaimRejectUseCase.reject(claimId, memberId, reason);
+    public SellerClaimResponse decideClaim(Long claimId, Long memberId, List<DeliveryClaimDecideRequest.Item> decisions) {
+        return deliveryClaimDecideUseCase.decide(claimId, memberId, decisions);
     }
 
     @Transactional
     public SellerClaimResponse completeClaim(Long claimId, Long memberId) {
         return deliveryClaimCompleteUseCase.complete(claimId, memberId);
+    }
+
+    @Transactional
+    public void applyClaimReturnVerified(Long claimId, boolean accepted, String rejectCode) {
+        deliveryClaimVerificationUseCase.apply(claimId, accepted, rejectCode);
     }
 
     @Transactional

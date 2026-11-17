@@ -9,15 +9,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
 public class SellerTrustHistoryRecordUseCase {
-
-    // 판매자 귀책으로 보는 클레임 사유(delivery의 ClaimReason 이름). 단순 변심·사이즈 불일치·기타는 판매자 책임이 아니다.
-    // delivery 도메인의 enum을 import하지 않고 이벤트가 전하는 문자열로 비교해 컨텍스트 사이 결합을 피한다.
-    private static final Set<String> FAULT_CLAIM_REASONS = Set.of("PRODUCT_DEFECT", "WRONG_DELIVERY");
 
     private final SellerTrustHistoryRepository sellerTrustHistoryRepository;
 
@@ -31,7 +26,7 @@ public class SellerTrustHistoryRecordUseCase {
     // 승인 시점이 아니라 완료 시점에 세는 이유는, 클레임이 끝나야 그 배송이 구매확정될 수 있어 구매확정 건수(분모)와 시점이 맞기 때문이다.
     // 완료 요청이 재시도되면 같은 클레임의 이벤트가 다시 발행되는데, 이때도 한 번만 남는다.
     public void recordClaimCompleted(DeliveryClaimCompletedEvent event) {
-        if (!FAULT_CLAIM_REASONS.contains(event.claimReason())) {
+        if (!event.sellerFault()) {
             return;
         }
 

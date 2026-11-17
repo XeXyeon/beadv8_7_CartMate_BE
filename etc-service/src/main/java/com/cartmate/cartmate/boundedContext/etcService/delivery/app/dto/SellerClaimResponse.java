@@ -19,10 +19,11 @@ public record SellerClaimResponse(
         ClaimType claimType,
         ClaimReason reason,
         String detail,
-        String rejectReason,
+        String notAcceptedCode,
         ClaimStatus status,
         RefundStatus refundStatus,
         LocalDateTime createdAt,
+        boolean partiallyApproved,
         List<DeliveryClaimResponse.Item> items
 ) {
     public static SellerClaimResponse from(DeliveryClaim claim, List<DeliveryClaimItem> claimItems) {
@@ -34,10 +35,11 @@ public record SellerClaimResponse(
                 claim.getClaimType(),
                 claim.getReason(),
                 claim.getDetail(),
-                claim.getRejectReason(),
+                claim.getNotAcceptedCode(),
                 claim.getStatus(),
                 claim.getRefundStatus(),
                 claim.getCreatedAt(),
+                DeliveryClaimResponse.isPartiallyApproved(claimItems),
                 claimItems.stream().map(DeliveryClaimResponse.Item::from).toList()
         );
     }

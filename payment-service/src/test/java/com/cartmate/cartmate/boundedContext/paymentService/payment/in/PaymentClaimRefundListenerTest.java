@@ -5,8 +5,7 @@ import com.cartmate.cartmate.boundedContext.paymentService.payment.exception.Pay
 import com.cartmate.cartmate.global.event.DomainEventPublisher;
 import com.cartmate.cartmate.global.exception.ServiceException;
 import com.cartmate.cartmate.global.lock.LockErrorCode;
-import com.cartmate.cartmate.shared.delivery.PurchaseType;
-import com.cartmate.cartmate.shared.delivery.event.DeliveryClaimApprovedEvent;
+import com.cartmate.cartmate.shared.order.event.OrderClaimRefundRequestedEvent;
 import com.cartmate.cartmate.shared.payment.event.ClaimRefundCompletedEvent;
 import com.cartmate.cartmate.shared.payment.event.ClaimRefundFailedEvent;
 import org.junit.jupiter.api.DisplayName;
@@ -21,32 +20,32 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
-class PaymentDeliveryEventListenerTest {
+class PaymentClaimRefundListenerTest {
 
     private final PaymentFacade paymentFacade = mock(PaymentFacade.class);
     private final DomainEventPublisher eventPublisher = mock(DomainEventPublisher.class);
-    private final PaymentDeliveryEventListener listener = new PaymentDeliveryEventListener(paymentFacade, eventPublisher);
+    private final PaymentClaimRefundListener listener = new PaymentClaimRefundListener(paymentFacade, eventPublisher);
 
-    private DeliveryClaimApprovedEvent event(PurchaseType purchaseType, String claimType, Long amount) {
-        return new DeliveryClaimApprovedEvent(7L, 3L, 100L, purchaseType, 10L, 5L, claimType, amount);
+    private OrderClaimRefundRequestedEvent event(long amount) {
+        return new OrderClaimRefundRequestedEvent(7L, 100L, 10L, amount);
     }
 
     @Test
     @DisplayName("환불에 성공하면 환불 완료 결과를 기록한다")
     void publishesCompletedWhenRefunded() {
-        listener.handle(event(PurchaseType.INDIVIDUAL_GROUP, "REFUND", 3_000L));
+        listener.handle(event(3_000L));
 
         verify(paymentFacade).refundByClaim(7L, 100L, 10L, 3_000L);
         verify(eventPublisher).publish(new ClaimRefundCompletedEvent(7L, 100L, 3_000L));
     }
 
     @Test
-    @DisplayName("교환이거나 환불 금액이 없으면 환불도 결과 기록도 하지 않는다")
-    void ignoresExchangeAndZeroAmount() {
-        listener.handle(event(PurchaseType.INDIVIDUAL_GROUP, "EXCHANGE", 0L));
-        listener.handle(event(PurchaseType.INDIVIDUAL_GROUP, "REFUND", 0L));
+    @DisplayName("환불 금액이 0원이면 지갑을 거치지 않고 환불 완료 결과를 기록한다")
+    void zeroAmountCompletesWithoutRefunding() {
+        listener.handle(event(0L));
 
-        verifyNoInteractions(paymentFacade, eventPublisher);
+        verifyNoInteractions(paymentFacade);
+        verify(eventPublisher).publish(new ClaimRefundCompletedEvent(7L, 100L, 0L));
     }
 
     @Test
@@ -55,7 +54,7 @@ class PaymentDeliveryEventListenerTest {
         doThrow(new ServiceException(PaymentErrorCode.PAYMENT_REFUND_EXCEEDS_REMAINING))
                 .when(paymentFacade).refundByClaim(anyLong(), anyLong(), anyLong(), anyLong());
 
-        listener.handle(event(PurchaseType.INDIVIDUAL_GROUP, "REFUND", 3_000L));
+        listener.handle(event(3_000L));
 
         verify(eventPublisher).publish(new ClaimRefundFailedEvent(
                 7L, 100L, PaymentErrorCode.PAYMENT_REFUND_EXCEEDS_REMAINING.resultCode()));
@@ -63,27 +62,17 @@ class PaymentDeliveryEventListenerTest {
     }
 
     @Test
-    @DisplayName("공동물품 반품은 환불하지 않고 환불 실패 결과로 기록한다")
-    void sharedGroupRefundIsFailedWithoutRefunding() {
-        listener.handle(event(PurchaseType.SHARED_GROUP, "REFUND", 3_000L));
-
-        verify(paymentFacade, never()).refundByClaim(anyLong(), anyLong(), anyLong(), anyLong());
-        verify(eventPublisher).publish(new ClaimRefundFailedEvent(
-                7L, 100L, PaymentErrorCode.PAYMENT_REFUND_NOT_ALLOWED.resultCode()));
-    }
-
-    @Test
     @DisplayName("락 획득 실패와 같은 환불 처리 중은 결과를 기록하지 않고 예외를 올려 재시도하게 한다")
     void rethrowsRetryableFailures() {
         doThrow(new ServiceException(LockErrorCode.LOCK_ACQUISITION_FAILED))
                 .when(paymentFacade).refundByClaim(anyLong(), anyLong(), anyLong(), anyLong());
-        assertThatThrownBy(() -> listener.handle(event(PurchaseType.INDIVIDUAL_GROUP, "REFUND", 3_000L)))
+        assertThatThrownBy(() -> listener.handle(event(3_000L)))
                 .isInstanceOf(ServiceException.class)
                 .hasMessageContaining("LOCK_ACQUISITION_FAILED");
 
         doThrow(new ServiceException(PaymentErrorCode.PAYMENT_REFUND_IN_PROGRESS))
                 .when(paymentFacade).refundByClaim(anyLong(), anyLong(), anyLong(), anyLong());
-        assertThatThrownBy(() -> listener.handle(event(PurchaseType.INDIVIDUAL_GROUP, "REFUND", 3_000L)))
+        assertThatThrownBy(() -> listener.handle(event(3_000L)))
                 .isInstanceOf(ServiceException.class)
                 .hasMessageContaining("PAYMENT_REFUND_IN_PROGRESS");
 
@@ -96,7 +85,7 @@ class PaymentDeliveryEventListenerTest {
         doThrow(new IllegalStateException("db down"))
                 .when(paymentFacade).refundByClaim(anyLong(), anyLong(), anyLong(), anyLong());
 
-        assertThatThrownBy(() -> listener.handle(event(PurchaseType.INDIVIDUAL_GROUP, "REFUND", 3_000L)))
+        assertThatThrownBy(() -> listener.handle(event(3_000L)))
                 .isInstanceOf(IllegalStateException.class);
 
         verifyNoInteractions(eventPublisher);

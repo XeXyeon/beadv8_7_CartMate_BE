@@ -17,8 +17,10 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -28,6 +30,9 @@ public class DeliveryClaimQueryUseCase {
     private final DeliveryClaimRepository deliveryClaimRepository;
     private final DeliveryClaimItemRepository deliveryClaimItemRepository;
     private final SellerQuery sellerQuery;
+
+    // 판매자에게는 확인 중(주문 서버가 검사하는 중)과 접수 불가(검사에서 거절됨) 클레임을 보이지 않는다. 구매자는 모두 본다.
+    private static final Set<ClaimStatus> HIDDEN_FROM_SELLER = EnumSet.of(ClaimStatus.VERIFYING, ClaimStatus.NOT_ACCEPTED);
 
     // 클레임이 속한 배송 ID를 조회한다. 없는 클레임이면 처리할 때와 같은 오류를 낸다.
     public Long getDeliveryId(Long claimId) {
@@ -64,8 +69,11 @@ public class DeliveryClaimQueryUseCase {
         Long sellerId = sellerQuery.findSellerIdByMemberId(memberId)
                 .orElseThrow(() -> new ServiceException(DeliveryErrorCode.DELIVERY_SELLER_ONLY));
 
-        List<ClaimStatus> statusFilter = statuses == null || statuses.isEmpty()
-                ? List.of(ClaimStatus.values()) : statuses;
+        List<ClaimStatus> statusFilter = (statuses == null || statuses.isEmpty() ? List.of(ClaimStatus.values()) : statuses)
+                .stream().filter(status -> !HIDDEN_FROM_SELLER.contains(status)).toList();
+        if (statusFilter.isEmpty()) {
+            return new PageImpl<>(List.of(), pageable, 0);
+        }
         List<ClaimType> typeFilter = claimType == null ? List.of(ClaimType.values()) : List.of(claimType);
 
         Page<DeliveryClaim> claims = deliveryClaimRepository

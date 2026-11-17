@@ -7,7 +7,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
 import java.util.List;
@@ -32,17 +31,13 @@ public record DeliveryClaimCreateRequest(
     @Schema(name = "DeliveryClaimCreateItemRequest")
     public record Item(
             @NotNull
-            Long deliveryItemId,
-
-            @NotNull
-            @Positive
-            Long quantity
+            Long deliveryItemId
     ) {}
 
     public DeliveryClaimCreateCommand toCommand(Long memberId) {
         List<DeliveryClaimCreateCommand.Item> commandItems = items == null ? null : items.stream()
                 .map(item -> item == null ? null
-                        : new DeliveryClaimCreateCommand.Item(item.deliveryItemId(), item.quantity()))
+                        : new DeliveryClaimCreateCommand.Item(item.deliveryItemId()))
                 .toList();
 
         return new DeliveryClaimCreateCommand(deliveryId, memberId, claimType, reason, detail, commandItems);

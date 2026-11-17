@@ -90,6 +90,18 @@ public class OrderController {
                 OrderCancelPreviewResponse.from(orderFacade.previewBuyerCancel(user.memberId(), id, orderItemIds)));
     }
 
+    @GetMapping("/{id}/return-preview")
+    @Operation(operationId = "returnPreview", summary = "고른 상품을 반품하면 돌려받을 예상 환불 금액 (판매자 탓 사유면 sellerFault=true)")
+    public RsData<OrderReturnPreviewResponse> returnPreview(
+            @AuthenticationPrincipal SecurityUser user,
+            @PathVariable Long id,
+            @RequestParam List<Long> orderItemIds,
+            @RequestParam(defaultValue = "false") boolean sellerFault
+    ) {
+        return new RsData<>("200-1", "예상 환불 금액 조회 성공했습니다.",
+                OrderReturnPreviewResponse.from(orderFacade.previewBuyerReturn(user.memberId(), id, orderItemIds, sellerFault)));
+    }
+
     @PostMapping("/{orderId}/payment")
     @Operation(operationId = "payOrder", summary = "개인 주문 예치금 결제 (쿠폰 선택)")
     public RsData<PaymentResult> pay(@AuthenticationPrincipal SecurityUser user, @PathVariable Long orderId,

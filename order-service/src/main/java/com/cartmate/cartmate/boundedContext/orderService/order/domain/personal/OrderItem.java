@@ -100,6 +100,26 @@ public class OrderItem {
         return canceledAt != null;
     }
 
+    // 반품이 승인돼 돌려보낸 시각. 반품은 상품 한 줄을 수량 전부 돌려보내는 것이라 취소처럼 시각만 남긴다
+    @Column(name = "returned_at")
+    private LocalDateTime returnedAt;
+
+    public boolean isReturned() {
+        return returnedAt != null;
+    }
+
+    // 취소됐거나 반품돼 주문에서 이미 빠진 항목
+    public boolean isGone() {
+        return isCanceled() || isReturned();
+    }
+
+    // 이미 반품된 항목은 처음 시각을 그대로 둔다
+    void markReturned(LocalDateTime now) {
+        if (returnedAt == null) {
+            returnedAt = now;
+        }
+    }
+
     // 이미 취소된 항목은 처음 취소된 사유와 시각을 그대로 둔다
     void cancel(DeliveryCancelReason reason, LocalDateTime now) {
         if (canceledAt == null) {

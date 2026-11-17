@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.LinkedHashMap;
 import com.cartmate.cartmate.shared.coupon.dto.CouponOrderTarget;
 import com.cartmate.cartmate.shared.delivery.DeliveryCancelReason;
+import com.cartmate.cartmate.shared.delivery.event.PendingReturn;
 import com.cartmate.cartmate.shared.order.OrderCancelReason;
 import com.cartmate.cartmate.shared.order.OrderStatus;
 import com.cartmate.cartmate.shared.order.OrderType;
@@ -326,7 +327,7 @@ public class Order {
         Map<Long, List<OrderItem>> targetsBySeller = new LinkedHashMap<>();
         itemIdsBySeller.forEach((sellerId, orderItemIds) -> {
             List<OrderItem> targets = items.stream()
-                    .filter(item -> sellerId.equals(item.getSellerId()) && !item.isCanceled())
+                    .filter(item -> sellerId.equals(item.getSellerId()) && !item.isGone())
                     .filter(item -> orderItemIds == null || orderItemIds.contains(item.getId()))
                     .toList();
             if (!targets.isEmpty()) {
@@ -337,10 +338,11 @@ public class Order {
             return ItemCancelOutcome.none();
         }
         List<OrderItem> allTargets = targetsBySeller.values().stream().flatMap(List::stream).toList();
-        CancelCalc calc = calculate(allTargets, OrderItem::isCanceled, remainingRefundAmount(), couponMode);
+        CancelCalc calc = calculate(allTargets, OrderItem::isGone, remainingRefundAmount(), couponMode);
         allTargets.forEach(item -> item.cancel(reason, now));
         boolean couponReturnable = couponReturnsWith(calc);
-        if (calc.orderCanceled()) {
+        // 반품된 항목이 있는 주문은 남은 상품이 모두 취소돼도 취소 상태로 바꾸지 않는다(받아서 반품한 상품이 있다)
+        if (calc.orderCanceled() && items.stream().allMatch(OrderItem::isCanceled)) {
             cancel(orderCancelReasonOfItems(), now);
         } else {
             partiallyCanceled = true;
@@ -375,11 +377,84 @@ public class Order {
         if (!isPaid()) {
             return new OrderCancelPreview(0, false);
         }
-        CancelCalc calc = calculate(targets, OrderItem::isCanceled, remainingRefundAmount(), CouponMode.RECALCULATE);
+        CancelCalc calc = calculate(targets, OrderItem::isGone, remainingRefundAmount(), CouponMode.RECALCULATE);
         if (calc.underpaid()) {
             throw new ServiceException(OrderErrorCode.ORDER_CANCEL_COUPON_MINIMUM);
         }
         return new OrderCancelPreview(calc.refund(), couponReturnsWith(calc));
+    }
+
+    // 고른 상품을 반품한다고 보고 환불 금액을 계산한다. 주문은 바꾸지 않는다.
+    public OrderReturnPreview previewReturn(Collection<Long> orderItemIds, CouponMode couponMode) {
+        return previewReturn(orderItemIds, List.of(), couponMode);
+    }
+
+    // 같은 주문에서 처리 중인 다른 반품이 차례로 먼저 승인돼 환불된 것으로 보고 이번 반품을 계산한다. 주문은 바꾸지 않는다.
+    // 각 반품이 서로를 모른 채 검사를 통과해도 차례로 환불되면 합쳐서 신청했을 때보다 더 돌려받을 수 있어서, 먼저 환불된다고 가정해 막는다.
+    public OrderReturnPreview previewReturn(Collection<Long> orderItemIds, List<PendingReturn> pendingReturns,
+                                            CouponMode couponMode) {
+        List<OrderItem> targets = returnTargets(orderItemIds);
+        Set<OrderItem> pendingGone = new HashSet<>();
+        Predicate<OrderItem> gone = item -> item.isGone() || pendingGone.contains(item);
+        long netPaid = remainingRefundAmount();
+        for (PendingReturn pending : pendingReturns) {
+            List<OrderItem> pendingTargets = items.stream()
+                    .filter(item -> pending.orderItemIds().contains(item.getId()) && item.getSellerId() != null
+                            && !gone.test(item) && !targets.contains(item))
+                    .toList();
+            if (pendingTargets.isEmpty()) {
+                continue;
+            }
+            CancelCalc calc = calculate(pendingTargets, gone, netPaid,
+                    pending.sellerFault() ? CouponMode.PROPORTIONAL : CouponMode.RECALCULATE);
+            netPaid -= calc.refund();
+            pendingGone.addAll(pendingTargets);
+        }
+        CancelCalc calc = calculate(targets, gone, netPaid, couponMode);
+        return new OrderReturnPreview(calc.refund(), calc.underpaid());
+    }
+
+    // 구매자 본인의 반품 예상 환불. 쿠폰 최소 금액이 깨져 오히려 더 내야 하는 반품은 받지 않는다(싼 상품을 끼워 조건을 채운 뒤 빼면 할인만 남기 때문).
+    public OrderReturnPreview previewBuyerReturn(Long requesterId, Collection<Long> orderItemIds, CouponMode couponMode) {
+        if (!isBuyer(requesterId)) {
+            throw new ServiceException(OrderErrorCode.ORDER_BUYER_ONLY);
+        }
+        OrderReturnPreview preview = previewReturn(orderItemIds, couponMode);
+        if (preview.underpaid()) {
+            throw new ServiceException(OrderErrorCode.ORDER_RETURN_COUPON_MINIMUM);
+        }
+        return preview;
+    }
+
+    // 판매자가 승인한 반품을 반영한다. 구매자가 더 내야 하는 경우는 0원이다(추가 결제 없음).
+    // 반품은 취소가 아니라 주문 상태는 바꾸지 않고, 쿠폰은 혜택이 0이 되는 순간 한 번 돌려준다.
+    public OrderReturnOutcome applyReturn(Collection<Long> orderItemIds, CouponMode couponMode, LocalDateTime now) {
+        List<OrderItem> targets = returnTargets(orderItemIds);
+        CancelCalc calc = calculate(targets, OrderItem::isGone, remainingRefundAmount(), couponMode);
+        targets.forEach(item -> item.markReturned(now));
+        boolean couponReturnable = couponReturnsWith(calc);
+        if (couponReturnable) {
+            couponReturned = true;
+        }
+        itemRefundedAmount += calc.refund();
+        return new OrderReturnOutcome(calc.refund(), couponReturnable);
+    }
+
+    // 결제 완료 주문에서 아직 빠지지 않은 항목이어야 하고, 같은 항목을 두 번 고를 수 없다.
+    private List<OrderItem> returnTargets(Collection<Long> orderItemIds) {
+        if (!isPaid()) {
+            throw new ServiceException(OrderErrorCode.ORDER_RETURN_NOT_PAID);
+        }
+        if (orderItemIds == null || orderItemIds.isEmpty() || Set.copyOf(orderItemIds).size() != orderItemIds.size()) {
+            throw new ServiceException(OrderErrorCode.ORDER_RETURN_ITEM_INVALID);
+        }
+        List<OrderItem> targets = items.stream()
+                .filter(item -> orderItemIds.contains(item.getId()) && !item.isGone() && item.getSellerId() != null)
+                .toList();
+        if (targets.size() != orderItemIds.size()) {
+            throw new ServiceException(OrderErrorCode.ORDER_RETURN_ITEM_INVALID);
+        }
+        return targets;
     }
 
     // underpaid: 다시 계산하면 구매자가 더 내야 하는 경우. 추가로 받지 않으므로 환불은 0원
@@ -466,7 +541,7 @@ public class Order {
             throw new ServiceException(OrderErrorCode.ORDER_CANCEL_ITEM_INVALID);
         }
         List<OrderItem> targets = items.stream()
-                .filter(item -> orderItemIds.contains(item.getId()) && !item.isCanceled() && item.getSellerId() != null)
+                .filter(item -> orderItemIds.contains(item.getId()) && !item.isGone() && item.getSellerId() != null)
                 .toList();
         if (targets.size() != orderItemIds.size()) {
             throw new ServiceException(OrderErrorCode.ORDER_CANCEL_ITEM_INVALID);
@@ -477,7 +552,7 @@ public class Order {
     // 판매글 내림 요청에 싣는 그 판매자의 아직 취소되지 않은 항목
     public List<Long> uncanceledItemIdsOf(Long sellerId) {
         return items.stream()
-                .filter(item -> sellerId.equals(item.getSellerId()) && !item.isCanceled())
+                .filter(item -> sellerId.equals(item.getSellerId()) && !item.isGone())
                 .map(OrderItem::getId)
                 .toList();
     }

@@ -47,11 +47,11 @@ public class DeliveryClaim {
     @Column(name = "status", nullable = false)
     private ClaimStatus status;
 
-    @Column(name = "reject_reason", length = DETAIL_MAX_LENGTH)
-    private String rejectReason;    //판매자 거절 사유
+    @Column(name = "not_accepted_code", length = 50)
+    private String notAcceptedCode;    //접수 검사에서 거절된 이유 코드
 
     @Column(name = "processed_at")
-    private LocalDateTime processedAt;  //판매자 승인·거절 시각
+    private LocalDateTime processedAt;  //판매자 처리(승인·거절) 시각
 
     @Column(name = "completed_at")
     private LocalDateTime completedAt;  //처리 완료 시각
@@ -88,34 +88,41 @@ public class DeliveryClaim {
         this.claimType = claimType;
         this.reason = reason;
         this.detail = detail;
+        this.status = needsVerification() ? ClaimStatus.VERIFYING : ClaimStatus.REQUESTED;
+    }
+
+    // 구매자 사정 반품은 쿠폰 최소 금액이 깨져 환불이 음수가 될 수 있어, 주문 서버가 확인한 뒤에 접수한다.
+    public boolean needsVerification() {
+        return claimType == ClaimType.REFUND && !reason.isSellerFault();
+    }
+
+    // 접수 검사를 통과하면 접수로 바꾼다. 확인 중이 아니면(같은 결과를 다시 받음) 아무것도 하지 않는다.
+    public boolean accept() {
+        if (this.status != ClaimStatus.VERIFYING) {
+            return false;
+        }
         this.status = ClaimStatus.REQUESTED;
+        return true;
     }
 
-    // 판매자가 접수된 교환·환불을 수락한다. 이미 수락된 클레임이면 아무것도 하지 않아 재요청해도 안전하다.
-    public void approve(boolean refundRequired) {
-        if (this.status == ClaimStatus.APPROVED) {
-            return;
+    // 접수 검사에서 거절되면 접수 불가로 끝낸다. 확인 중이 아니면 아무것도 하지 않는다.
+    public boolean notAccept(String code) {
+        if (this.status != ClaimStatus.VERIFYING) {
+            return false;
         }
+        this.status = ClaimStatus.NOT_ACCEPTED;
+        this.notAcceptedCode = code;
+        return true;
+    }
+
+    // 판매자가 상품별 결정을 한 번에 확정한다. 하나라도 승인하면 승인, 모두 거절하면 거절이다.
+    // 반품은 승인한 상품이 있으면 환불을 기다리고, 교환이나 전부 거절이면 환불이 필요 없다.
+    public void decide(boolean anyApproved) {
         if (this.status != ClaimStatus.REQUESTED) {
             throw new ServiceException(DeliveryErrorCode.DELIVERY_CLAIM_INVALID_STATUS);
         }
-
-        this.status = ClaimStatus.APPROVED;
-        this.refundStatus = refundRequired ? RefundStatus.PENDING : RefundStatus.NONE;
-        this.processedAt = LocalDateTime.now();
-    }
-
-    // 판매자가 접수된 교환·환불을 거절하고 사유를 남긴다. 이미 거절된 클레임이면 아무것도 하지 않아 재요청해도 안전하다.
-    public void reject(String rejectReason) {
-        if (this.status == ClaimStatus.REJECTED) {
-            return;
-        }
-        if (this.status != ClaimStatus.REQUESTED) {
-            throw new ServiceException(DeliveryErrorCode.DELIVERY_CLAIM_INVALID_STATUS);
-        }
-
-        this.status = ClaimStatus.REJECTED;
-        this.rejectReason = rejectReason;
+        this.status = anyApproved ? ClaimStatus.APPROVED : ClaimStatus.REJECTED;
+        this.refundStatus = claimType == ClaimType.REFUND && anyApproved ? RefundStatus.PENDING : RefundStatus.NONE;
         this.processedAt = LocalDateTime.now();
     }
 
