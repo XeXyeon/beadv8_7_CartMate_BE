@@ -11,7 +11,10 @@ dependencies {
     api 'org.springframework.boot:spring-boot-starter-validation'
     api 'org.springframework.boot:spring-boot-starter-data-redis'
     api 'org.springframework.boot:spring-boot-starter-aspectj'
-    api 'org.redisson:redisson:4.8.0'
+
+    // Redisson: 분산 락(global/lock) · RedissonConfig. 컴파일만 하고 넘기지 않는다.
+    // 락을 쓰는 서비스(payment · etc)만 직접 넣고, 없는 서비스에서는 빈이 만들어지지 않는다(@ConditionalOnClass)
+    compileOnly 'org.redisson:redisson:4.8.0'
 
     // QueryDSL: BaseEntity 같은 공통 엔티티의 Q클래스도 여기서 만든다
     api 'io.github.openfeign.querydsl:querydsl-jpa:7.7'
@@ -23,9 +26,9 @@ dependencies {
     runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
     runtimeOnly 'io.jsonwebtoken:jjwt-gson:0.12.6'
 
-    // S3
-    api platform('software.amazon.awssdk:bom:2.25.0')
-    api 'software.amazon.awssdk:s3'
+    // S3: S3Config. 컴파일만 하고 넘기지 않는다. 이미지를 올리는 서비스(product)만 직접 넣는다(@ConditionalOnClass)
+    compileOnly platform('software.amazon.awssdk:bom:2.25.0')
+    compileOnly 'software.amazon.awssdk:s3'
 
     // Outbox · ShedLock
     api 'net.javacrumbs.shedlock:shedlock-spring:7.10.1'
@@ -44,6 +47,9 @@ dependencies {
     compileOnly 'io.micrometer:context-propagation'        // 비동기 실행기에 traceId 넘기기(AsyncConfig). 있는 서비스에서만 켜진다
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.redisson:redisson:4.8.0'                     // 의존성이 있을 때 · 없을 때 빈이 켜지고 꺼지는지 테스트
+    testImplementation platform('software.amazon.awssdk:bom:2.25.0')
+    testImplementation 'software.amazon.awssdk:s3'
     testImplementation 'io.micrometer:micrometer-tracing-bridge-otel'   // traceparent 왕복 테스트용 실제 추적기 (버전은 BOM)
     testImplementation 'io.opentelemetry:opentelemetry-sdk'
     testImplementation "io.sentry:sentry:${sentryVersion}"
