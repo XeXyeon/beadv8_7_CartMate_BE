@@ -2,6 +2,7 @@ package com.cartmate.cartmate.boundedContext.etcService.delivery.app;
 
 import com.cartmate.cartmate.boundedContext.etcService.delivery.app.dto.DeliveryClaimCreateCommand;
 import com.cartmate.cartmate.boundedContext.etcService.delivery.app.dto.DeliveryClaimResponse;
+import com.cartmate.cartmate.boundedContext.etcService.delivery.domain.ClaimItemResult;
 import com.cartmate.cartmate.boundedContext.etcService.delivery.domain.ClaimStatus;
 import com.cartmate.cartmate.boundedContext.etcService.delivery.domain.ClaimType;
 import com.cartmate.cartmate.boundedContext.etcService.delivery.domain.Delivery;
@@ -14,12 +15,16 @@ import com.cartmate.cartmate.boundedContext.etcService.delivery.out.DeliveryClai
 import com.cartmate.cartmate.boundedContext.etcService.delivery.out.DeliveryClaimRepository;
 import com.cartmate.cartmate.boundedContext.etcService.delivery.out.DeliveryItemRepository;
 import com.cartmate.cartmate.boundedContext.etcService.delivery.out.DeliveryRepository;
+import com.cartmate.cartmate.global.event.DomainEventPublisher;
 import com.cartmate.cartmate.global.exception.ServiceException;
 import com.cartmate.cartmate.shared.delivery.PurchaseType;
+import com.cartmate.cartmate.shared.delivery.event.DeliveryClaimReturnRequestedEvent;
+import com.cartmate.cartmate.shared.delivery.event.PendingReturn;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -30,13 +35,14 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class DeliveryClaimCreateUseCase {
 
-    // 판매자가 아직 처리 중이거나 승인되어 진행 중인 클레임. 이 클레임에 포함된 상품은 다시 접수할 수 없다.
-    private static final List<ClaimStatus> ACTIVE_STATUSES = List.of(ClaimStatus.REQUESTED, ClaimStatus.APPROVED);
+    // 승인된 반품으로 보는 클레임 상태
+    private static final List<ClaimStatus> RETURNED_STATUSES = List.of(ClaimStatus.APPROVED, ClaimStatus.COMPLETED);
 
     private final DeliveryRepository deliveryRepository;
     private final DeliveryItemRepository deliveryItemRepository;
     private final DeliveryClaimRepository deliveryClaimRepository;
     private final DeliveryClaimItemRepository deliveryClaimItemRepository;
+    private final DomainEventPublisher eventPublisher;
 
     // 수령인(구매자) 본인이 배송완료된 배송에서 상품을 골라 교환·환불을 접수한다. 구매확정 이후에는 접수할 수 없다.
     public DeliveryClaimResponse create(DeliveryClaimCreateCommand command) {
@@ -60,25 +66,58 @@ public class DeliveryClaimCreateUseCase {
         Map<Long, DeliveryItem> deliveryItems = deliveryItemRepository.findByDeliveryId(command.deliveryId())
                 .stream()
                 .collect(Collectors.toMap(DeliveryItem::getId, Function.identity()));
-        validateItems(command.items(), deliveryItems);
+        validateItems(command.items(), deliveryItems, approvedReturnedItemIds(command.deliveryId()));
 
         List<Long> requestedItemIds = command.items().stream()
                 .map(DeliveryClaimCreateCommand.Item::deliveryItemId)
                 .toList();
-        if (deliveryClaimItemRepository.existsByDeliveryItemIdsAndClaimStatuses(requestedItemIds, ACTIVE_STATUSES)) {
+        if (deliveryClaimItemRepository.existsByDeliveryItemIdsAndClaimStatuses(requestedItemIds, ClaimStatus.inProgress())) {
             throw new ServiceException(DeliveryErrorCode.DELIVERY_CLAIM_ALREADY_EXISTS);
         }
 
         DeliveryClaim claim = DeliveryClaim.create(
                 delivery, command.memberId(), command.claimType(), command.reason(), normalize(command.detail()));
+        // 이번 신청을 저장하기 전에 같은 주문의 처리 중인 다른 반품을 읽는다. 검사가 필요한 반품만 쓴다.
+        List<PendingReturn> pendingReturns = claim.needsVerification() ? pendingReturns(delivery) : List.of();
         deliveryClaimRepository.save(claim);
 
         List<DeliveryClaimItem> claimItems = command.items().stream()
-                .map(item -> DeliveryClaimItem.create(claim, deliveryItems.get(item.deliveryItemId()), item.quantity()))
+                .map(item -> DeliveryClaimItem.create(claim, deliveryItems.get(item.deliveryItemId()),
+                        deliveryItems.get(item.deliveryItemId()).getQuantity()))
                 .toList();
         deliveryClaimItemRepository.saveAll(claimItems);
 
+        // 구매자 사정 반품은 쿠폰 최소 금액이 깨질 수 있어 주문 서버가 확인한 뒤에 접수된다.
+        if (claim.needsVerification()) {
+            eventPublisher.publish(new DeliveryClaimReturnRequestedEvent(
+                    claim.getId(), delivery.getOrderId(), delivery.getPurchaseType(), claim.getMemberId(),
+                    claimItems.stream()
+                            .map(ci -> ci.getDeliveryItem().getOrderItemId())
+                            .toList(),
+                    pendingReturns));
+        }
+
         return DeliveryClaimResponse.from(claim, claimItems);
+    }
+
+    // 같은 주문에서 처리 중인 다른 반품을 클레임별로 묶어 판매자 탓 여부와 함께 돌려준다(클레임 번호 순서).
+    private List<PendingReturn> pendingReturns(Delivery delivery) {
+        Map<Long, List<DeliveryClaimItem>> byClaim = deliveryClaimItemRepository
+                .findPendingReturnItems(delivery.getOrderId(), delivery.getPurchaseType(), ClaimType.REFUND,
+                        ClaimStatus.inProgress(), ClaimItemResult.APPROVED)
+                .stream()
+                .collect(Collectors.groupingBy(ci -> ci.getClaim().getId(), LinkedHashMap::new, Collectors.toList()));
+        return byClaim.values().stream()
+                .map(items -> new PendingReturn(
+                        items.get(0).getClaim().getReason().isSellerFault(),
+                        items.stream().map(ci -> ci.getDeliveryItem().getOrderItemId()).toList()))
+                .toList();
+    }
+
+    // 이미 승인된 반품이 있는 배송상품. 돌려보낸 상품이라 다시 반품·교환할 수 없다.
+    private Set<Long> approvedReturnedItemIds(Long deliveryId) {
+        return new HashSet<>(deliveryClaimItemRepository.findApprovedReturnedDeliveryItemIds(
+                deliveryId, ClaimType.REFUND, RETURNED_STATUSES, ClaimItemResult.APPROVED));
     }
 
     private void validate(DeliveryClaimCreateCommand command) {
@@ -106,17 +145,15 @@ public class DeliveryClaimCreateUseCase {
             if (item == null || item.deliveryItemId() == null) {
                 throw new ServiceException(DeliveryErrorCode.DELIVERY_CLAIM_ITEM_ID_REQUIRED);
             }
-            if (item.quantity() == null || item.quantity() <= 0) {
-                throw new ServiceException(DeliveryErrorCode.DELIVERY_CLAIM_QUANTITY_INVALID);
-            }
             if (!seen.add(item.deliveryItemId())) {
                 throw new ServiceException(DeliveryErrorCode.DELIVERY_CLAIM_ITEM_DUPLICATED);
             }
         }
     }
 
-    // 선택한 상품이 모두 이 배송의 취소되지 않은 상품이고, 요청 수량이 배송 수량을 넘지 않는지 확인한다.
-    private void validateItems(List<DeliveryClaimCreateCommand.Item> items, Map<Long, DeliveryItem> deliveryItems) {
+    // 선택한 상품이 모두 이 배송의 취소되지 않은 상품이고, 이미 반품된 상품이 아닌지 확인한다.
+    private void validateItems(List<DeliveryClaimCreateCommand.Item> items, Map<Long, DeliveryItem> deliveryItems,
+                               Set<Long> approvedReturned) {
         for (DeliveryClaimCreateCommand.Item item : items) {
             DeliveryItem deliveryItem = deliveryItems.get(item.deliveryItemId());
             if (deliveryItem == null) {
@@ -126,8 +163,8 @@ public class DeliveryClaimCreateUseCase {
             if (deliveryItem.isCanceled()) {
                 throw new ServiceException(DeliveryErrorCode.DELIVERY_CLAIM_ITEM_CANCELED);
             }
-            if (item.quantity() > deliveryItem.getQuantity()) {
-                throw new ServiceException(DeliveryErrorCode.DELIVERY_CLAIM_QUANTITY_EXCEEDED);
+            if (approvedReturned.contains(deliveryItem.getId())) {
+                throw new ServiceException(DeliveryErrorCode.DELIVERY_CLAIM_ITEM_ALREADY_RETURNED);
             }
         }
     }

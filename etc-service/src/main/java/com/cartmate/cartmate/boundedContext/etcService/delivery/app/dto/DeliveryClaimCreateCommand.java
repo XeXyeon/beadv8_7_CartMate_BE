@@ -14,7 +14,6 @@ public record DeliveryClaimCreateCommand(
         List<Item> items
 ) {
     public record Item(
-            Long deliveryItemId,
-            Long quantity
+            Long deliveryItemId
     ) {}
 }

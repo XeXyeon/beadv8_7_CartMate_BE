@@ -22,7 +22,6 @@ public class DeliveryWithdrawalQueryUseCase {
 
     private static final Set<DeliveryStatus> NOT_FINISHED =
             EnumSet.of(DeliveryStatus.REQUESTED, DeliveryStatus.PREPARING, DeliveryStatus.SHIPPING, DeliveryStatus.DELIVERED);
-    private static final Set<ClaimStatus> CLAIM_IN_PROGRESS = EnumSet.of(ClaimStatus.REQUESTED, ClaimStatus.APPROVED);
 
     private final DeliveryRepository deliveryRepository;
     private final DeliveryClaimRepository deliveryClaimRepository;
@@ -43,10 +42,10 @@ public class DeliveryWithdrawalQueryUseCase {
     }
 
     public long countClaimsInProgressOfBuyer(Long memberId) {
-        return deliveryClaimRepository.countByMemberIdAndStatusIn(memberId, CLAIM_IN_PROGRESS);
+        return deliveryClaimRepository.countByMemberIdAndStatusIn(memberId, ClaimStatus.inProgress());
     }
 
     public long countClaimsInProgressOfSeller(Long sellerId) {
-        return deliveryClaimRepository.countByDeliverySellerIdAndStatusIn(sellerId, CLAIM_IN_PROGRESS);
+        return deliveryClaimRepository.countByDeliverySellerIdAndStatusIn(sellerId, ClaimStatus.inProgress());
     }
 }
