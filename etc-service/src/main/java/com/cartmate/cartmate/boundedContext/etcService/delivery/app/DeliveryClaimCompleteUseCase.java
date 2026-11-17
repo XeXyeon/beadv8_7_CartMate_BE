@@ -44,6 +44,7 @@ public class DeliveryClaimCompleteUseCase {
                 claim.getDelivery().getSellerId(),
                 claim.getClaimType().name(),
                 claim.getReason().name(),
+                claim.getReason().isSellerFault(),
                 claim.getCompletedAt()
         ));
 
