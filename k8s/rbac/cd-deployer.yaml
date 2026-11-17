@@ -25,7 +25,9 @@
 #   current-context: cd
 #   EOF
 #   sudo chmod 600 /home/deploy/.kube/config
-# 확인: sudo -u deploy kubectl auth can-i --list -n cartmate
+# 서버의 kubectl(k3s 내장)은 KUBECONFIG가 없으면 관리자 설정(/etc/rancher/k3s/k3s.yaml)을 읽으므로 항상 직접 지정한다
+#   CD(cd.yaml)도 서버에서 KUBECONFIG=$HOME/.kube/config를 지정해 실행한다
+# 확인: sudo -u deploy env KUBECONFIG=/home/deploy/.kube/config kubectl auth can-i --list -n cartmate
 #
 # 토큰은 만료되지 않는다. 바꾸려면 cd-deployer-token Secret을 지우고 이 파일을 다시 적용한 뒤 kubeconfig를 다시 만든다
 apiVersion: v1
