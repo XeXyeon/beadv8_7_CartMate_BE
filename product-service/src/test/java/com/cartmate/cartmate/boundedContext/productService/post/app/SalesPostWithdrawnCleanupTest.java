@@ -210,7 +210,7 @@ class SalesPostWithdrawnCleanupTest {
 
     private void saveSeller(Long sellerId, Long memberId) {
         salesPostSellerRepository.save(new SalesPostSeller(sellerId, memberId, "INDIVIDUAL", null, null,
-                "010-0000-0000", null, null, null, "ACTIVE", LocalDateTime.now(), LocalDateTime.now()));
+                "ACTIVE", LocalDateTime.now(), LocalDateTime.now()));
     }
 
     private Long savePost(Long sellerId, SalesPostSaleStatus status, SalesPostUpdateStatus updateStatus) {
