@@ -63,9 +63,13 @@ public class SalesPostReindexUseCase {
     private String reindexLocked() {
         // 이 시점까지 쌓인 낡음 표시만 이번 재색인이 해결한다
         long staleSnapshot = indexHealth.snapshot();
+        // 지난 재색인이 남긴 색인 · 재색인 별칭을 먼저 치운다(쌓이지 않게, 재색인 별칭이 두 색인에 붙지 않게)
+        indexAdmin.cleanUpLeftovers();
         Optional<String> oldIndex = indexAdmin.currentIndex();
-        String newIndex = indexAdmin.createIndex();
+        String newIndex = indexAdmin.newIndexName();
         try {
+            // 만들다 타임아웃이 나도 아래에서 지운다
+            indexAdmin.createIndex(newIndex);
             // 채우는 동안 바뀐 판매글은 sync가 옛 색인과 새 색인 양쪽에 쓴다
             indexAdmin.markReindexing(newIndex);
             fill(newIndex);

@@ -109,6 +109,19 @@ class SalesPostReindexUseCaseTest {
     }
 
     @Test
+    void 재색인은_지난_재색인이_남긴_색인과_별칭을_치운다() throws IOException {
+        reindexUseCase.reindex();
+        indexAdmin.createIndex();                      // 어느 별칭도 가리키지 않는 색인(만들다 타임아웃 난 경우)
+        String stuck = indexAdmin.createIndex();
+        indexAdmin.markReindexing(stuck);              // 끝나지 못한 재색인
+
+        String next = reindexUseCase.reindex();
+
+        assertThat(client.indices().get(g -> g.index("sales-posts-*")).indices()).containsOnlyKeys(next);
+        assertThat(indexAdmin.reindexingIndex()).isEmpty();
+    }
+
+    @Test
     void 재색인이_끝나면_낡음_표시가_풀린다() {
         indexHealth.markStale();
 

@@ -13,16 +13,20 @@ import co.elastic.clients.elasticsearch.core.SearchResponse;
 import com.cartmate.cartmate.boundedContext.productService.search.domain.SalesPostSearchCondition;
 import com.cartmate.cartmate.boundedContext.productService.search.domain.SalesPostSearchHits;
 import com.cartmate.cartmate.boundedContext.productService.search.domain.SalesPostSearchSort;
+import co.elastic.clients.transport.rest5_client.Rest5ClientOptions;
+import co.elastic.clients.transport.rest5_client.low_level.RequestOptions;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.time.Duration;
 import java.util.List;
-import lombok.RequiredArgsConstructor;
+import org.apache.hc.client5.http.config.RequestConfig;
+import org.apache.hc.core5.util.Timeout;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 
 /** 판매글 검색 색인에서 조건에 맞는 판매글 id를 순서대로 가져온다. 응답 내용은 DB에서 채운다. */
 @Component
-@RequiredArgsConstructor
 public class SalesPostSearchClient {
 
     // 형태소(nori)로 맞추는 필드와 가중치
@@ -35,6 +39,28 @@ public class SalesPostSearchClient {
     private static final float BIGRAM_BOOST = 0.3f;
 
     private final ElasticsearchClient client;
+
+    public SalesPostSearchClient(ElasticsearchClient client,
+                                 @Value("${cartmate.search.timeout:2s}") Duration searchTimeout) {
+        this.client = client.withTransportOptions(searchOptions(client, searchTimeout));
+    }
+
+    // 검색은 사용자가 기다리므로 짧게 끊고 MySQL로 대신한다. 색인 관리 · 일괄 쓰기는 기본(30초)을 쓴다
+    static Rest5ClientOptions searchOptions(ElasticsearchClient client, Duration searchTimeout) {
+        Timeout timeout = Timeout.of(searchTimeout);
+        Rest5ClientOptions base = Rest5ClientOptions.of(client._transportOptions());
+        RequestOptions options = base.restClientRequestOptions().toBuilder()
+                .setRequestConfig(RequestConfig.custom()
+                        .setConnectionRequestTimeout(timeout)
+                        .setResponseTimeout(timeout)
+                        .build())
+                .build();
+        return new Rest5ClientOptions(options, base.keepResponseBodyOnException());
+    }
+
+    Rest5ClientOptions requestOptions() {
+        return (Rest5ClientOptions) client._transportOptions();
+    }
 
     public SalesPostSearchHits search(SalesPostSearchCondition condition, Pageable pageable) {
         try {
@@ -57,11 +83,12 @@ public class SalesPostSearchClient {
     private BoolQuery.Builder query(BoolQuery.Builder b, SalesPostSearchCondition condition) {
         if (condition.hasKeyword()) {
             String keyword = condition.keyword();
-            // 검색어의 조각이 모두 들어 있어야 걸린다(operator and). 둘 중 하나로 맞으면 된다
+            // 검색어의 조각이 모두 들어 있어야 걸리되, 조각마다 어느 필드에 있어도 된다(제목 "갤럭시" + 상품명 "이어폰").
+            // 형태소 · 두 글자 조각 둘 중 하나로 맞으면 된다
             b.should(sh -> sh.multiMatch(m -> m.query(keyword).fields(NORI_FIELDS)
-                            .type(TextQueryType.BestFields).operator(Operator.And)))
+                            .type(TextQueryType.CrossFields).operator(Operator.And)))
                     .should(sh -> sh.multiMatch(m -> m.query(keyword).fields(BIGRAM_FIELDS)
-                            .type(TextQueryType.BestFields).operator(Operator.And).boost(BIGRAM_BOOST)))
+                            .type(TextQueryType.CrossFields).operator(Operator.And).boost(BIGRAM_BOOST)))
                     .minimumShouldMatch("1");
         } else {
             b.must(m -> m.matchAll(all -> all));

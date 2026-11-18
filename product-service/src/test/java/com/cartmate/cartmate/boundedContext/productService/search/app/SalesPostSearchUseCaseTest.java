@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 
+import co.elastic.clients.elasticsearch._types.ElasticsearchException;
+import co.elastic.clients.elasticsearch._types.ErrorResponse;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPost;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostProduct;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostProductStatus;
@@ -88,7 +90,18 @@ class SalesPostSearchUseCaseTest {
 
         assertThat(page.content()).extracting(SelectSalesPostResponse::getId).containsExactly(newer, older);
         assertThat(fallbackCount("error")).isEqualTo(before + 1);
-        // 검색에서 ES 장애를 알아채도 복구 재색인 대상이 된다
+        // 닿지 않거나 느린 것은 색인이 변경을 놓쳤다는 뜻이 아니라 재색인하지 않는다
+        assertThat(indexHealth.isStale()).isFalse();
+    }
+
+    @Test
+    void 색인이_없어서_검색이_실패하면_낡음으로_표시한다() {
+        given(searchClient.search(any(), any())).willThrow(new ElasticsearchException("search",
+                ErrorResponse.of(r -> r.status(404).error(e -> e.type("index_not_found_exception").reason("no such index")))));
+        indexHealth.markFixed(indexHealth.snapshot());
+
+        search("이어폰");
+
         assertThat(indexHealth.isStale()).isTrue();
     }
 

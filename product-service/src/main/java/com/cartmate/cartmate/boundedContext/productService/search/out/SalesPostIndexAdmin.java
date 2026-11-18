@@ -11,6 +11,7 @@ import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -21,11 +22,39 @@ public class SalesPostIndexAdmin {
 
     private final ElasticsearchClient client;
 
+    public String newIndexName() {
+        return SalesPostIndexSchema.newIndexName();
+    }
+
     public String createIndex() {
-        String index = SalesPostIndexSchema.newIndexName();
+        String index = newIndexName();
+        createIndex(index);
+        return index;
+    }
+
+    /** 이름을 먼저 정해 두고 만든다. 만드는 중에 타임아웃이 나도 부른 쪽이 그 이름으로 지울 수 있다. */
+    public void createIndex(String index) {
         try (InputStream json = SalesPostIndexSchema.settingsAndMappings()) {
             client.indices().create(c -> c.index(index).withJson(json));
-            return index;
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    /**
+     * 지난 재색인이 타임아웃 등으로 남긴 것을 지운다. 검색 별칭이 가리키는 색인 말고 판매글 검색 색인은 모두 지운다
+     * (지우면 붙어 있던 재색인 별칭도 함께 사라진다). 재색인 락 안에서만 부른다.
+     */
+    public void cleanUpLeftovers() {
+        Optional<String> current = currentIndex();
+        allIndices().stream()
+                .filter(index -> current.filter(index::equals).isEmpty())
+                .forEach(this::deleteIndex);
+    }
+
+    private Set<String> allIndices() {
+        try {
+            return client.indices().get(g -> g.index(ALIAS + "-*")).indices().keySet();
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }

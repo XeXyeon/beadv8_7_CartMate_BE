@@ -1,4 +1,7 @@
 spring:
+  # 아무도 듣지 않는 주소. 개발 PC에 떠 있는 ES에 테스트 데이터가 들어가지 않게 한다(ES 테스트는 컨테이너 주소로 덮어쓴다)
+  elasticsearch:
+    uris: http://localhost:1
   datasource:
     url: jdbc:tc:mysql:8.4:///cartmatedb
     driver-class-name: org.testcontainers.jdbc.ContainerDatabaseDriver

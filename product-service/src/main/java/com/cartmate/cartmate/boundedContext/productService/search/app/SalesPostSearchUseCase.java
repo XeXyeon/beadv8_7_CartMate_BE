@@ -38,7 +38,8 @@ public class SalesPostSearchUseCase {
             String reason = isTimeout(e) ? "timeout" : "error";
             log.warn("판매글 검색 색인을 쓰지 못해 MySQL로 대신 검색합니다. reason={}", reason, e);
             meterRegistry.counter(FALLBACK_METRIC, "reason", reason).increment();
-            if (SalesPostIndexHealth.fixableByReindex(e)) {
+            // 검색이 느리거나 닿지 않는 것은 색인이 변경을 놓쳤다는 뜻이 아니다. 색인 · 별칭이 없을 때(404)만 재색인한다
+            if (e instanceof ElasticsearchException es && es.status() == 404) {
                 indexHealth.markStale();
             }
             return selectUseCase.selectForSearchFallback(condition, pageable);

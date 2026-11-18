@@ -133,6 +133,20 @@ class SalesPostSearchClientTest {
         assertThat(hits.postIds()).isEmpty();
     }
 
+    @Test
+    void 검색어_조각이_다른_필드에_있어도_찾는다() throws IOException {
+        save(doc(1L, "갤럭시 버즈 팝니다", "무선 이어폰"));
+
+        assertThat(search("갤럭시 이어폰").postIds()).containsExactly(1L);
+    }
+
+    @Test
+    void 검색_요청은_설정한_제한_시간_2초를_쓴다() {
+        var requestConfig = searchClient.requestOptions().restClientRequestOptions().getRequestConfig();
+
+        assertThat(requestConfig.getResponseTimeout().toMilliseconds()).isEqualTo(2_000L);
+    }
+
     private SalesPostSearchHits search(String keyword) {
         return searchClient.search(new SalesPostSearchCondition(keyword, null, null, null, null), PageRequest.of(0, 20));
     }
