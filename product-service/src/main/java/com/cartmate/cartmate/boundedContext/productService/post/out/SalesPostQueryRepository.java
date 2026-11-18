@@ -4,6 +4,7 @@ import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPost
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostSaleStatus;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostUpdateStatus;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.SelectSalesPostRequest;
+import com.cartmate.cartmate.boundedContext.productService.search.domain.SalesPostSearchCondition;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -44,4 +45,7 @@ public interface SalesPostQueryRepository {
     // countDelta: 작성 +1, 삭제 -1, 수정 0 / ratingDelta: 작성 +별점, 삭제 -별점, 수정 (새 별점 - 옛 별점)
     // 실행 전 flush, 실행 뒤 영속성 컨텍스트를 비운다
     int applyReviewSummary(Long postId, long countDelta, long ratingDelta);
+
+    // 검색 대체(검색 색인을 못 쓸 때): 판매 중 + 제목 포함 + 판매 중 상품의 카테고리 · 가격, 최신순
+    Page<SalesPost> selectForSearchFallback(SalesPostSearchCondition condition, Pageable pageable);
 }

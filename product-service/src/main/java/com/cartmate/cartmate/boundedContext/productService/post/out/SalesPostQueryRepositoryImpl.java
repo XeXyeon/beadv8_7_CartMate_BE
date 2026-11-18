@@ -1,11 +1,16 @@
 package com.cartmate.cartmate.boundedContext.productService.post.out;
 
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPost;
+import com.cartmate.cartmate.boundedContext.productService.post.domain.QSalesPostProduct;
+import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostProductStatus;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostSaleStatus;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostUpdateStatus;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.SelectSalesPostRequest;
+import com.cartmate.cartmate.boundedContext.productService.search.domain.SalesPostSearchCondition;
+import com.querydsl.core.types.Predicate;
 import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.core.types.dsl.NumberExpression;
+import com.querydsl.jpa.JPAExpressions;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
@@ -18,6 +23,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static com.cartmate.cartmate.boundedContext.productService.post.domain.QSalesPost.salesPost;
@@ -232,5 +238,46 @@ public class SalesPostQueryRepositoryImpl implements SalesPostQueryRepository {
                 .execute();
         em.clear();
         return (int) changed;
+    }
+
+    @Override
+    public Page<SalesPost> selectForSearchFallback(SalesPostSearchCondition condition, Pageable pageable) {
+        Predicate[] where = {
+                onSale(),
+                titleContains(condition.keyword()),
+                // 검색 색인처럼, 살 수 있는 상품이 없는 글은 빼고 카테고리 · 가격은 서로 다른 상품이 맞아도 된다
+                onSaleProductExists("anyProduct", product -> null),
+                condition.categoryIds().isEmpty() ? null
+                        : onSaleProductExists("categoryProduct", product -> product.categoryId.in(condition.categoryIds())),
+                condition.minPrice() == null && condition.maxPrice() == null ? null
+                        : onSaleProductExists("priceProduct", product -> priceBetween(product, condition.minPrice(), condition.maxPrice()))
+        };
+        List<SalesPost> content = queryFactory
+                .selectFrom(salesPost)
+                .where(where)
+                .orderBy(salesPost.id.desc())
+                .offset(pageable.getOffset())
+                .limit(pageable.getPageSize())
+                .fetch();
+        return PageableExecutionUtils.getPage(content, pageable, () -> {
+            Long total = queryFactory.select(salesPost.count()).from(salesPost).where(where).fetchOne();
+            return total == null ? 0L : total;
+        });
+    }
+
+    private BooleanExpression onSaleProductExists(String alias, Function<QSalesPostProduct, BooleanExpression> condition) {
+        QSalesPostProduct product = new QSalesPostProduct(alias);
+        return JPAExpressions.selectOne()
+                .from(product)
+                .where(product.salesPost.eq(salesPost),
+                        product.status.eq(SalesPostProductStatus.ON_SALE),
+                        condition.apply(product))
+                .exists();
+    }
+
+    private BooleanExpression priceBetween(QSalesPostProduct product, Long minPrice, Long maxPrice) {
+        BooleanExpression min = minPrice == null ? null : product.basePrice.goe(minPrice);
+        BooleanExpression max = maxPrice == null ? null : product.basePrice.loe(maxPrice);
+        return min == null ? max : min.and(max);
     }
 }
