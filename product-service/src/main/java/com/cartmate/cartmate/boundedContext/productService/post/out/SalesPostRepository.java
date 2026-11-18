@@ -4,6 +4,7 @@ import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPost
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostSaleStatus;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostUpdateStatus;
 import org.springframework.data.domain.Limit;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.LocalDateTime;
@@ -25,4 +26,8 @@ public interface SalesPostRepository extends JpaRepository<SalesPost, Long>, Sal
 
     List<SalesPost> findByStatusAndCreateDateBeforeOrderByIdAsc(
             SalesPostSaleStatus status, LocalDateTime before, Limit limit);
+
+    // 검색 재색인: 판매글마다 상품을 따로 읽지 않도록 상품까지 한 번에 가져온다
+    @EntityGraph(attributePaths = "productList")
+    List<SalesPost> findWithProductsByIdIn(Collection<Long> ids);
 }

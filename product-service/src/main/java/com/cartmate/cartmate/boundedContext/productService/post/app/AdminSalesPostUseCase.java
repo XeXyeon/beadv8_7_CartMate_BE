@@ -14,6 +14,8 @@ import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPost
 import com.cartmate.cartmate.boundedContext.productService.product.out.ImageStorage;
 import com.cartmate.cartmate.boundedContext.productService.code.SalesPostErrorCode;
 import com.cartmate.cartmate.global.exception.ServiceException;
+import com.cartmate.cartmate.shared.post.event.SalesPostChangedEvent;
+import com.cartmate.cartmate.global.event.DomainEventPublisher;
 import com.cartmate.cartmate.global.page.PageResponse;
 import com.cartmate.cartmate.shared.post.event.SalesPostHideType;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +35,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AdminSalesPostUseCase {
     private final SalesPostRepository salesPostRepository;
+    private final DomainEventPublisher domainEventPublisher;
     private final SalesPostSellerRepository salesPostSellerRepository;
     private final SalesPostSanctionRepository salesPostSanctionRepository;
     private final SalesPostApiClient salesPostApiClient;
@@ -100,6 +103,7 @@ public class AdminSalesPostUseCase {
         String trimmed = reason.trim();
         salesPostSanctionRepository.save(new SalesPostSanction(postId, adminId, SalesPostSanctionAction.SUSPEND, trimmed));
         salesPostHideUseCase.publishHidden(post, SalesPostHideType.ADMIN_SUSPENDED, adminId, trimmed);
+        domainEventPublisher.publish(new SalesPostChangedEvent(postId));
     }
 
     // 숨김 해제. 숨김 중 취소된 거래는 되돌리지 않는다.
@@ -112,6 +116,7 @@ public class AdminSalesPostUseCase {
 
         post.resumeByAdmin();
         salesPostSanctionRepository.save(new SalesPostSanction(postId, adminId, SalesPostSanctionAction.RESUME, reason.trim()));
+        domainEventPublisher.publish(new SalesPostChangedEvent(postId));
     }
 
     private SalesPost findVisiblePost(Long postId) {

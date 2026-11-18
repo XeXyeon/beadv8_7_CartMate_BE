@@ -13,6 +13,8 @@ import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPost
 import com.cartmate.cartmate.boundedContext.productService.code.ProductErrorCode;
 import com.cartmate.cartmate.boundedContext.productService.code.SalesPostErrorCode;
 import com.cartmate.cartmate.global.exception.ServiceException;
+import com.cartmate.cartmate.shared.post.event.SalesPostChangedEvent;
+import com.cartmate.cartmate.global.event.DomainEventPublisher;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.SyncProductImage;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.SyncProductOption;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +27,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class SalesPostSyncProductUseCase {
     private final SalesPostRepository salesPostRepository;
+    private final DomainEventPublisher domainEventPublisher;
     private final SalesPostProductRepository salesPostProductRepository;
     private final SalesPostProductImageRepository salesPostProductImageRepository;
     private final SalesPostProductOptionRepository salesPostProductOptionRepository;
@@ -72,6 +75,7 @@ public class SalesPostSyncProductUseCase {
                 optionList.forEach(option -> syncOption(option, target));
             }
         });
+        domainEventPublisher.publish(new SalesPostChangedEvent(salesPost.getId()));
     }
 
     // 같은 ID의 사진 복제본이 있으면 값을 맞추고(빠진 사진은 DELETED로 온다), 없으면 새로 만든다

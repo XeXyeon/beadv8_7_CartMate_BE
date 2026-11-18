@@ -32,8 +32,19 @@ public class FakeOrderPaymentClient implements OrderPaymentClient {
         this.chargeFailure = null;
     }
 
+    private final java.util.concurrent.atomic.AtomicReference<Runnable> onNextCharge = new java.util.concurrent.atomic.AtomicReference<>();
+
+    // 다음 차감 한 번이 시작될 때 실행한다(차감 도중에 다른 요청을 끼워 넣는 동시성 테스트용)
+    public void onNextCharge(Runnable hook) {
+        onNextCharge.set(hook);
+    }
+
     @Override
     public PaymentResult charge(PaymentOrderType orderType, Long orderId, Long memberId, long amount) {
+        Runnable hook = onNextCharge.getAndSet(null);
+        if (hook != null) {
+            hook.run();
+        }
         RuntimeException failure = chargeFailure;
         if (failure != null) {
             throw failure;

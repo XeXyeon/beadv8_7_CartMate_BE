@@ -6,10 +6,12 @@ import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostRep
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostSellerTrustRepository;
 import com.cartmate.cartmate.boundedContext.productService.product.out.ImageStorage;
 import com.cartmate.cartmate.boundedContext.productService.code.SalesPostErrorCode;
+import com.cartmate.cartmate.boundedContext.productService.search.domain.SalesPostSearchCondition;
 import com.cartmate.cartmate.global.exception.ServiceException;
 import com.cartmate.cartmate.global.page.PageResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,11 +33,34 @@ public class SalesPostSelectUseCase {
     @Transactional(readOnly = true)
     public PageResponse<SelectSalesPostResponse> selectSalesPostAll(SelectSalesPostRequest request, Pageable pageable) {
         Page<SalesPost> posts = salesPostRepository.selectSalesPostAll(request, pageable);
-        Map<Long, SalesPostSellerTrust> trustBySeller = findTrustBySeller(posts.getContent());
+        return PageResponse.of(new PageImpl<>(toResponses(posts.getContent()), pageable, posts.getTotalElements()));
+    }
 
-        Page<SelectSalesPostResponse> page = posts.map(post ->
-                toSelectResultDto(post, trustBySeller.get(post.getSellerId())));
-        return PageResponse.of(page);
+    // 검색: 검색 색인이 정한 순서대로 판매글을 읽는다. 색인 반영 전에 판매 중이 아니게 된 글은 뺀다
+    @Transactional(readOnly = true)
+    public List<SelectSalesPostResponse> selectOnSaleInOrder(List<Long> postIds) {
+        Map<Long, SalesPost> byId = salesPostRepository.findWithProductsByIdIn(postIds).stream()
+                .collect(Collectors.toMap(SalesPost::getId, Function.identity()));
+        List<SalesPost> posts = postIds.stream()
+                .map(byId::get)
+                .filter(post -> post != null && post.getStatus() == SalesPostSaleStatus.ON_SALE)
+                .toList();
+        return toResponses(posts);
+    }
+
+    // 검색 색인을 쓸 수 없을 때의 대체 검색. 제목만 보고 최신순이다
+    @Transactional(readOnly = true)
+    public PageResponse<SelectSalesPostResponse> selectForSearchFallback(SalesPostSearchCondition condition, Pageable pageable) {
+        Page<SalesPost> posts = salesPostRepository.selectForSearchFallback(condition, pageable);
+        return PageResponse.of(new PageImpl<>(toResponses(posts.getContent()), pageable, posts.getTotalElements()));
+    }
+
+    // 판매자 신뢰도를 한 번에 조회해 응답으로 바꾼다. 상품 · 사진을 읽으므로 트랜잭션 안에서 불러야 한다
+    private List<SelectSalesPostResponse> toResponses(List<SalesPost> posts) {
+        Map<Long, SalesPostSellerTrust> trustBySeller = findTrustBySeller(posts);
+        return posts.stream()
+                .map(post -> toSelectResultDto(post, trustBySeller.get(post.getSellerId())))
+                .toList();
     }
 
     // 판매자 본인의 판매글 목록(판매글 관리 화면). 삭제된 글만 빼고 판매 중지 · 운영 중지 · 등록 중까지 모두 보여준다

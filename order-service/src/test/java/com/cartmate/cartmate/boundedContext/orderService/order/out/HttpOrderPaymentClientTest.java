@@ -71,6 +71,19 @@ class HttpOrderPaymentClientTest {
         then(paymentServerApiClient).should(never()).get(anyString(), any(), any(), any(), any());
     }
 
+    @Test
+    @DisplayName("같은 키의 차감이 진행 중이라는 응답(PAYMENT_IN_PROGRESS)은 실패가 아니라 주문 쪽 '결제 처리 중' 오류로 바꿔 던진다")
+    void chargeInProgressBecomesOrderPaymentInProgress() {
+        given(paymentServerApiClient.post(eq(PATH), any(), any()))
+                .willThrow(new ServiceException("409-PAYMENT_IN_PROGRESS", "이미 처리 중인 결제입니다."));
+
+        assertThatThrownBy(() -> paymentClient.charge(TYPE, ORDER_ID, MEMBER_ID, AMOUNT))
+                .isInstanceOf(ServiceException.class)
+                .extracting(e -> ((ServiceException) e).getRsData().getResultCode())
+                .isEqualTo(com.cartmate.cartmate.boundedContext.orderService.order.exception.OrderErrorCode
+                        .ORDER_PAYMENT_IN_PROGRESS.resultCode());
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"PAID", "PARTIALLY_REFUNDED"})
     @DisplayName("차감 응답을 못 받았어도 결제 서버 재조회에서 결제됨으로 확인되면 그 결제를 돌려준다")

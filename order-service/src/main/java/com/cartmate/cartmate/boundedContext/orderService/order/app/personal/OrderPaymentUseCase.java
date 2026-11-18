@@ -26,6 +26,7 @@ import com.cartmate.cartmate.shared.payment.dto.PaymentResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionOperations;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -44,6 +45,8 @@ class OrderPaymentUseCase {
     private final OrderPaymentClient orderPaymentClient;
     private final OrderCouponClient orderCouponClient;
     private final OrderInventoryClient orderInventoryClient;
+    // pay()의 짧은 트랜잭션들(잠금+선점 / 반영 / 표시 해제). pay()는 트랜잭션 밖에서 불려 각각 새 트랜잭션이 된다
+    private final TransactionOperations transaction;
 
     OrderPaymentInfo getPaymentInfo(Long orderId, Long memberId, LocalDateTime now) {
         Order order = orderRepository.findById(orderId)
@@ -152,33 +155,72 @@ class OrderPaymentUseCase {
         return pay(orderId, memberId, null, now);
     }
 
+    /**
+     * 개인 주문 결제. 트랜잭션 밖에서 부른다 — 다른 서버 호출(상품·쿠폰·재고·결제) 동안 DB 커넥션을 잡지 않는다.
+     *
+     * <p>같은 주문의 결제는 한 번에 하나만 진행한다: 주문 행을 잠그고 결제 진행 표시를 건 요청만 선점·차감·반영하고,
+     * 표시가 살아 있는 동안 들어온 요청은 409(ORDER_PAYMENT_IN_PROGRESS)로 바로 거절한다.
+     * 그래서 실패한 요청이 진행 중인 다른 요청의 재고 선점을 푸는 일이 없다(선점은 주문 단위라 누가 잡았는지 구분하지 않는다).
+     */
     PaymentResult pay(Long orderId, Long memberId, Long memberCouponId, LocalDateTime now) {
-        var existing = orderPaymentClient.findPayment(PaymentOrderType.INDIVIDUAL_GROUP, orderId, memberId);
-        if (existing.isPresent() && existing.get().isPaid()) {
-            return applyOrCompensate(orderId, memberId, existing.get(), memberCouponId);
+        var existing = orderPaymentClient.findPayment(PaymentOrderType.INDIVIDUAL_GROUP, orderId, memberId)
+                .filter(PaymentResult::isPaid);
+        if (existing.isPresent()) {
+            // 이미 차감됨(응답을 못 받았던 재시도 등): 반영만 한다
+            LocalDateTime lockedUntil = transaction.execute(status -> lockPayment(orderId, memberId, now, false));
+            return applyOrCompensate(orderId, memberId, existing.get(), memberCouponId, lockedUntil);
         }
-        OrderPaymentInfo info = getPaymentInfo(orderId, memberId, now);
-        if (!info.payable()) {
+        // 잠그기 전에 확인 · 할인 계산 (주문 상품은 결제 대기 중 바뀌지 않는다)
+        Order order = orderRepository.findWithItemsById(orderId)
+                .orElseThrow(() -> new ServiceException(OrderErrorCode.ORDER_NOT_FOUND));
+        orderSupport.validateBuyer(order, memberId);
+        if (!order.canAcceptPayment(now) || !groupPurchaseAcceptsPayment(order, now, false)) {
             throw new ServiceException(OrderErrorCode.ORDER_NOT_PAYABLE);
         }
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new ServiceException(OrderErrorCode.ORDER_NOT_FOUND));
         validatePurchasable(order.getItems().stream().map(OrderItem::getInventoryId).toList());
         long discount = memberCouponId == null ? 0
                 : orderCouponClient.quote(memberId, memberCouponId, orderId, order.couponTarget()).discountAmount();
-        // 결제 직전 재고 선점. 부족하면 ORDER_OUT_OF_STOCK(결제 안 함, 주문 취소는 호출한 쪽이 따로 한다)
-        reserveStock(orderId, order);
+        // 결제 진행 표시 + 재고 선점을 한 트랜잭션으로 커밋. 부족하면 ORDER_OUT_OF_STOCK(표시 없이 롤백, 주문 취소는 호출한 쪽이 따로 한다)
+        LocalDateTime lockedUntil = transaction.execute(status -> lockPayment(orderId, memberId, now, true));
         PaymentResult payment;
         try {
             payment = orderPaymentClient.charge(
-                    PaymentOrderType.INDIVIDUAL_GROUP, orderId, memberId, info.amount() - discount);
+                    PaymentOrderType.INDIVIDUAL_GROUP, orderId, memberId, order.getTotalAmount() - discount);
         } catch (InternalServerUnavailableException e) {
-            throw e;   // 결제됐는지 모른다 → 선점을 풀지 않는다(재시도 · 결제 기한 취소가 정리)
+            // 결제됐는지 모른다 → 선점도 표시도 그대로(표시는 만료, 선점은 재시도 · 결제 기한 취소가 정리)
+            throw e;
         } catch (ServiceException e) {
-            releaseStock(orderId);   // 결제 실패가 확실 → 선점 해제
+            // 같은 키의 차감이 아직 진행 중이면 결과를 모르는 것과 같다 → 그대로 둔다
+            if (!OrderErrorCode.ORDER_PAYMENT_IN_PROGRESS.resultCode().equals(e.getRsData().getResultCode())) {
+                releaseStock(orderId);   // 결제 실패가 확실 → 선점 해제 (표시를 쥔 요청만 여기 온다)
+                unlockPayment(orderId, lockedUntil);
+            }
             throw e;
         }
-        return applyOrCompensate(orderId, memberId, payment, memberCouponId);
+        return applyOrCompensate(orderId, memberId, payment, memberCouponId, lockedUntil);
+    }
+
+    // 주문 행을 잠그고 결제 진행 표시를 건다. reserve면 결제 가능 여부를 다시 보고 재고도 선점한다(행을 잠근 채라 같은 주문 선점이 겹치지 않는다)
+    private LocalDateTime lockPayment(Long orderId, Long memberId, LocalDateTime now, boolean reserve) {
+        Order order = orderSupport.getOrderForUpdate(orderId);
+        orderSupport.validateBuyer(order, memberId);
+        if (reserve && !order.canAcceptPayment(now)) {
+            throw new ServiceException(OrderErrorCode.ORDER_NOT_PAYABLE);
+        }
+        LocalDateTime lockedUntil = order.lockPayment(now);
+        if (reserve) {
+            reserveStock(orderId, order);
+        }
+        return lockedUntil;
+    }
+
+    // 표시를 푸는 실패가 원래 오류를 가리지 않게 로그만 남긴다(표시는 만료되면 저절로 풀린다)
+    private void unlockPayment(Long orderId, LocalDateTime lockedUntil) {
+        try {
+            transaction.executeWithoutResult(status -> orderRepository.unlockPayment(orderId, lockedUntil));
+        } catch (RuntimeException e) {
+            log.warn("결제 진행 표시 해제 실패 — {} 뒤 저절로 풀린다: 주문 #{}", Order.PAYMENT_LOCK_PERIOD, orderId, e);
+        }
     }
 
     private void reserveStock(Long orderId, Order order) {
@@ -197,17 +239,23 @@ class OrderPaymentUseCase {
         }
     }
 
-    private PaymentResult applyOrCompensate(Long orderId, Long memberId, PaymentResult payment, Long memberCouponId) {
+    // 결제 완료로 바꾸면 진행 표시도 같이 지워진다(markPaid). 실패하면 정리한 뒤 표시를 푼다:
+    // 차감은 이미 확정이라 다음 요청은 같은 결제를 받아 반영만 하므로 기다리게 할 이유가 없다
+    private PaymentResult applyOrCompensate(Long orderId, Long memberId, PaymentResult payment, Long memberCouponId,
+                                            LocalDateTime lockedUntil) {
         try {
-            applyPayment(orderId, memberId, payment.paymentId(), payment.paidAt(), memberCouponId, payment.amount());
+            transaction.executeWithoutResult(status -> applyPayment(
+                    orderId, memberId, payment.paymentId(), payment.paidAt(), memberCouponId, payment.amount()));
             return payment;
         } catch (InternalServerUnavailableException e) {
             releaseCoupon(orderId, memberId, memberCouponId);
+            unlockPayment(orderId, lockedUntil);
             throw e;
         } catch (ServiceException e) {
             orderPaymentClient.compensateCharge(PaymentOrderType.INDIVIDUAL_GROUP, orderId, memberId);
             releaseStock(orderId);
             releaseCoupon(orderId, memberId, memberCouponId);
+            unlockPayment(orderId, lockedUntil);
             throw e;
         }
     }

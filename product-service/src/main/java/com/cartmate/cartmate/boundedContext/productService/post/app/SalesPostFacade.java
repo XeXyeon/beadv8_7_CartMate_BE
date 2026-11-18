@@ -6,6 +6,7 @@ import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostApi
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostMemberClient;
 import com.cartmate.cartmate.boundedContext.productService.code.SalesPostErrorCode;
 import com.cartmate.cartmate.global.exception.ServiceException;
+import com.cartmate.cartmate.shared.post.event.SalesPostChangedEvent;
 import com.cartmate.cartmate.global.security.SecurityUser;
 import com.cartmate.cartmate.shared.delivery.PurchaseType;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostApiClient.ProductRequestRejectedException;
@@ -186,6 +187,7 @@ public class SalesPostFacade {
         }
         salesPostSyncProductUseCase.deleteProductByUser(event.productId());
         salesPostHideUseCase.publishProductDeleted(event.salesPostId(), event.productId());
+        domainEventPublisher.publish(new SalesPostChangedEvent(event.salesPostId()));
     }
 
     public void updateSalesPostByUser(UpdateSalesPostRequest request, List<MultipartFile> images) {
