@@ -15,11 +15,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionalEventListener;
 
-import static org.springframework.transaction.annotation.Propagation.REQUIRES_NEW;
-import static org.springframework.transaction.event.TransactionPhase.AFTER_COMMIT;
 import static org.springframework.transaction.event.TransactionPhase.BEFORE_COMMIT;
 
 @Slf4j
@@ -28,8 +25,8 @@ import static org.springframework.transaction.event.TransactionPhase.BEFORE_COMM
 public class SalesPostEventListener {
     private final SalesPostFacade salesPostFacade;
 
-    @TransactionalEventListener(phase = AFTER_COMMIT)
-    @Transactional(propagation = REQUIRES_NEW)
+    // 회원 서비스의 판매자 등록 (Kafka → Inbox). Inbox 트랜잭션 안에서 처리 → 실패하면 롤백되고 다시 받는다. 멱등(있으면 갱신)
+    @TransactionalEventListener(phase = BEFORE_COMMIT, fallbackExecution = true)
     public void handle(SellerRegisteredEvent event) {
         salesPostFacade.syncSeller(event);
     }
@@ -48,9 +45,9 @@ public class SalesPostEventListener {
         }
     }
 
-    // 신뢰도 점수가 커밋된 뒤 판매글에 보여줄 판매자 신뢰도를 복제한다. 복제가 실패해도 점수 계산은 롤백되지 않는다.
-    @TransactionalEventListener(phase = AFTER_COMMIT)
-    @Transactional(propagation = REQUIRES_NEW)
+    // 기타 서비스의 신뢰도 변경 (Kafka → Inbox). 판매글에 보여줄 판매자 신뢰도를 복제한다.
+    // Inbox 트랜잭션 안에서 처리 → 실패하면 다시 받는다. 늦게 온 이전 점수는 calculatedAt 비교로 무시한다(멱등).
+    @TransactionalEventListener(phase = BEFORE_COMMIT, fallbackExecution = true)
     public void handle(SellerTrustScoreChangedEvent event) {
         salesPostFacade.syncSellerTrust(event);
     }

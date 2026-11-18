@@ -1,15 +1,16 @@
 package com.cartmate.cartmate.shared.post.event;
 
+import com.cartmate.cartmate.global.event.DomainEvent;
+
 import java.time.LocalDateTime;
 import java.util.List;
 
 /**
  * 판매글이 판매 중지·숨김·삭제되어 진행 중 거래를 정리해야 할 때 발행한다.
  *
- * <p>판매글 상태 변경이 커밋된 뒤에 받는다. 받는 쪽은
- * {@code @TransactionalEventListener(phase = AFTER_COMMIT)} + {@code @Transactional(propagation = REQUIRES_NEW)}로,
- * 한 모듈의 처리가 실패해도 숨김 자체나 다른 모듈 처리가 롤백되지 않게 한다.
- * 같은 이벤트가 두 번 와도 결과가 같아야 한다(멱등). Kafka 전환 시 이 클래스가 메시지 스키마가 된다.
+ * <p>판매글 상태 변경과 같은 트랜잭션에서 Outbox에 저장한다 (토픽 cartmate.post.sales-post-hidden).
+ * 다른 서비스는 Kafka → Inbox 트랜잭션 안에서 받아, 처리가 실패하면 롤백되고 다시 받는다.
+ * 같은 이벤트가 두 번 와도 결과가 같아야 한다(멱등).
  *
  * <ul>
  *   <li>cart: 모집 중 공동구매에서 productIds 상품 제외, 남은 상품이 없으면 공동구매 취소</li>
@@ -29,5 +30,15 @@ public record SalesPostHiddenEvent(
         Long actorId,
         String reason,
         LocalDateTime hiddenAt
-) {
+) implements DomainEvent {
+
+    @Override
+    public String aggregateType() {
+        return "SalesPost";
+    }
+
+    @Override
+    public String aggregateId() {
+        return String.valueOf(postId);
+    }
 }

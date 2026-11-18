@@ -29,7 +29,9 @@ public class OrderPostEventListener {
     private final SharedGroupOrderFacade sharedGroupOrderFacade;
     private final SalesStopCancelFacade salesStopCancelFacade;
 
-    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
+    // 상품 서비스의 판매글 숨김 (Outbox → Kafka → Inbox 트랜잭션 안). 실패하면 롤백되고 Inbox가 다시 처리한다.
+    // 대상 조회가 상태 조건(결제 대기·결제 완료·결제 중·확정)이라 같은 이벤트가 다시 와도 이미 취소된 주문은 건너뛴다(멱등).
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT, fallbackExecution = true)
     public void handle(SalesPostHiddenEvent event) {
         List<Long> productIds = event.productIds();
         if (productIds == null || productIds.isEmpty()) {

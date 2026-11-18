@@ -4,6 +4,7 @@ import com.cartmate.cartmate.global.kafka.InboundEventBinding;
 import com.cartmate.cartmate.global.outbox.OutboxTopics;
 import com.cartmate.cartmate.shared.delivery.event.DeliveryConfirmedEvent;
 import com.cartmate.cartmate.shared.member.event.MemberSignedUpEvent;
+import com.cartmate.cartmate.shared.member.event.SellerRegisteredEvent;
 import com.cartmate.cartmate.shared.order.event.OrderCanceledEvent;
 import com.cartmate.cartmate.shared.order.event.OrderClaimRefundRequestedEvent;
 import com.cartmate.cartmate.shared.order.event.OrderSellerItemsCanceledEvent;
@@ -19,7 +20,7 @@ import org.springframework.context.annotation.Configuration;
  * PayoutEventListener, WalletEventListener)가 받는다.
  *
  * <p>토픽 이름은 OutboxTopics로 이벤트 클래스에서 만든다 (보내는 쪽과 같은 규칙이라 오타로 어긋나지 않는다).
- * 판매자 등록은 보내는 쪽이 Outbox로 바뀌면 여기에 추가한다.
+ * 판매자 등록(SellerRegisteredEvent)은 PayoutEventListener가 받아 정산 지급 대상 판매자를 복제한다.
  */
 @Configuration
 @ConditionalOnProperty(name = "cartmate.kafka.enabled", havingValue = "true")
@@ -58,6 +59,12 @@ public class PaymentServiceKafkaConfig {
     @Bean
     public InboundEventBinding memberSignedUpBinding() {
         return binding(MemberSignedUpEvent.class);
+    }
+
+    // 정산 지급 대상 판매자 복제 (PayoutEventListener → PayoutSellerRegisterUseCase, 이미 있으면 건너뜀)
+    @Bean
+    public InboundEventBinding sellerRegisteredBinding() {
+        return binding(SellerRegisteredEvent.class);
     }
 
     private static InboundEventBinding binding(Class<?> eventType) {

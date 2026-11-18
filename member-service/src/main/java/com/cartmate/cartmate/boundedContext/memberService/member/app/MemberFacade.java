@@ -12,6 +12,7 @@ import com.cartmate.cartmate.shared.member.dto.MemberDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -39,6 +40,7 @@ public class MemberFacade {
     private final MemberAddressUseCase memberAddressUseCase;
     private final AdminDashboardUseCase adminDashboardUseCase;
     private final MemberWithdrawalUseCase memberWithdrawalUseCase;
+    private final TransactionTemplate transactionTemplate;
 
 
     @Transactional
@@ -230,6 +232,25 @@ public class MemberFacade {
         return memberSellerUseCase.register(memberId, request);
     }
 
+    private static final int SELLER_REPUBLISH_PAGE_SIZE = 500;
+
+    // 모든 판매자의 등록 이벤트를 다시 발행한다 (운영 백필, 내부 API). 한 트랜잭션에 너무 많이 넣지 않게 페이지마다 커밋한다.
+    // 중간에 실패해도 받는 쪽이 멱등이라 처음부터 다시 실행하면 된다. 반환: 발행한 건수
+    public int republishSellerRegisteredEvents() {
+        int total = 0;
+        Long afterId = 0L;
+        while (true) {
+            Long cursor = afterId;
+            MemberSellerUseCase.RepublishPage page = transactionTemplate.execute(
+                    status -> memberSellerUseCase.republishRegistered(cursor, SELLER_REPUBLISH_PAGE_SIZE));
+            total += page.count();
+            if (page.count() < SELLER_REPUBLISH_PAGE_SIZE) {
+                return total;
+            }
+            afterId = page.lastId();
+        }
+    }
+
     @Transactional(readOnly = true)
     public List<MemberAddressResponse> getAddresses(Long memberId) {
         return memberAddressUseCase.list(memberId);
@@ -261,23 +282,30 @@ public class MemberFacade {
     }
 
     // ===== 회원 탈퇴 =====
-    @Transactional(readOnly = true)
+    // 진행 중 거래 확인은 다른 서비스 HTTP라 트랜잭션 밖에서 한다 (그동안 DB 연결을 잡지 않는다).
+    // 상태 변경 · 이벤트 발행 · 새 토큰 발급만 짧은 트랜잭션으로 묶는다.
     public WithdrawalCheckResponse checkWithdrawal(Long memberId) {
         return memberWithdrawalUseCase.check(memberId);
     }
 
     // 탈퇴 신청·취소 뒤 상태(탈퇴 대기 표시 wp)가 반영된 새 Access Token을 함께 준다 (다른 서비스 필터는 토큰만 본다)
     // amr: 지금 토큰의 인증 수단 (새 토큰이 이어 받음)
-    @Transactional
     public WithdrawalResult requestWithdrawal(Long memberId, String password, List<String> amr) {
-        WithdrawalCheckResponse check = memberWithdrawalUseCase.request(memberId, password);
-        return new WithdrawalResult(check, reissueAccessToken(memberId, amr));
+        memberWithdrawalUseCase.ensureCanRequest(memberId, password);
+        LocalDateTime now = LocalDateTime.now();
+        String accessToken = transactionTemplate.execute(status -> {
+            memberWithdrawalUseCase.request(memberId, now);
+            return reissueAccessToken(memberId, amr);
+        });
+        return new WithdrawalResult(memberWithdrawalUseCase.check(memberId), accessToken);
     }
 
-    @Transactional
     public WithdrawalResult cancelWithdrawal(Long memberId, List<String> amr) {
-        WithdrawalCheckResponse check = memberWithdrawalUseCase.cancel(memberId);
-        return new WithdrawalResult(check, reissueAccessToken(memberId, amr));
+        String accessToken = transactionTemplate.execute(status -> {
+            memberWithdrawalUseCase.cancel(memberId);
+            return reissueAccessToken(memberId, amr);
+        });
+        return new WithdrawalResult(memberWithdrawalUseCase.check(memberId), accessToken);
     }
 
     public record WithdrawalResult(WithdrawalCheckResponse check, String accessToken) {
