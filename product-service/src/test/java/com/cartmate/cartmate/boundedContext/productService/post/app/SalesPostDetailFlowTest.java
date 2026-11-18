@@ -9,7 +9,6 @@ import com.cartmate.cartmate.boundedContext.productService.post.dto.SelectSalesP
 import com.cartmate.cartmate.boundedContext.productService.post.dto.SelectSalesPostOptionGroup;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.SelectSalesPostProduct;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.SelectSalesPostRequest;
-import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostApiClient;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductImageRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductOptionRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductRepository;
@@ -18,22 +17,14 @@ import com.cartmate.cartmate.boundedContext.productService.product.app.TestImage
 import com.cartmate.cartmate.boundedContext.productService.product.out.FakeImageStorage;
 import com.cartmate.cartmate.boundedContext.productService.product.out.ProductImageRepository;
 import com.cartmate.cartmate.boundedContext.productService.product.out.ProductRepository;
-import com.cartmate.cartmate.support.ProductServiceRedisContainer;
+import com.cartmate.cartmate.support.ProductServiceTestSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.cache.CacheManager;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.net.ServerSocket;
 import java.util.List;
 import java.util.Objects;
 
@@ -49,32 +40,13 @@ import static org.mockito.Mockito.verify;
  * 판매글 상세: 복제본(판매글 · 상품 · 사진)에 상품 서버의 선택 목록 · 재고를 붙인다. 재고 부분은 Redis에 2초 캐시한다.
  * post → product HTTP 호출이 실제로 일어나도록 웹 서버를 빈 포트로 띄우고, 캐시용 Redis 컨테이너를 쓴다.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT,
-        properties = "cartmate.scheduling.enabled=false")
-@ActiveProfiles("test")
-class SalesPostDetailFlowTest {
-
-    private static final int PORT;
-
-    static {
-        ProductServiceRedisContainer.start();   // Redis 컨테이너를 먼저 띄운 뒤 빈 포트를 고른다(포트 충돌 방지)
-        PORT = freePort();
-    }
+class SalesPostDetailFlowTest extends ProductServiceTestSupport {
 
     private static final Long SELLER_ID = 7L;
     private static final Long BASE_PRICE = 189000L;
 
-    @DynamicPropertySource
-    static void serverProductUrlAndRedis(DynamicPropertyRegistry registry) {
-        registry.add("server.port", () -> PORT);
-        registry.add("product.global.internalUrl", () -> "http://localhost:" + PORT);
-        ProductServiceRedisContainer.register(registry);
-    }
-
     @Autowired
     SalesPostFacade salesPostFacade;
-    @MockitoSpyBean
-    SalesPostApiClient salesPostApiClient;
     @Autowired
     CacheManager cacheManager;
 
@@ -184,11 +156,4 @@ class SalesPostDetailFlowTest {
                 .orElseThrow();
     }
 
-    private static int freePort() {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
 }

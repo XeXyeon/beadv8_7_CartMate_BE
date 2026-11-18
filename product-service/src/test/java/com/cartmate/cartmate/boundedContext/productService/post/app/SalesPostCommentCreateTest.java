@@ -9,7 +9,6 @@ import com.cartmate.cartmate.boundedContext.productService.post.dto.CreateSalesP
 import com.cartmate.cartmate.boundedContext.productService.post.dto.CreateSalesPostReplyRequest;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostCommentHistoryRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostCommentRepository;
-import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostMemberClient;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductImageRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductOptionRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductRepository;
@@ -17,6 +16,7 @@ import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostRep
 import com.cartmate.cartmate.global.exception.ErrorCode;
 import com.cartmate.cartmate.global.exception.ServiceException;
 import com.cartmate.cartmate.global.http.InternalApiClient.InternalServerUnavailableException;
+import com.cartmate.cartmate.support.ProductServiceTestSupport;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -24,9 +24,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.time.LocalDateTime;
 
@@ -41,9 +38,7 @@ import static org.mockito.Mockito.verify;
  * 판매글 원댓글 · 답글 작성.
  * 답글은 그 판매글의 판매자(sellerId 일치)나 원댓글 작성자만 쓸 수 있고, 판매 중 · 판매 중지에서만 새로 쓸 수 있다.
  */
-@SpringBootTest(properties = "cartmate.scheduling.enabled=false")
-@ActiveProfiles("test")
-class SalesPostCommentCreateTest {
+class SalesPostCommentCreateTest extends ProductServiceTestSupport {
 
     private static final Long SELLER_ID = 7L;          // 이 판매글의 판매자
     private static final Long SELLER_MEMBER_ID = 70L;
@@ -66,10 +61,6 @@ class SalesPostCommentCreateTest {
     SalesPostProductImageRepository salesPostProductImageRepository;
     @Autowired
     SalesPostProductOptionRepository salesPostProductOptionRepository;
-
-    // 실제로는 회원 서버를 HTTP로 부르므로 대역으로 바꾼다
-    @MockitoBean
-    SalesPostMemberClient salesPostMemberClient;
 
     Long postId;
 

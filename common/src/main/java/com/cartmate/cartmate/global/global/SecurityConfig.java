@@ -26,8 +26,7 @@ public class SecurityConfig {
     @Value("${cartmate.internal.api-key}")
     private String internalApiKey;
     private final JwtProvider jwtProvider;
-    private final BlockedMemberRegistry blockedMemberRegistry;
-    private final WithdrawalPendingRegistry withdrawalPendingRegistry;
+    private final SuspendedMemberChecker suspendedMemberChecker;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -49,6 +48,10 @@ public class SecurityConfig {
                         .requestMatchers("/api/claims/**").authenticated()
                         .requestMatchers("/api/payments/**").authenticated()
                         .requestMatchers("/api/carts/**", "/api/group-purchases/**", "/api/group-orders/**", "/api/orders/**").authenticated()
+                        // 판매자 판매글 관리(등록 · 수정 · 내 글 목록 · 삭제 · 중지 · 재개): 로그인 필수. 판매자 본인인지는 컨트롤러에서 JWT의 sellerId로 확인
+                        .requestMatchers(HttpMethod.POST, "/api/sales-posts").authenticated()
+                        .requestMatchers(HttpMethod.PATCH, "/api/sales-posts").authenticated()
+                        .requestMatchers("/api/sales-posts/sellers/**").authenticated()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .anyRequest().permitAll() // 다른 모듈 개발 중이라 임시 허용
                 )
@@ -66,10 +69,10 @@ public class SecurityConfig {
                                     "{\"resultCode\":\"403-AUTH_FORBIDDEN\",\"msg\":\"접근 권한이 없습니다.\",\"data\":null}");
                         })
                 )
-                .addFilterBefore(new JwtAuthenticationFilter(jwtProvider, blockedMemberRegistry),
+                .addFilterBefore(new JwtAuthenticationFilter(jwtProvider, suspendedMemberChecker),
                         UsernamePasswordAuthenticationFilter.class)
-                // 인증 다음에 실행: 탈퇴 대기 회원의 변경 요청 차단
-                .addFilterAfter(new WithdrawalPendingFilter(withdrawalPendingRegistry), JwtAuthenticationFilter.class)
+                // 인증 다음에 실행: 탈퇴 대기 회원(토큰의 wp)의 변경 요청 차단
+                .addFilterAfter(new WithdrawalPendingFilter(), JwtAuthenticationFilter.class)
                 .addFilterBefore(new InternalApiKeyFilter(internalApiKey), JwtAuthenticationFilter.class);
         return http.build();
     }

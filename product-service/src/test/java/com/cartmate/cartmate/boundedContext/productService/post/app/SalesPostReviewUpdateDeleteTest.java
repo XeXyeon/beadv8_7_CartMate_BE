@@ -12,7 +12,6 @@ import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPost
 import com.cartmate.cartmate.boundedContext.productService.post.dto.CreateSalesPostReviewRequest;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.UpdateSalesPostReviewRequest;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.WritableSalesPostReviewResponse;
-import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostMemberClient;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductImageRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductOptionRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductRepository;
@@ -23,14 +22,12 @@ import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostRev
 import com.cartmate.cartmate.global.exception.ErrorCode;
 import com.cartmate.cartmate.global.exception.ServiceException;
 import com.cartmate.cartmate.shared.delivery.PurchaseType;
+import com.cartmate.cartmate.support.ProductServiceTestSupport;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
@@ -49,9 +46,7 @@ import static org.mockito.BDDMockito.given;
  * 수정: 작성자 본인 · 구매확정 후 30일 안 · 이력 보관 · 별점 합계에 차이만 반영.
  * 삭제: 작성자 본인 · 언제든 · soft delete · 리뷰 수 · 별점 합계 감소 · 다시 쓸 수 없음.
  */
-@SpringBootTest(properties = "cartmate.scheduling.enabled=false")
-@ActiveProfiles("test")
-class SalesPostReviewUpdateDeleteTest {
+class SalesPostReviewUpdateDeleteTest extends ProductServiceTestSupport {
 
     private static final Long SELLER_ID = 7L;
     private static final Long BUYER_ID = 100L;
@@ -77,9 +72,6 @@ class SalesPostReviewUpdateDeleteTest {
     SalesPostReviewRepository salesPostReviewRepository;
     @Autowired
     SalesPostReviewHistoryRepository salesPostReviewHistoryRepository;
-
-    @MockitoBean
-    SalesPostMemberClient salesPostMemberClient;
 
     Long postId;
     Long productId;

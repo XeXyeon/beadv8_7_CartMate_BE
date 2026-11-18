@@ -12,11 +12,10 @@ import com.cartmate.cartmate.boundedContext.memberService.member.out.SellerRepos
 import com.cartmate.cartmate.boundedContext.memberService.member.out.WithdrawalTradeClient;
 import com.cartmate.cartmate.boundedContext.memberService.member.out.WithdrawalTradeClient.BuyerTrades;
 import com.cartmate.cartmate.boundedContext.memberService.member.out.WithdrawalTradeClient.SellerTrades;
+import com.cartmate.cartmate.global.event.DomainEventPublisher;
 import com.cartmate.cartmate.global.exception.ServiceException;
-import com.cartmate.cartmate.shared.member.event.MemberWithdrawalCanceledEvent;
 import com.cartmate.cartmate.shared.member.event.MemberWithdrawalRequestedEvent;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -40,8 +39,9 @@ class MemberWithdrawalUseCase {
     private final SellerRepository sellerRepository;
     private final WithdrawalTradeClient withdrawalTradeClient;
     private final PasswordEncoder passwordEncoder;
-    private final ApplicationEventPublisher eventPublisher;
+    private final DomainEventPublisher domainEventPublisher;
 
+    // 트랜잭션 없이 부른다: 진행 중 거래 확인이 다른 서비스 HTTP라 DB 연결을 잡지 않는다 (조회는 저장소가 각자 연다)
     WithdrawalCheckResponse check(Long memberId) {
         Member member = findMember(memberId);
         if (member.getStatus() == MemberStatus.WITHDRAWAL_PENDING) {
@@ -53,7 +53,8 @@ class MemberWithdrawalUseCase {
         return new WithdrawalCheckResponse(canWithdraw, blockers, member.getStatus().name(), null, null);
     }
 
-    WithdrawalCheckResponse request(Long memberId, String password) {
+    // 트랜잭션 밖에서 부른다: 비밀번호와 진행 중 거래(다른 서비스 HTTP)를 확인한다. 막히면 예외.
+    void ensureCanRequest(Long memberId, String password) {
         Member member = findMember(memberId);
         if (!passwordEncoder.matches(password, member.getPassword())) {
             throw new ServiceException(MemberErrorCode.PASSWORD_MISMATCH);
@@ -63,26 +64,23 @@ class MemberWithdrawalUseCase {
         if (!blockers.isEmpty()) {
             throw new ServiceException(MemberErrorCode.MEMBER_WITHDRAWAL_BLOCKED.resultCode(), blockers.get(0).message());
         }
+    }
 
-        LocalDateTime now = LocalDateTime.now();
+    // 트랜잭션 안에서 부른다: 상태 변경과 이벤트 발행만. 확인 이후 상태가 바뀌었으면 requestWithdrawal이 막는다.
+    void request(Long memberId, LocalDateTime now) {
+        Member member = findMember(memberId);
         member.requestWithdrawal(now);
         memberRepository.save(member);
 
-        Long sellerId = sellerIdOf(member);
-        eventPublisher.publishEvent(new MemberWithdrawalRequestedEvent(member.getId(), sellerId, now));
-        return check(memberId);
+        // 다른 서비스: Outbox → product 판매글 판매 중지. 회원 안 차단은 새 토큰의 탈퇴 대기 표시(wp)가 맡는다
+        domainEventPublisher.publish(new MemberWithdrawalRequestedEvent(member.getId(), sellerIdOf(member), now));
     }
 
-    WithdrawalCheckResponse cancel(Long memberId) {
+    // 탈퇴 취소. 판매 중지한 판매글은 판매자가 직접 재개하므로 다른 서비스에 알리지 않는다
+    void cancel(Long memberId) {
         Member member = findMember(memberId);
         member.cancelWithdrawal();
         memberRepository.save(member);
-        eventPublisher.publishEvent(new MemberWithdrawalCanceledEvent(member.getId()));
-        return check(memberId);
-    }
-
-    List<Long> findPendingMemberIds() {
-        return memberRepository.findIdsByStatus(MemberStatus.WITHDRAWAL_PENDING);
     }
 
     // 구매자로서 + (판매자면) 판매자로서 진행 중인 거래를 모은다

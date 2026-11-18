@@ -1,11 +1,14 @@
 package com.cartmate.cartmate.boundedContext.productService.product.out;
 
+import org.springframework.transaction.annotation.Transactional;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.querydsl.jpa.impl.JPAUpdateClause;
 import jakarta.persistence.EntityManager;
 
 import static com.cartmate.cartmate.boundedContext.productService.product.domain.QInventory.inventory;
 
+// 예전 @Query 메서드처럼 트랜잭션 밖에서 불러도 동작하게 한다(안에서 부르면 그 트랜잭션에 합류)
+@Transactional
 public class InventoryQueryRepositoryImpl implements InventoryQueryRepository {
     private final EntityManager entityManager;
     private final JPAQueryFactory queryFactory;

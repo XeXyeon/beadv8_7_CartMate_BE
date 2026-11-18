@@ -1,6 +1,5 @@
 package com.cartmate.cartmate.global.jpa.entity;
 
-import com.cartmate.cartmate.global.global.GlobalConfig;
 import com.cartmate.cartmate.global.modelType.HasModelTypeCode;
 import jakarta.persistence.MappedSuperclass;
 import lombok.Getter;
@@ -19,9 +18,5 @@ public abstract class BaseEntity implements HasModelTypeCode {
     @Override
     public String getModelTypeCode() {
         return this.getClass().getSimpleName();
-    }
-
-    protected void publishEvent(Object event) {
-        GlobalConfig.getEventPublisher().publish(event);
     }
 }

@@ -1,5 +1,6 @@
 package com.cartmate.cartmate.boundedContext.memberService.member.in.internal;
 
+import com.cartmate.cartmate.boundedContext.memberService.member.app.MemberFacade;
 import com.cartmate.cartmate.boundedContext.memberService.member.app.SellerQueryAdapter;
 import com.cartmate.cartmate.global.rsData.RsData;
 import com.cartmate.cartmate.shared.member.MemberQuery;
@@ -7,6 +8,7 @@ import io.swagger.v3.oas.annotations.Hidden;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -22,6 +24,7 @@ public class MemberInternalController {
 
     private final MemberQuery memberQuery;
     private final SellerQueryAdapter sellerQueryAdapter;
+    private final MemberFacade memberFacade;
 
     @GetMapping("/nicknames")
     public RsData<Map<Long, String>> findNicknames(@RequestParam List<Long> ids) {
@@ -31,5 +34,12 @@ public class MemberInternalController {
     @GetMapping("/{memberId}/seller-id")
     public RsData<Long> findSellerId(@PathVariable Long memberId) {
         return new RsData<>("200-1", "판매자 ID 조회", sellerQueryAdapter.findSellerIdByMemberId(memberId).orElse(null));
+    }
+
+    // 운영 백필: 모든 판매자의 등록 이벤트를 Outbox로 다시 발행한다 (결제·상품 판매자 복제본 채우기).
+    // 받는 쪽이 멱등이라 여러 번 실행해도 안전하다. 실행 방법: docs/operations/seller-registered-backfill.md
+    @PostMapping("/sellers/republish-registered")
+    public RsData<Integer> republishSellerRegistered() {
+        return new RsData<>("200-1", "판매자 등록 이벤트 다시 발행", memberFacade.republishSellerRegisteredEvents());
     }
 }

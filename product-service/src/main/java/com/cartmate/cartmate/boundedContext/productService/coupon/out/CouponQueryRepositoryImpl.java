@@ -1,10 +1,13 @@
 package com.cartmate.cartmate.boundedContext.productService.coupon.out;
 
+import org.springframework.transaction.annotation.Transactional;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import jakarta.persistence.EntityManager;
 
 import static com.cartmate.cartmate.boundedContext.productService.coupon.domain.QCoupon.coupon;
 
+// 예전 @Query 메서드처럼 트랜잭션 밖에서 불러도 동작하게 한다(안에서 부르면 그 트랜잭션에 합류)
+@Transactional
 public class CouponQueryRepositoryImpl implements CouponQueryRepository {
     private final EntityManager entityManager;
     private final JPAQueryFactory queryFactory;

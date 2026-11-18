@@ -19,13 +19,12 @@ import com.cartmate.cartmate.boundedContext.productService.product.out.ProductIm
 import com.cartmate.cartmate.boundedContext.productService.product.out.ProductOptionRepository;
 import com.cartmate.cartmate.boundedContext.productService.product.out.ProductRepository;
 import com.cartmate.cartmate.boundedContext.productService.product.domain.ProductStatus;
+import com.cartmate.cartmate.support.ProductServiceTestSupport;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Duration;
@@ -41,9 +40,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>정상 사진은 실제 상품 등록으로 만들고(파일 + DB 행), 고아 파일은 저장소에만 직접 넣는다(FakeImageStorage.putFile).
  * 기준 시각(uploadedBefore)은 스케줄러처럼 "지금 - 1일"을 넘긴다.
  */
-@SpringBootTest(properties = "cartmate.scheduling.enabled=false")
-@ActiveProfiles("test")
-class ProductImageOrphanCleanTest {
+class ProductImageOrphanCleanTest extends ProductServiceTestSupport {
 
     private static final Long SELLER_ID = 7L;
     private static final Duration GRACE = Duration.ofDays(1);

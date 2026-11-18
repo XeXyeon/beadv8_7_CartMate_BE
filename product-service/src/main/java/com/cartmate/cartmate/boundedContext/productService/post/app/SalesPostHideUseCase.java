@@ -8,8 +8,9 @@ import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostPro
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostProductStatus;
 import com.cartmate.cartmate.boundedContext.productService.code.SalesPostErrorCode;
-import com.cartmate.cartmate.global.eventPublisher.EventPublisher;
+import com.cartmate.cartmate.global.event.DomainEventPublisher;
 import com.cartmate.cartmate.global.exception.ServiceException;
+import com.cartmate.cartmate.shared.post.event.SalesPostChangedEvent;
 import com.cartmate.cartmate.shared.post.event.SalesPostHiddenEvent;
 import com.cartmate.cartmate.shared.post.event.SalesPostHideType;
 import lombok.RequiredArgsConstructor;
@@ -30,7 +31,7 @@ public class SalesPostHideUseCase {
     private final SalesPostProductRepository salesPostProductRepository;
     private final SalesPostApiClient salesPostApiClient;
     private final SalesPostHidePolicy hidePolicy;
-    private final EventPublisher eventPublisher;
+    private final DomainEventPublisher eventPublisher;
 
     // 판매자 내림. 상품 API 먼저 → 성공하면 판매글 변경  이벤트 (판매글 수정과 같은 순서 원칙)
     @Transactional
@@ -42,6 +43,7 @@ public class SalesPostHideUseCase {
 
         post.pauseBySeller();
         publishHidden(post, SalesPostHideType.SELLER_PAUSED, actorMemberId, null);
+        eventPublisher.publish(new SalesPostChangedEvent(postId));
     }
 
     // 판매자 재개. 내림 중에 취소된 거래는 되돌리지 않는다.
@@ -53,9 +55,11 @@ public class SalesPostHideUseCase {
         salesPostApiClient.changeProductStatus(postId, SalesPostProductStatus.ON_SALE);
 
         post.resumeBySeller();
+        eventPublisher.publish(new SalesPostChangedEvent(postId));
     }
 
-    // 판매글 상태를 바꾼 트랜잭션 안에서 호출한다. 받는 쪽은 커밋 후에 처리한다.
+    // 판매글 상태를 바꾼 트랜잭션 안에서 호출한다 (Outbox에 같은 트랜잭션으로 저장, 트랜잭션이 없으면 예외).
+    // 주문 서비스가 Kafka → Inbox로 받아 결제 대기 취소, 결제 중 공동 주문 취소(→ 환불), 장바구니·공동구매를 정리한다.
     public void publishHidden(SalesPost post, SalesPostHideType hideType, Long actorId, String reason) {
         List<Long> productIds = salesPostProductRepository.findBySalesPostId(post.getId()).stream()
                 .map(SalesPostProduct::getId)
@@ -90,14 +94,13 @@ public class SalesPostHideUseCase {
         return post;
     }
 
-    // 최근 24시간 안에 내려간 판매글의 숨김 이벤트를 다시 발행한다 (대사).
-    // 후처리는 멱등이라 이미 정리된 건은 건너뛰고 놓친 것만 처리된다.
-    // 리스너가 커밋 후에 실행되므로 반드시 트랜잭션 안에서 발행한다.
+    // since 이후에 내려간 판매글의 숨김 이벤트를 다시 발행한다 (대사). Outbox라 다시 보낼 때마다 Kafka → 주문 Inbox 처리가 생기므로
+    // 범위를 짧게 둔다(SalesPostHideReconcileScheduler). 후처리는 멱등이라 이미 정리된 건은 건너뛰고 놓친 것만 처리된다.
     @Transactional
-    public int republishRecentlyHidden() {
+    public int republishRecentlyHidden(LocalDateTime since) {
         List<SalesPost> posts = salesPostRepository.findByStatusInAndHiddenAtAfter(
                 List.of(SalesPostSaleStatus.PAUSED, SalesPostSaleStatus.SUSPENDED, SalesPostSaleStatus.DELETED),
-                LocalDateTime.now().minusHours(24));
+                since);
         for (SalesPost post : posts) {
             publishHidden(post, toHideType(post.getStatus()), null, "대사 재처리");
         }

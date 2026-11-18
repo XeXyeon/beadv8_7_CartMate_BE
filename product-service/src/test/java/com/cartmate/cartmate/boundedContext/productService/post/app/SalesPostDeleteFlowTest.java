@@ -26,6 +26,7 @@ import com.cartmate.cartmate.boundedContext.productService.product.out.ProductIm
 import com.cartmate.cartmate.boundedContext.productService.product.out.InventoryRepository;
 import com.cartmate.cartmate.boundedContext.productService.product.out.ProductOptionRepository;
 import com.cartmate.cartmate.boundedContext.productService.product.out.ProductRepository;
+import com.cartmate.cartmate.global.event.OutboxMessageRelayed;
 import com.cartmate.cartmate.global.exception.ServiceException;
 import com.cartmate.cartmate.global.outbox.ManualOutboxRelayConfig;
 import com.cartmate.cartmate.global.outbox.OutboxRelay;
@@ -35,24 +36,16 @@ import com.cartmate.cartmate.shared.post.event.SalesPostHiddenEvent;
 import com.cartmate.cartmate.shared.post.event.SalesPostHideType;
 import com.cartmate.cartmate.boundedContext.productService.product.domain.ProductStatus;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostProductStatus;
+import com.cartmate.cartmate.support.ProductServiceTestSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.context.event.ApplicationEvents;
 import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.net.ServerSocket;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -72,34 +65,18 @@ import static org.mockito.Mockito.reset;
  * <p>테스트는 스케줄링을 끄므로 outbox 릴레이를 직접 돌린다. Kafka는 꺼져 있어 같은 앱 안으로 전달된다.
  * 판매글 · 상품 · 복제본은 실제 등록 흐름(상품 API를 실제 HTTP로 부름)으로 만들어 두므로 웹 서버를 빈 포트로 띄운다.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT,
-        properties = {
-        "cartmate.scheduling.enabled=false",
-        // ManualOutboxRelayConfig의 릴레이도 @Scheduled가 붙어 있어 저절로 돈다. 테스트가 직접 돌리도록 첫 실행을 미룬다(order-service와 같은 방식)
-        "custom.outbox.relay.initial-delay=PT1H"
-})
-@ActiveProfiles("test")
 @RecordApplicationEvents
-@Import(ManualOutboxRelayConfig.class)
-class SalesPostDeleteFlowTest {
+class SalesPostDeleteFlowTest extends ProductServiceTestSupport {
 
-    private static final int PORT = freePort();
     private static final Long SELLER_ID = 7L;
     private static final Long OTHER_SELLER_ID = 8L;
 
     private static final String SALES_POST_DELETED = "SalesPostDeletedEvent";
     private static final String PRODUCTS_DELETED_BY_POST = "ProductsDeletedByPostEvent";
-
-    @DynamicPropertySource
-    static void serverAndProductUrl(DynamicPropertyRegistry registry) {
-        registry.add("server.port", () -> PORT);
-        registry.add("product.global.internalUrl", () -> "http://localhost:" + PORT);
-    }
+    private static final String SALES_POST_HIDDEN = "SalesPostHiddenEvent";
 
     @Autowired
     SalesPostFacade salesPostFacade;
-    @MockitoSpyBean
-    SalesPostDeleteUseCase salesPostDeleteUseCase;
     @Autowired
     OutboxRelay outboxRelay;
     @Autowired
@@ -219,7 +196,14 @@ class SalesPostDeleteFlowTest {
         relay();
         relay();
 
-        List<SalesPostHiddenEvent> hidden = events.stream(SalesPostHiddenEvent.class).toList();
+        // 숨김 이벤트는 Outbox로 나간다 (order-service가 Kafka로 받는다). 한 번 더 릴레이해 내용을 확인한다
+        assertThat(outboxCount(SALES_POST_HIDDEN, null)).isEqualTo(1);
+        relay();
+        List<SalesPostHiddenEvent> hidden = events.stream(OutboxMessageRelayed.class)
+                .map(OutboxMessageRelayed::event)
+                .filter(SalesPostHiddenEvent.class::isInstance)
+                .map(SalesPostHiddenEvent.class::cast)
+                .toList();
         assertThat(hidden).hasSize(1);
         SalesPostHiddenEvent event = hidden.getFirst();
         assertThat(event.postId()).isEqualTo(postId);
@@ -246,7 +230,7 @@ class SalesPostDeleteFlowTest {
 
         // product가 다시 처리했다면 상품 삭제 완료 이벤트가 하나 더 생긴다
         assertThat(outboxCount(PRODUCTS_DELETED_BY_POST, null)).isEqualTo(1);
-        assertThat(events.stream(SalesPostHiddenEvent.class)).hasSize(1);
+        assertThat(outboxCount(SALES_POST_HIDDEN, null)).isEqualTo(1);
         assertThat(salesPostRepository.findById(postId).orElseThrow().getStatus()).isEqualTo(SalesPostSaleStatus.DELETED);
     }
 
@@ -335,11 +319,4 @@ class SalesPostDeleteFlowTest {
         return new CreateSalesPostRequest(null, SELLER_ID, "아이폰 팝니다", "상태 좋아요", List.of(iphone, charger));
     }
 
-    private static int freePort() {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
 }

@@ -1,6 +1,7 @@
 package com.cartmate.cartmate.boundedContext.memberService.member.app;
 
 import com.cartmate.cartmate.boundedContext.memberService.member.domain.Member;
+import com.cartmate.cartmate.boundedContext.memberService.member.domain.MemberStatus;
 import com.cartmate.cartmate.boundedContext.memberService.member.domain.SuspensionReleaseType;
 import com.cartmate.cartmate.boundedContext.memberService.member.dto.*;
 import com.cartmate.cartmate.boundedContext.memberService.member.exception.MemberErrorCode;
@@ -11,6 +12,7 @@ import com.cartmate.cartmate.shared.member.dto.MemberDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -38,6 +40,7 @@ public class MemberFacade {
     private final MemberAddressUseCase memberAddressUseCase;
     private final AdminDashboardUseCase adminDashboardUseCase;
     private final MemberWithdrawalUseCase memberWithdrawalUseCase;
+    private final TransactionTemplate transactionTemplate;
 
 
     @Transactional
@@ -229,6 +232,25 @@ public class MemberFacade {
         return memberSellerUseCase.register(memberId, request);
     }
 
+    private static final int SELLER_REPUBLISH_PAGE_SIZE = 500;
+
+    // 모든 판매자의 등록 이벤트를 다시 발행한다 (운영 백필, 내부 API). 한 트랜잭션에 너무 많이 넣지 않게 페이지마다 커밋한다.
+    // 중간에 실패해도 받는 쪽이 멱등이라 처음부터 다시 실행하면 된다. 반환: 발행한 건수
+    public int republishSellerRegisteredEvents() {
+        int total = 0;
+        Long afterId = 0L;
+        while (true) {
+            Long cursor = afterId;
+            MemberSellerUseCase.RepublishPage page = transactionTemplate.execute(
+                    status -> memberSellerUseCase.republishRegistered(cursor, SELLER_REPUBLISH_PAGE_SIZE));
+            total += page.count();
+            if (page.count() < SELLER_REPUBLISH_PAGE_SIZE) {
+                return total;
+            }
+            afterId = page.lastId();
+        }
+    }
+
     @Transactional(readOnly = true)
     public List<MemberAddressResponse> getAddresses(Long memberId) {
         return memberAddressUseCase.list(memberId);
@@ -260,23 +282,51 @@ public class MemberFacade {
     }
 
     // ===== 회원 탈퇴 =====
-    @Transactional(readOnly = true)
+    // 진행 중 거래 확인은 다른 서비스 HTTP라 트랜잭션 밖에서 한다 (그동안 DB 연결을 잡지 않는다).
+    // 상태 변경 · 이벤트 발행 · 새 토큰 발급만 짧은 트랜잭션으로 묶는다.
     public WithdrawalCheckResponse checkWithdrawal(Long memberId) {
         return memberWithdrawalUseCase.check(memberId);
     }
 
-    @Transactional
-    public WithdrawalCheckResponse requestWithdrawal(Long memberId, String password) {
-        return memberWithdrawalUseCase.request(memberId, password);
+    // 탈퇴 신청·취소 뒤 상태(탈퇴 대기 표시 wp)가 반영된 새 Access Token을 함께 준다 (다른 서비스 필터는 토큰만 본다)
+    // amr: 지금 토큰의 인증 수단 (새 토큰이 이어 받음)
+    public WithdrawalResult requestWithdrawal(Long memberId, String password, List<String> amr) {
+        memberWithdrawalUseCase.ensureCanRequest(memberId, password);
+        LocalDateTime now = LocalDateTime.now();
+        String accessToken = transactionTemplate.execute(status -> {
+            memberWithdrawalUseCase.request(memberId, now);
+            return reissueAccessToken(memberId, amr);
+        });
+        return new WithdrawalResult(memberWithdrawalUseCase.check(memberId), accessToken);
     }
 
-    @Transactional
-    public WithdrawalCheckResponse cancelWithdrawal(Long memberId) {
-        return memberWithdrawalUseCase.cancel(memberId);
+    public WithdrawalResult cancelWithdrawal(Long memberId, List<String> amr) {
+        String accessToken = transactionTemplate.execute(status -> {
+            memberWithdrawalUseCase.cancel(memberId);
+            return reissueAccessToken(memberId, amr);
+        });
+        return new WithdrawalResult(memberWithdrawalUseCase.check(memberId), accessToken);
+    }
+
+    public record WithdrawalResult(WithdrawalCheckResponse check, String accessToken) {
+    }
+
+    private String reissueAccessToken(Long memberId, List<String> amr) {
+        Member member = memberSupport.findById(memberId)
+                .orElseThrow(() -> new ServiceException(MemberErrorCode.MEMBER_NOT_FOUND));
+        return memberTokenUseCase.reissueAccessToken(member, amr);
+    }
+
+    // ===== 정지 회원 Redis 키 동기화 (SuspendedMemberSync) =====
+    @Transactional(readOnly = true)
+    public boolean isSuspended(Long memberId) {
+        return memberSupport.findById(memberId)
+                .map(member -> member.getStatus() == MemberStatus.SUSPENDED)
+                .orElse(false);
     }
 
     @Transactional(readOnly = true)
-    public List<Long> findWithdrawalPendingMemberIds() {
-        return memberWithdrawalUseCase.findPendingMemberIds();
+    public List<Long> findSuspendedMemberIds() {
+        return memberSupport.findIdsByStatus(MemberStatus.SUSPENDED);
     }
 }

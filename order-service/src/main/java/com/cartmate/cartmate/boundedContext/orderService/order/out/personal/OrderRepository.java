@@ -3,6 +3,7 @@ package com.cartmate.cartmate.boundedContext.orderService.order.out.personal;
 import com.cartmate.cartmate.boundedContext.orderService.order.domain.personal.Order;
 import com.cartmate.cartmate.shared.order.OrderStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -31,4 +32,9 @@ public interface OrderRepository extends JpaRepository<Order, Long>, OrderReposi
     List<Order> findAllByIndividualGroupPurchaseId(Long individualGroupPurchaseId);
 
     long countByBuyerMemberIdAndStatus(Long buyerMemberId, OrderStatus status);
+
+    // 자기가 건 결제 진행 표시만 푼다(만료 뒤 다른 요청이 새로 건 표시는 그대로 둔다)
+    @Modifying
+    @Query("update Order o set o.paymentLockedUntil = null where o.id = :id and o.paymentLockedUntil = :lockedUntil")
+    int unlockPayment(@Param("id") Long id, @Param("lockedUntil") LocalDateTime lockedUntil);
 }

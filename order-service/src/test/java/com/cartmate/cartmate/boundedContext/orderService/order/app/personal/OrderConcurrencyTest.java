@@ -68,6 +68,12 @@ class OrderConcurrencyTest {
     @Autowired
     private TransactionTemplate transactionTemplate;
 
+    @Autowired
+    private com.cartmate.cartmate.boundedContext.orderService.order.out.FakeOrderPaymentClient paymentClient;
+
+    @Autowired
+    private com.cartmate.cartmate.boundedContext.orderService.order.out.FakeOrderInventoryClient inventoryClient;
+
     private final long base = 9_500_000_000L + ThreadLocalRandom.current().nextLong(1_000_000_000L) * 100;
 
     private long sequence;
@@ -115,6 +121,46 @@ class OrderConcurrencyTest {
             }
         }
         assertThat(paidRounds + canceledRounds).isEqualTo(ROUNDS);
+    }
+
+    @Test
+    @DisplayName("같은 주문을 결제하는 도중 두 번째 결제가 오면 409로 거절하고, 첫 결제의 재고 선점을 풀지 않는다 (남의 선점을 풀던 버그)")
+    void secondPaymentDuringChargeDoesNotReleaseStock() throws Exception {
+        long buyer = nextId();
+        Long orderId = saveOrder(buyer, LocalDateTime.now().truncatedTo(ChronoUnit.SECONDS));
+        CountDownLatch charging = new CountDownLatch(1);
+        CountDownLatch finishCharge = new CountDownLatch(1);
+        paymentClient.onNextCharge(() -> {
+            charging.countDown();
+            try {
+                finishCharge.await(10, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        });
+        ExecutorService first = Executors.newSingleThreadExecutor();
+        try {
+            var firstPayment = first.submit(() -> facade.payOrder(buyer, orderId));
+            assertThat(charging.await(5, TimeUnit.SECONDS)).isTrue();
+
+            ServiceException second = org.assertj.core.api.Assertions.catchThrowableOfType(ServiceException.class,
+                    () -> facade.payOrder(buyer, orderId));
+
+            finishCharge.countDown();
+            firstPayment.get(10, TimeUnit.SECONDS);
+            assertThat(second).isNotNull();
+            assertThat(second.getResultCode()).isEqualTo(OrderErrorCode.ORDER_PAYMENT_IN_PROGRESS.resultCode());
+        } finally {
+            finishCharge.countDown();
+            first.shutdown();
+        }
+
+        Order order = repository.findById(orderId).orElseThrow();
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
+        assertThat(order.getPaymentLockedUntil()).as("결제 완료와 함께 진행 표시도 지운다").isNull();
+        assertThat(inventoryClient.reservedOrderIds()).containsOnlyOnce(orderId);
+        assertThat(inventoryClient.releasedOrderIds()).doesNotContain(orderId);
+        assertThat(eventRecorder.count(OrderPaidEvent.class, e -> e.orderId().equals(orderId))).isEqualTo(1);
     }
 
     @Test

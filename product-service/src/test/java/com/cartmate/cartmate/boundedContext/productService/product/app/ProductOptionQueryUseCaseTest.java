@@ -3,11 +3,10 @@ package com.cartmate.cartmate.boundedContext.productService.product.app;
 import com.cartmate.cartmate.boundedContext.productService.product.dto.ProductOptionTypeResponse;
 import com.cartmate.cartmate.boundedContext.productService.product.dto.ProductOptionValueResponse;
 import com.cartmate.cartmate.global.exception.ServiceException;
+import com.cartmate.cartmate.support.ProductServiceTestSupport;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 
 import java.util.List;
 
@@ -18,9 +17,7 @@ import static org.assertj.core.api.Assertions.tuple;
 /**
  * 옵션 종류 · 상품옵션 조회: data.sql 초기 데이터가 옵션 종류별로 묶여 ID 순으로 나온다.
  */
-@SpringBootTest(properties = "cartmate.scheduling.enabled=false")
-@ActiveProfiles("test")
-class ProductOptionQueryUseCaseTest {
+class ProductOptionQueryUseCaseTest extends ProductServiceTestSupport {
 
     @Autowired
     ProductOptionQueryUseCase productOptionQueryUseCase;

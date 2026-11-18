@@ -57,7 +57,8 @@ public enum SalesPostErrorCode implements ErrorCode {
     WISH_LOGIN_REQUIRED(HttpStatus.UNAUTHORIZED, "WISH_LOGIN_REQUIRED", "로그인이 필요합니다."),
     // 판매글 상품이 없거나 삭제됨, 또는 판매글이 다른 사용자에게 보이지 않는 상태
     WISH_PRODUCT_NOT_FOUND(HttpStatus.NOT_FOUND, "WISH_PRODUCT_NOT_FOUND", "상품을 찾을 수 없습니다."),
-    WISH_NOT_ALLOWED(HttpStatus.CONFLICT, "WISH_NOT_ALLOWED", "판매 중이거나 판매 중지된 상품만 찜할 수 있습니다.");
+    WISH_NOT_ALLOWED(HttpStatus.CONFLICT, "WISH_NOT_ALLOWED", "판매 중이거나 판매 중지된 상품만 찜할 수 있습니다."),
+    SEARCH_PRICE_RANGE_INVALID(HttpStatus.BAD_REQUEST, "SEARCH_PRICE_RANGE_INVALID", "가격 범위를 다시 확인해 주세요.");
 
     private final HttpStatus status;
     private final String code;

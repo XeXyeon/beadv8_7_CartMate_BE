@@ -51,6 +51,17 @@ spec:
             # env가 envFrom(cartmate-app-config의 PRODUCT_URL)보다 우선한다
             - name: PRODUCT_URL
               value: http://localhost:9982
+            # 판매글 검색 색인. 같은 네임스페이스의 Elasticsearch(k8s/infra/elasticsearch.yaml)에 elastic 계정으로 붙는다
+            # 비밀번호는 ES가 쓰는 Secret(es-secret)에서 가져온다
+            - name: ES_URL
+              value: http://elasticsearch:9200
+            - name: ES_USERNAME
+              value: elastic
+            - name: ES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: es-secret
+                  key: elastic-password
           resources:
             requests:
               cpu: 250m

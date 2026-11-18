@@ -21,7 +21,7 @@ public class SalesPostSupport {
                 .filter(p -> p.getStatus() != SalesPostSaleStatus.DELETED)
                 .orElseThrow(() -> new ServiceException(SalesPostErrorCode.POST_NOT_FOUND));
 
-        if (!post.getSellerId().equals(request.getSellerId())) { // 로그인한 사용자의 sellerId와 비교하도록 수정
+        if (!post.getSellerId().equals(request.getSellerId())) { // 요청 sellerId는 컨트롤러에서 JWT sellerId와 같은지 확인했다
             throw new ServiceException(SalesPostErrorCode.POST_ACCESS_DENIED);
         }
 

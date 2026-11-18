@@ -3,6 +3,7 @@ package com.cartmate.cartmate.boundedContext.paymentService.config;
 import com.cartmate.cartmate.global.kafka.InboundEventBinding;
 import com.cartmate.cartmate.global.outbox.OutboxTopics;
 import com.cartmate.cartmate.shared.delivery.event.DeliveryConfirmedEvent;
+import com.cartmate.cartmate.shared.member.event.SellerRegisteredEvent;
 import com.cartmate.cartmate.shared.order.event.OrderClaimRefundRequestedEvent;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -28,6 +29,13 @@ class PaymentServiceKafkaConfigTest {
     void bindsOrderClaimRefundRequest() {
         assertThat(bindings()).contains(new InboundEventBinding(
                 OutboxTopics.of(OrderClaimRefundRequestedEvent.class), OrderClaimRefundRequestedEvent.class));
+    }
+
+    @Test
+    @DisplayName("회원 서버의 판매자 등록 이벤트를 인박스로 받도록 바인딩한다 (없으면 정산 지급이 PAYOUT_SELLER_NOT_FOUND)")
+    void bindsSellerRegistered() {
+        assertThat(bindings()).contains(new InboundEventBinding(
+                OutboxTopics.of(SellerRegisteredEvent.class), SellerRegisteredEvent.class));
     }
 
     private static List<InboundEventBinding> bindings() {

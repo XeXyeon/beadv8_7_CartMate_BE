@@ -1,8 +1,7 @@
 package com.cartmate.cartmate.boundedContext.orderService;
 
-import com.cartmate.cartmate.global.security.BlockedMemberRegistry;
 import com.cartmate.cartmate.global.security.JwtProvider;
-import com.cartmate.cartmate.global.security.WithdrawalPendingRegistry;
+import com.cartmate.cartmate.global.security.SuspendedMemberChecker;
 import com.cartmate.cartmate.support.ExternalApiTestSupport;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -10,15 +9,17 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpMethod;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
+import java.util.List;
 import java.util.stream.Stream;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.mockito.BDDMockito.given;
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -33,11 +34,10 @@ class ExternalApiGuardTest extends ExternalApiTestSupport {
     @Value("${custom.jwt.secret}")
     private String jwtSecret;
 
-    @Autowired
-    private BlockedMemberRegistry blockedMemberRegistry;
-
-    @Autowired
-    private WithdrawalPendingRegistry withdrawalPendingRegistry;
+    // 정지 여부는 Redis(member:suspended:{id})에서 읽는다. 주문 서비스 테스트에는 Redis가 없어 조회 결과만 바꿔 낀다
+    // (실제 Redis 키로 막는 것은 payment-service SuspendedMemberFilterRedisTest)
+    @MockitoBean
+    private SuspendedMemberChecker suspendedMemberChecker;
 
     @ParameterizedTest(name = "{0} {1}")
     @CsvSource({
@@ -75,26 +75,21 @@ class ExternalApiGuardTest extends ExternalApiTestSupport {
     @Test
     @DisplayName("정지된 회원은 남은 토큰이 유효해도 401을 받는다")
     void blockedMember() throws Exception {
-        blockedMemberRegistry.block(MEMBER);
-        try {
-            expectUnauthorized(mvc.perform(get("/api/carts").with(buyer(MEMBER))));
-        } finally {
-            blockedMemberRegistry.unblock(MEMBER);
-        }
+        given(suspendedMemberChecker.isSuspended(MEMBER)).willReturn(true);
+
+        expectUnauthorized(mvc.perform(get("/api/carts").with(buyer(MEMBER))));
     }
 
     @Test
-    @DisplayName("탈퇴 대기 회원은 조회는 할 수 있지만 장바구니 · 주문 변경 요청은 403으로 막힌다")
+    @DisplayName("탈퇴 대기 표시(wp)가 있는 토큰은 조회는 할 수 있지만 장바구니 · 주문 변경 요청은 403으로 막힌다")
     void withdrawalPendingMember() throws Exception {
-        withdrawalPendingRegistry.add(MEMBER);
-        try {
-            ok(get("/api/carts").with(buyer(MEMBER)));
-            mvc.perform(json(post("/api/carts/items"), "{\"inventoryId\":1,\"quantity\":1}").with(buyer(MEMBER)))
-                    .andExpect(status().isForbidden())
-                    .andExpect(jsonPath("$.resultCode").value("403-MEMBER_WITHDRAWAL_PENDING"));
-        } finally {
-            withdrawalPendingRegistry.remove(MEMBER);
-        }
+        String pending = new JwtProvider(jwtSecret, 1800)
+                .createAccessToken(MEMBER, "member@cartmate.test", "BUYER", null, List.of("pwd"), true, 1800);
+
+        ok(get("/api/carts").with(bearer(pending)));
+        mvc.perform(json(post("/api/carts/items"), "{\"inventoryId\":1,\"quantity\":1}").with(bearer(pending)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.resultCode").value("403-MEMBER_WITHDRAWAL_PENDING"));
     }
 
     @ParameterizedTest(name = "{0} {1} {2}")
