@@ -14,7 +14,7 @@ import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostPro
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostRepository;
 import com.cartmate.cartmate.boundedContext.productService.search.domain.SalesPostDocument;
 import com.cartmate.cartmate.boundedContext.productService.search.out.SalesPostIndexAdmin;
-import com.cartmate.cartmate.support.ProductServiceElasticsearchContainer;
+import com.cartmate.cartmate.support.ProductServiceSearchTestSupport;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -24,14 +24,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.context.ImportTestcontainers;
-import org.springframework.test.context.ActiveProfiles;
 
-@SpringBootTest(properties = "cartmate.scheduling.enabled=false")
-@ActiveProfiles("test")
-@ImportTestcontainers(ProductServiceElasticsearchContainer.class)
-class SalesPostIndexerTest {
+class SalesPostIndexerTest extends ProductServiceSearchTestSupport {
 
     private static final AtomicLong PRODUCT_SEQ = new AtomicLong(9_100_000L);
     private static final Long SELLER_ID = 7L;

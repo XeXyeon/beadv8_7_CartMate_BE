@@ -11,21 +11,18 @@ import com.cartmate.cartmate.boundedContext.productService.post.dto.CreateSalesP
 import com.cartmate.cartmate.boundedContext.productService.post.dto.UpdateSalesPostCommentRequest;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostCommentHistoryRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostCommentRepository;
-import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostMemberClient;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductImageRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductOptionRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostRepository;
 import com.cartmate.cartmate.global.exception.ErrorCode;
 import com.cartmate.cartmate.global.exception.ServiceException;
+import com.cartmate.cartmate.support.ProductServiceTestSupport;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.time.LocalDateTime;
 import java.util.Comparator;
@@ -40,9 +37,7 @@ import static org.mockito.BDDMockito.given;
  * 판매글 댓글 · 답글 수정과 삭제.
  * 작성자 본인만 언제든 수정 · 삭제하고, 수정 전 내용은 이력으로 남는다. 판매 종료된 판매글에서도 할 수 있다.
  */
-@SpringBootTest(properties = "cartmate.scheduling.enabled=false")
-@ActiveProfiles("test")
-class SalesPostCommentUpdateDeleteTest {
+class SalesPostCommentUpdateDeleteTest extends ProductServiceTestSupport {
 
     private static final Long SELLER_ID = 7L;
     private static final Long SELLER_MEMBER_ID = 70L;
@@ -62,9 +57,6 @@ class SalesPostCommentUpdateDeleteTest {
     SalesPostProductImageRepository salesPostProductImageRepository;
     @Autowired
     SalesPostProductOptionRepository salesPostProductOptionRepository;
-
-    @MockitoBean
-    SalesPostMemberClient salesPostMemberClient;
 
     Long postId;
 

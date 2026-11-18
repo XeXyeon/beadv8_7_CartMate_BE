@@ -23,15 +23,13 @@ import com.cartmate.cartmate.boundedContext.productService.product.out.ProductOp
 import com.cartmate.cartmate.boundedContext.productService.product.out.ProductRepository;
 import com.cartmate.cartmate.global.outbox.ManualOutboxRelayConfig;
 import com.cartmate.cartmate.global.outbox.OutboxRelay;
+import com.cartmate.cartmate.support.ProductServiceTestSupport;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
@@ -51,14 +49,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * "오래된" 것은 판매글 생성 시각(createDate)을 과거로 돌려 만든다. 테스트는 스케줄링을 끄므로 스케줄러를 직접 만들어 부른다.
  * 상품 정리는 등록 실패 이벤트(outbox)로 product에 전달되므로 릴레이도 직접 돌린다.
  */
-@SpringBootTest(properties = {
-        "cartmate.scheduling.enabled=false",
-        // ManualOutboxRelayConfig의 릴레이도 @Scheduled가 붙어 있어 저절로 돈다. 테스트가 직접 돌리도록 첫 실행을 미룬다
-        "custom.outbox.relay.initial-delay=PT1H"
-})
-@ActiveProfiles("test")
-@Import(ManualOutboxRelayConfig.class)
-class SalesPostRegisterReconcileTest {
+class SalesPostRegisterReconcileTest extends ProductServiceTestSupport {
 
     private static final Long SELLER_ID = 7L;
 

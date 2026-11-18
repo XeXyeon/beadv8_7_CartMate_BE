@@ -11,7 +11,6 @@ import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPost
 import com.cartmate.cartmate.boundedContext.productService.post.dto.CreateSalesPostReviewRequest;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.CreateSalesPostReviewResponse;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.WritableSalesPostReviewResponse;
-import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostMemberClient;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductImageRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductOptionRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductRepository;
@@ -23,14 +22,12 @@ import com.cartmate.cartmate.global.exception.ErrorCode;
 import com.cartmate.cartmate.global.exception.ServiceException;
 import com.cartmate.cartmate.global.http.InternalApiClient.InternalServerUnavailableException;
 import com.cartmate.cartmate.shared.delivery.PurchaseType;
+import com.cartmate.cartmate.support.ProductServiceTestSupport;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -47,9 +44,7 @@ import static org.mockito.Mockito.verify;
  * 리뷰 작성과 "리뷰를 쓸 수 있는 상품 목록".
  * 자격: 본인 구매 · 구매확정 · 구매확정 후 30일 안 · 주문항목마다 1개 · 판매글이 보이는 상태.
  */
-@SpringBootTest(properties = "cartmate.scheduling.enabled=false")
-@ActiveProfiles("test")
-class SalesPostReviewCreateTest {
+class SalesPostReviewCreateTest extends ProductServiceTestSupport {
 
     private static final Long SELLER_ID = 7L;
     private static final Long BUYER_ID = 100L;
@@ -75,10 +70,6 @@ class SalesPostReviewCreateTest {
     SalesPostReviewRepository salesPostReviewRepository;
     @Autowired
     SalesPostReviewHistoryRepository salesPostReviewHistoryRepository;
-
-    // 실제로는 회원 서버를 HTTP로 부르므로 대역으로 바꾼다
-    @MockitoBean
-    SalesPostMemberClient salesPostMemberClient;
 
     Long postId;
     Long productId;

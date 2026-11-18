@@ -28,24 +28,16 @@ import com.cartmate.cartmate.boundedContext.productService.product.out.ProductRe
 import com.cartmate.cartmate.global.exception.ServiceException;
 import com.cartmate.cartmate.global.outbox.ManualOutboxRelayConfig;
 import com.cartmate.cartmate.global.outbox.OutboxRelay;
+import com.cartmate.cartmate.support.ProductServiceTestSupport;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.net.ServerSocket;
 import java.util.List;
 
 import static com.cartmate.cartmate.global.inbox.QProcessedEvent.processedEvent;
@@ -68,31 +60,12 @@ import static org.mockito.Mockito.reset;
  * <p>보상은 등록 실패 이벤트(outbox)로 product에 전달되므로, 보상 테스트는 릴레이를 직접 돌린 뒤 확인한다.
  * product는 상품 삭제가 커밋된 뒤 사진 파일도 지운다. 그래서 DB와 저장소(FakeImageStorage) 모두 비었는지 확인한다.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT,
-        properties = {
-        "cartmate.scheduling.enabled=false",
-        // ManualOutboxRelayConfig의 릴레이도 @Scheduled가 붙어 있어 저절로 돈다. 테스트가 직접 돌리도록 첫 실행을 미룬다
-        "custom.outbox.relay.initial-delay=PT1H"
-})
-@ActiveProfiles("test")
-@Import(ManualOutboxRelayConfig.class)
-class SalesPostRegisterFlowTest {
+class SalesPostRegisterFlowTest extends ProductServiceTestSupport {
 
-    private static final int PORT = freePort();
     private static final Long SELLER_ID = 7L;
-
-    @DynamicPropertySource
-    static void serverAndProductUrl(DynamicPropertyRegistry registry) {
-        registry.add("server.port", () -> PORT);
-        registry.add("product.global.internalUrl", () -> "http://localhost:" + PORT);
-    }
 
     @Autowired
     SalesPostFacade salesPostFacade;
-    @MockitoSpyBean
-    SalesPostCreateUseCase salesPostCreateUseCase;
-    @MockitoSpyBean
-    SalesPostSyncProductUseCase salesPostSyncProductUseCase;
 
     @Autowired
     SalesPostRepository salesPostRepository;
@@ -268,11 +241,4 @@ class SalesPostRegisterFlowTest {
         return List.of(TestImageFiles.jpeg(), TestImageFiles.png());
     }
 
-    private static int freePort() {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
 }

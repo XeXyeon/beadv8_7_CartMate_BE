@@ -8,7 +8,6 @@ import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPost
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostUpdateStatus;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostCommentHistoryRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostCommentRepository;
-import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostMemberClient;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductImageRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductOptionRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductRepository;
@@ -17,13 +16,11 @@ import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostRep
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostReviewHistoryRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostReviewRepository;
 import com.cartmate.cartmate.shared.delivery.PurchaseType;
+import com.cartmate.cartmate.support.ProductServiceTestSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -35,9 +32,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 탈퇴가 완료된 회원들이 쓴 댓글 · 답글 · 리뷰의 삭제 처리(soft delete)와 판매글 리뷰 집계 반영.
  * 탈퇴 완료 회원 ID는 스케줄러가 회원 서버에서 받아 넘긴다 — 여기서는 UseCase를 직접 부른다.
  */
-@SpringBootTest(properties = "cartmate.scheduling.enabled=false")
-@ActiveProfiles("test")
-class SalesPostWriterWithdrawTest {
+class SalesPostWriterWithdrawTest extends ProductServiceTestSupport {
 
     private static final Long SELLER_ID = 7L;
     private static final Long WITHDRAWN_MEMBER_ID = 100L;
@@ -65,10 +60,6 @@ class SalesPostWriterWithdrawTest {
     SalesPostProductImageRepository salesPostProductImageRepository;
     @Autowired
     SalesPostProductOptionRepository salesPostProductOptionRepository;
-
-    // 다른 댓글 · 리뷰 테스트와 같은 스프링 컨텍스트를 쓰도록 같은 대역을 둔다 (이 테스트에서는 부르지 않는다)
-    @MockitoBean
-    SalesPostMemberClient salesPostMemberClient;
 
     Long postId;
     Long otherPostId;

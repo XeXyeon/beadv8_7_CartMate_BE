@@ -9,20 +9,17 @@ import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPost
 import com.cartmate.cartmate.boundedContext.productService.post.domain.WithdrawnMemberCleanup;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostCommentHistoryRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostCommentRepository;
-import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostMemberClient;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductImageRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductOptionRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.out.WithdrawnMemberCleanupRepository;
 import com.cartmate.cartmate.global.http.InternalApiClient.InternalServerUnavailableException;
+import com.cartmate.cartmate.support.ProductServiceTestSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -35,9 +32,7 @@ import static org.mockito.BDDMockito.given;
  * 탈퇴 회원 정리 한 번 실행: 마지막 성공 시각부터 받아 삭제 처리하고, 성공했을 때만 시각을 갱신한다.
  * 회원 서버 API는 아직 없어 클라이언트를 대역으로 바꾼다.
  */
-@SpringBootTest(properties = "cartmate.scheduling.enabled=false")
-@ActiveProfiles("test")
-class SalesPostWithdrawnCleanupTest {
+class SalesPostWithdrawnCleanupTest extends ProductServiceTestSupport {
 
     private static final Long WITHDRAWN_MEMBER_ID = 100L;
     private static final Long OTHER_MEMBER_ID = 200L;
@@ -66,9 +61,6 @@ class SalesPostWithdrawnCleanupTest {
 
     @Autowired
     SalesPostSellerRepository salesPostSellerRepository;
-
-    @MockitoBean
-    SalesPostMemberClient salesPostMemberClient;
 
     Long postId;
 

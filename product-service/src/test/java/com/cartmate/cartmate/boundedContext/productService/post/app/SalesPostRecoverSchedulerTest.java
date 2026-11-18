@@ -17,7 +17,6 @@ import com.cartmate.cartmate.boundedContext.productService.product.domain.Invent
 import com.cartmate.cartmate.boundedContext.productService.product.out.InventoryRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.UpdateSalesPostRequest;
 import com.cartmate.cartmate.boundedContext.productService.post.in.SalesPostRecoverScheduler;
-import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostApiClient;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductImageRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductOptionRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductRepository;
@@ -29,21 +28,14 @@ import com.cartmate.cartmate.boundedContext.productService.product.out.FakeImage
 import com.cartmate.cartmate.boundedContext.productService.product.out.ProductImageRepository;
 import com.cartmate.cartmate.boundedContext.productService.product.out.ProductOptionRepository;
 import com.cartmate.cartmate.boundedContext.productService.product.out.ProductRepository;
+import com.cartmate.cartmate.support.ProductServiceTestSupport;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.net.ServerSocket;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -67,30 +59,14 @@ import static org.mockito.Mockito.reset;
  * "오래 멈춘" 것은 수정 상태가 바뀐 시각(updateStatusChangedAt)을 과거로 돌려 만든다.
  * 테스트는 스케줄링을 끄므로 스케줄러를 직접 만들어 부른다. 상품 API는 실제 HTTP라 웹 서버를 빈 포트로 띄운다.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT,
-        properties = "cartmate.scheduling.enabled=false")
-@ActiveProfiles("test")
-class SalesPostRecoverSchedulerTest {
+class SalesPostRecoverSchedulerTest extends ProductServiceTestSupport {
 
-    private static final int PORT = freePort();
     private static final Long SELLER_ID = 7L;
-
-    @DynamicPropertySource
-    static void serverAndProductUrl(DynamicPropertyRegistry registry) {
-        registry.add("server.port", () -> PORT);
-        registry.add("product.global.internalUrl", () -> "http://localhost:" + PORT);
-    }
 
     @Autowired
     SalesPostFacade salesPostFacade;
     @Autowired
     SalesPostRecoveryUseCase salesPostRecoveryUseCase;
-    @MockitoSpyBean
-    SalesPostUpdateUseCase salesPostUpdateUseCase;
-    @MockitoSpyBean
-    SalesPostApiClient salesPostApiClient;
-    @MockitoSpyBean
-    SalesPostSyncProductUseCase salesPostSyncProductUseCase;
     @Autowired
     TransactionTemplate transactionTemplate;
     @Autowired
@@ -337,11 +313,4 @@ class SalesPostRecoverSchedulerTest {
         return new UpdateSalesPostRequest(postId, SELLER_ID, "새 제목", "새 내용", List.of(product));
     }
 
-    private static int freePort() {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
 }

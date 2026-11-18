@@ -1,23 +1,17 @@
 package com.cartmate.cartmate.boundedContext.productService.search.out;
 
+import com.cartmate.cartmate.support.ProductServiceSearchTestSupport;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import com.cartmate.cartmate.support.ProductServiceElasticsearchContainer;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.context.ImportTestcontainers;
-import org.springframework.test.context.ActiveProfiles;
 
-@SpringBootTest(properties = "cartmate.scheduling.enabled=false")
-@ActiveProfiles("test")
-@ImportTestcontainers(ProductServiceElasticsearchContainer.class)
-class SalesPostIndexAdminTest {
+class SalesPostIndexAdminTest extends ProductServiceSearchTestSupport {
 
     @Autowired
     SalesPostIndexAdmin admin;

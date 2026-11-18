@@ -7,7 +7,7 @@ import com.cartmate.cartmate.boundedContext.productService.search.domain.SalesPo
 import com.cartmate.cartmate.boundedContext.productService.search.domain.SalesPostSearchCondition;
 import com.cartmate.cartmate.boundedContext.productService.search.domain.SalesPostSearchHits;
 import com.cartmate.cartmate.boundedContext.productService.search.domain.SalesPostSearchSort;
-import com.cartmate.cartmate.support.ProductServiceElasticsearchContainer;
+import com.cartmate.cartmate.support.ProductServiceSearchTestSupport;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -15,15 +15,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.context.ImportTestcontainers;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.test.context.ActiveProfiles;
 
-@SpringBootTest(properties = "cartmate.scheduling.enabled=false")
-@ActiveProfiles("test")
-@ImportTestcontainers(ProductServiceElasticsearchContainer.class)
-class SalesPostSearchClientTest {
+class SalesPostSearchClientTest extends ProductServiceSearchTestSupport {
 
     private static final Long SHOES = 3L;
     private static final Long SOCKS = 1L;

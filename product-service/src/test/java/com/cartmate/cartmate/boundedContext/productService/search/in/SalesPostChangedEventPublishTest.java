@@ -1,6 +1,8 @@
 package com.cartmate.cartmate.boundedContext.productService.search.in;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.willDoNothing;
 
 import com.cartmate.cartmate.boundedContext.productService.post.app.AdminSalesPostUseCase;
 import com.cartmate.cartmate.boundedContext.productService.post.app.SalesPostCreateUseCase;
@@ -16,11 +18,11 @@ import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPost
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostUpdateStatus;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.SyncProduct;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.UpdateSalesPostRequest;
-import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostApiClient;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostRepository;
 import com.cartmate.cartmate.global.outbox.OutboxEventRepository;
 import com.cartmate.cartmate.shared.product.event.ProductDeletedEvent;
+import com.cartmate.cartmate.support.ProductServiceTestSupport;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -29,14 +31,9 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 // 판매글이 바뀌는 길마다 같은 트랜잭션으로 outbox에 SalesPostChangedEvent가 남는지 본다
-@SpringBootTest(properties = "cartmate.scheduling.enabled=false")
-@ActiveProfiles("test")
-class SalesPostChangedEventPublishTest {
+class SalesPostChangedEventPublishTest extends ProductServiceTestSupport {
 
     private static final AtomicLong PRODUCT_SEQ = new AtomicLong(9_500_000L);
     private static final Long SELLER_ID = 7L;
@@ -52,14 +49,14 @@ class SalesPostChangedEventPublishTest {
     @Autowired SalesPostRepository salesPostRepository;
     @Autowired SalesPostProductRepository salesPostProductRepository;
     @Autowired OutboxEventRepository outboxEventRepository;
-    // 판매 중지 · 운영 중지는 상품 서버 API를 먼저 부른다
-    @MockitoBean SalesPostApiClient salesPostApiClient;
 
     @BeforeEach
     void setUp() {
         outboxEventRepository.deleteAll();
         salesPostProductRepository.deleteAll();
         salesPostRepository.deleteAll();
+        // 판매 중지 · 운영 중지는 상품 서버 API를 먼저 부른다. 이 테스트는 판매글만 저장하므로 상품 API는 성공한 것으로 정한다
+        willDoNothing().given(salesPostApiClient).changeProductStatus(any(), any());
     }
 
     @Test

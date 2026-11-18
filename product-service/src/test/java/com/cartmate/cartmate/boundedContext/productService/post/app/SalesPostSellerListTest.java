@@ -10,13 +10,12 @@ import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostPro
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostRepository;
 import com.cartmate.cartmate.global.page.PageResponse;
+import com.cartmate.cartmate.support.ProductServiceTestSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDateTime;
 
@@ -27,9 +26,7 @@ import static org.assertj.core.api.Assertions.tuple;
  * 판매자 본인의 판매글 목록(판매글 관리 화면): 삭제된 글만 빼고 판매 중지 · 운영 중지 · 등록 중까지 모두, 최신순.
  * 수정 · 판매 중지 버튼을 판단할 수 있게 판매 상태 · 수정 진행 상태를 함께 준다.
  */
-@SpringBootTest(properties = "cartmate.scheduling.enabled=false")
-@ActiveProfiles("test")
-class SalesPostSellerListTest {
+class SalesPostSellerListTest extends ProductServiceTestSupport {
 
     private static final Long SELLER_ID = 7L;
     private static final Long OTHER_SELLER_ID = 8L;

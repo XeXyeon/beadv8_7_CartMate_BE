@@ -14,6 +14,7 @@ import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostPro
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostRepository;
 import com.cartmate.cartmate.global.page.PageResponse;
+import com.cartmate.cartmate.support.ProductServiceTestSupport;
 import jakarta.persistence.EntityManagerFactory;
 import org.hibernate.SessionFactory;
 import org.hibernate.stat.Statistics;
@@ -21,9 +22,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDateTime;
 import java.util.concurrent.atomic.AtomicLong;
@@ -34,12 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 판매글 목록(홈 · 공개 목록)의 쿼리 수: 판매글 · 상품 수가 늘어도 쿼리 수가 늘지 않아야 한다(N+1 없음).
  * 응답을 만들 때 판매글 → 상품, 상품 → 사진 · 옵션을 지연 로딩으로 읽으므로, 하나씩 조회하면 판매글 · 상품 수만큼 쿼리가 늘어난다.
  */
-@SpringBootTest(properties = {
-        "cartmate.scheduling.enabled=false",
-        "spring.jpa.properties.hibernate.generate_statistics=true"
-})
-@ActiveProfiles("test")
-class SalesPostListQueryCountTest {
+class SalesPostListQueryCountTest extends ProductServiceTestSupport {
 
     private static final Long SELLER_ID = 7L;
     private static final int PRODUCTS_PER_POST = 2;
@@ -104,12 +98,18 @@ class SalesPostListQueryCountTest {
     }
 
     // 목록 조회 한 번에 실행된 SQL 수
+    // 통계는 설정(generate_statistics)이 아니라 여기서 켜고 끈다. 설정으로 켜면 다른 테스트와 컨텍스트를 같이 쓰지 못한다
     private long countQueries(int pageSize) {
         Statistics statistics = entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
-        statistics.clear();
-        PageResponse<SelectSalesPostResponse> page = list(pageSize);
-        assertThat(page.content()).hasSize(pageSize);
-        return statistics.getPrepareStatementCount();
+        statistics.setStatisticsEnabled(true);
+        try {
+            statistics.clear();
+            PageResponse<SelectSalesPostResponse> page = list(pageSize);
+            assertThat(page.content()).hasSize(pageSize);
+            return statistics.getPrepareStatementCount();
+        } finally {
+            statistics.setStatisticsEnabled(false);
+        }
     }
 
     private PageResponse<SelectSalesPostResponse> list(int pageSize) {
