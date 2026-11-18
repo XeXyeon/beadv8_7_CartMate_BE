@@ -23,6 +23,9 @@ spec:
     spec:
       # 종료 순서: preStop 5초(Service 대상에서 빠질 시간) → 처리 중인 요청 마무리(Spring Boot graceful shutdown 기본, 최대 30초). 합 35초 < 45초
       terminationGracePeriodSeconds: 45
+      # 같은 네임스페이스 Service마다 쿠버네티스가 <이름>_PORT=tcp://IP:포트 같은 환경변수를 자동으로 넣는다(서비스 링크)
+      # 앱 설정의 MEMBER_SERVICE_PORT · REDIS_CACHE_PORT 등과 이름이 겹쳐 server.port 변환이 실패하므로 끈다
+      enableServiceLinks: false
       # 띄울 노드(cartmate/node 라벨). server = k3s server 노드(member · order · payment · etc), agent = k3s agent 노드(트래픽이 가장 많은 상품 서버를 떼어 둔다)
       nodeSelector:
         cartmate/node: server
@@ -48,13 +51,14 @@ spec:
               memory: 768Mi
             limits:
               memory: 768Mi
-          # 기동이 끝날 때까지(최대 5초 × 36 = 3분) liveness · readiness 검사를 하지 않는다
+          # 기동이 끝날 때까지(최대 5초 × 60 = 5분) liveness · readiness 검사를 하지 않는다
+          # server 노드는 JVM 4개가 CPU 2코어를 나눠 쓰며 동시에 시작하면 3분을 넘겨 재시작됐다(첫 배포, 2026-11-18)
           startupProbe:
             httpGet:
               path: /actuator/health/liveness
               port: http
             periodSeconds: 5
-            failureThreshold: 36
+            failureThreshold: 60
           readinessProbe:
             httpGet:
               path: /actuator/health/readiness
