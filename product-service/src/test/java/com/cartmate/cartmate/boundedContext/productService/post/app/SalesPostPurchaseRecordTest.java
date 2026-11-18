@@ -8,13 +8,11 @@ import com.cartmate.cartmate.shared.delivery.event.DeliveryConfirmedEvent;
 import com.cartmate.cartmate.shared.order.OrderType;
 import com.cartmate.cartmate.shared.order.event.OrderPaidEvent;
 import com.cartmate.cartmate.shared.order.event.SharedGroupOrderConfirmedEvent;
+import com.cartmate.cartmate.support.ProductServiceTestSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -30,9 +28,7 @@ import static org.mockito.Mockito.doThrow;
  * 이벤트 도착 순서 · 중복 · 구매 유형별 주문항목 id 겹침 · 리스너가 예외를 던지지 않는지 확인한다.
  * (다른 리스너(재고 판매 확정 · 페이백)와 섞이지 않게 이 리스너를 직접 부른다)
  */
-@SpringBootTest(properties = "cartmate.scheduling.enabled=false")
-@ActiveProfiles("test")
-class SalesPostPurchaseRecordTest {
+class SalesPostPurchaseRecordTest extends ProductServiceTestSupport {
 
     private static final Long BUYER_ID = 100L;
     private static final Long CREATOR_ID = 300L;
@@ -44,10 +40,6 @@ class SalesPostPurchaseRecordTest {
     SalesPostEventListener listener;
     @Autowired
     SalesPostPurchaseRepository salesPostPurchaseRepository;
-
-    // 실패해도 예외를 던지지 않는지 볼 때만 예외를 내게 바꾼다 (평소에는 실제 동작)
-    @MockitoSpyBean
-    SalesPostPurchaseRecordUseCase salesPostPurchaseRecordUseCase;
 
     @BeforeEach
     void setUp() {

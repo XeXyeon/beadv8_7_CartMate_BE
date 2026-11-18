@@ -37,21 +37,14 @@ import com.cartmate.cartmate.boundedContext.productService.product.out.ProductIm
 import com.cartmate.cartmate.boundedContext.productService.product.out.ProductOptionRepository;
 import com.cartmate.cartmate.boundedContext.productService.product.out.ProductRepository;
 import com.cartmate.cartmate.global.exception.ServiceException;
+import com.cartmate.cartmate.support.ProductServiceTestSupport;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.net.ServerSocket;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -73,29 +66,13 @@ import static org.mockito.Mockito.reset;
  * <p>등록 E2E와 같은 이유로 실제 웹 서버를 빈 포트로 띄우고, 판매글 · 상품 · 복제본은 실제 등록 흐름으로 만들어 둔다.
  * 사진은 그대로 두고 이름 · 가격만 바꿔서, 업로드 · 삭제 키 처리 때문에 실패 원인이 가려지지 않게 한다.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT,
-        properties = "cartmate.scheduling.enabled=false")
-@ActiveProfiles("test")
-class SalesPostUpdateFlowTest {
+class SalesPostUpdateFlowTest extends ProductServiceTestSupport {
 
-    private static final int PORT = freePort();
     private static final Long SELLER_ID = 7L;
     private static final Long OTHER_SELLER_ID = 8L;
 
-    @DynamicPropertySource
-    static void serverAndProductUrl(DynamicPropertyRegistry registry) {
-        registry.add("server.port", () -> PORT);
-        registry.add("product.global.internalUrl", () -> "http://localhost:" + PORT);
-    }
-
     @Autowired
     SalesPostFacade salesPostFacade;
-    @MockitoSpyBean
-    SalesPostUpdateUseCase salesPostUpdateUseCase;
-    @MockitoSpyBean
-    SalesPostSyncProductUseCase salesPostSyncProductUseCase;
-    @MockitoSpyBean
-    SalesPostApiClient salesPostApiClient;
     @Autowired
     ProductFacade productFacade;
     @Autowired
@@ -505,11 +482,4 @@ class SalesPostUpdateFlowTest {
                 .toList());
     }
 
-    private static int freePort() {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
 }

@@ -36,15 +36,13 @@ import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPost
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostSaleStatus;
 import com.cartmate.cartmate.shared.post.event.SalesPostHiddenEvent;
 import com.cartmate.cartmate.shared.post.event.SalesPostHideType;
+import com.cartmate.cartmate.support.ProductServiceTestSupport;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.event.ApplicationEvents;
 import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -64,15 +62,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  *
  * <p>테스트는 스케줄링을 끄므로 outbox 릴레이를 직접 돌린다. Kafka는 꺼져 있어 같은 앱 안으로 전달된다.
  */
-@SpringBootTest(properties = {
-        "cartmate.scheduling.enabled=false",
-        // ManualOutboxRelayConfig의 릴레이도 @Scheduled가 붙어 있어 저절로 돈다. 테스트가 직접 돌리도록 첫 실행을 미룬다(order-service와 같은 방식)
-        "custom.outbox.relay.initial-delay=PT1H"
-})
-@ActiveProfiles("test")
-@Import(ManualOutboxRelayConfig.class)
 @RecordApplicationEvents
-class ProductDeleteTest {
+class ProductDeleteTest extends ProductServiceTestSupport {
 
     private static final Long SELLER_ID = 7L;
     private static final Long OTHER_SELLER_ID = 8L;

@@ -16,7 +16,7 @@ import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPost
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostRepository;
 import com.cartmate.cartmate.boundedContext.productService.search.out.SalesPostIndexAdmin;
-import com.cartmate.cartmate.support.ProductServiceElasticsearchContainer;
+import com.cartmate.cartmate.support.ProductServiceSearchTestSupport;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.concurrent.atomic.AtomicLong;
@@ -24,15 +24,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.context.ImportTestcontainers;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
-@SpringBootTest(properties = "cartmate.scheduling.enabled=false")
-@ActiveProfiles("test")
-@ImportTestcontainers(ProductServiceElasticsearchContainer.class)
-class SalesPostReindexUseCaseTest {
+class SalesPostReindexUseCaseTest extends ProductServiceSearchTestSupport {
 
     private static final AtomicLong PRODUCT_SEQ = new AtomicLong(9_200_000L);
     private static final Long SELLER_ID = 7L;
@@ -42,7 +35,6 @@ class SalesPostReindexUseCaseTest {
     @Autowired ElasticsearchClient client;
     @Autowired SalesPostRepository salesPostRepository;
     @Autowired SalesPostProductRepository salesPostProductRepository;
-    @MockitoSpyBean SalesPostIndexer indexer;
     @Autowired SalesPostIndexHealth indexHealth;
 
     @BeforeEach

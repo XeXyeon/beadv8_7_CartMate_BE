@@ -2,13 +2,12 @@ package com.cartmate.cartmate.boundedContext.productService.post.app;
 
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostProductWish;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductWishRepository;
+import com.cartmate.cartmate.support.ProductServiceTestSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.test.context.ActiveProfiles;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -16,9 +15,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * 찜 저장 구조: 회원 · 판매글 상품으로 저장, 같은 회원이 같은 판매글 상품을 두 번 찜할 수 없다(유니크 키).
  */
-@SpringBootTest(properties = "cartmate.scheduling.enabled=false")
-@ActiveProfiles("test")
-class SalesPostProductWishStructureTest {
+class SalesPostProductWishStructureTest extends ProductServiceTestSupport {
 
     private static final Long MEMBER_ID = 100L;
     private static final Long OTHER_MEMBER_ID = 200L;

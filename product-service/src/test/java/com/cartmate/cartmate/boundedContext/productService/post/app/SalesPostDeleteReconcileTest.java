@@ -24,22 +24,15 @@ import com.cartmate.cartmate.global.outbox.OutboxEventStatus;
 import com.cartmate.cartmate.global.outbox.OutboxRelay;
 import com.cartmate.cartmate.boundedContext.productService.product.domain.ProductStatus;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostProductStatus;
+import com.cartmate.cartmate.support.ProductServiceTestSupport;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.net.ServerSocket;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -54,27 +47,12 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>테스트는 스케줄링을 끄므로 스케줄러를 직접 만들어 부르고, outbox 릴레이도 직접 돌린다.
  * "오래 멈춘" 상태는 판매글의 삭제 시작 시각(modifyDate)을 2시간 전으로, 멈춘 outbox 행을 FAILED로 바꿔 만든다.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT,
-        properties = {
-        "cartmate.scheduling.enabled=false",
-        // ManualOutboxRelayConfig의 릴레이도 @Scheduled가 붙어 있어 저절로 돈다. 테스트가 직접 돌리도록 첫 실행을 미룬다(order-service와 같은 방식)
-        "custom.outbox.relay.initial-delay=PT1H"
-})
-@ActiveProfiles("test")
-@Import(ManualOutboxRelayConfig.class)
-class SalesPostDeleteReconcileTest {
+class SalesPostDeleteReconcileTest extends ProductServiceTestSupport {
 
-    private static final int PORT = freePort();
     private static final Long SELLER_ID = 7L;
 
     private static final String SALES_POST_DELETED = "SalesPostDeletedEvent";
     private static final String PRODUCTS_DELETED_BY_POST = "ProductsDeletedByPostEvent";
-
-    @DynamicPropertySource
-    static void serverAndProductUrl(DynamicPropertyRegistry registry) {
-        registry.add("server.port", () -> PORT);
-        registry.add("product.global.internalUrl", () -> "http://localhost:" + PORT);
-    }
 
     @Autowired
     SalesPostFacade salesPostFacade;
@@ -232,11 +210,4 @@ class SalesPostDeleteReconcileTest {
         return new CreateSalesPostRequest(null, SELLER_ID, "아이폰 팝니다", "상태 좋아요", List.of(iphone, charger));
     }
 
-    private static int freePort() {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
 }

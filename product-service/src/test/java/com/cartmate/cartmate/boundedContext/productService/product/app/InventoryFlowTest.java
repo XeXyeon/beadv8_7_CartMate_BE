@@ -28,12 +28,11 @@ import com.cartmate.cartmate.boundedContext.productService.product.out.ProductIm
 import com.cartmate.cartmate.boundedContext.productService.product.out.ProductOptionRepository;
 import com.cartmate.cartmate.boundedContext.productService.product.out.ProductRepository;
 import com.cartmate.cartmate.global.exception.ServiceException;
+import com.cartmate.cartmate.support.ProductServiceTestSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 
 import java.util.List;
 
@@ -46,9 +45,7 @@ import static org.assertj.core.api.Assertions.tuple;
  * 재고 흐름: 등록은 상품정보 → 이미지 → 재고 → 재고에서 분리된 선택된 옵션 순으로 저장한다.
  * 수정에서 빠진 재고는 선택된 옵션과 함께 DELETED로 남고(재고 ID 유지), 수정 실패 복구는 같은 재고를 같은 ID로 되살린다.
  */
-@SpringBootTest(properties = "cartmate.scheduling.enabled=false")
-@ActiveProfiles("test")
-class InventoryFlowTest {
+class InventoryFlowTest extends ProductServiceTestSupport {
 
     private static final Long SELLER_ID = 7L;
     private static final Long BASE_PRICE = 10000L;

@@ -1,6 +1,7 @@
 package com.cartmate.cartmate.support;
 
 import java.nio.file.Path;
+import java.time.Duration;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.testcontainers.elasticsearch.ElasticsearchContainer;
 import org.testcontainers.images.builder.ImageFromDockerfile;
@@ -36,6 +37,9 @@ public final class ProductServiceElasticsearchContainer {
             super(image);
             withEnv("xpack.security.enabled", "false");
             withEnv("ES_JAVA_OPTS", "-Xms448m -Xmx448m");
+            // ES 9.5는 시작할 때 내장 모듈 수십 개를 읽느라 노트북 CPU에서는 110~130초 걸린다(2026-11-19 측정).
+            // 기본 대기 시간(120초)을 넘기면 ES 테스트 전체가 실패로 잡히므로 늘린다. 빨리 뜨는 환경(CI)은 뜨는 즉시 넘어간다
+            withStartupTimeout(Duration.ofMinutes(5));
         }
 
         @Override

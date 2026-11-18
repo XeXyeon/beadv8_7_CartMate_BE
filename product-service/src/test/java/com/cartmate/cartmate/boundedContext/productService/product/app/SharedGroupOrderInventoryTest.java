@@ -29,13 +29,12 @@ import com.cartmate.cartmate.shared.order.event.SharedGroupOrderCanceledEvent;
 import com.cartmate.cartmate.shared.order.event.SharedGroupOrderConfirmedEvent;
 import com.cartmate.cartmate.shared.order.event.SharedGroupOrderSellerItemsCanceledEvent;
 import com.cartmate.cartmate.shared.product.dto.InventoryReserveRequest;
+import com.cartmate.cartmate.support.ProductServiceTestSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
@@ -50,9 +49,7 @@ import static org.assertj.core.api.Assertions.tuple;
  * 판매자 몫 취소 = 그 판매자 재고만 재고 복구. 공동 주문 id는 개인 주문 id와 겹칠 수 있어 주문 종류로 구분한다.
  * 이벤트는 인박스처럼 트랜잭션 안에서 발행한다.
  */
-@SpringBootTest(properties = "cartmate.scheduling.enabled=false")
-@ActiveProfiles("test")
-class SharedGroupOrderInventoryTest {
+class SharedGroupOrderInventoryTest extends ProductServiceTestSupport {
 
     private static final Long SELLER_ID = 7L;
     private static final Long OTHER_SELLER_ID = 8L;

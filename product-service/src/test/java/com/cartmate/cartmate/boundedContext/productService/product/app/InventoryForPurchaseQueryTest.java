@@ -24,12 +24,11 @@ import com.cartmate.cartmate.boundedContext.productService.product.out.ProductIm
 import com.cartmate.cartmate.boundedContext.productService.product.out.ProductOptionRepository;
 import com.cartmate.cartmate.boundedContext.productService.product.out.ProductRepository;
 import com.cartmate.cartmate.shared.product.dto.InventoryForPurchase;
+import com.cartmate.cartmate.support.ProductServiceTestSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 
 import java.util.List;
 
@@ -42,9 +41,7 @@ import static org.assertj.core.api.Assertions.tuple;
  * 옵션명은 재고 이름(skuName), 가격은 적용가(기본가 + 추가금액)이고,
  * 구매 가능 = 상품 판매 중 + 재고 삭제 안 됨 + 남은 수량(재고 - 예약) 1개 이상.
  */
-@SpringBootTest(properties = "cartmate.scheduling.enabled=false")
-@ActiveProfiles("test")
-class InventoryForPurchaseQueryTest {
+class InventoryForPurchaseQueryTest extends ProductServiceTestSupport {
 
     private static final Long SELLER_ID = 7L;
     private static final Long CATEGORY_ID = 1L;

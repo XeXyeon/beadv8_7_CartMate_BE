@@ -36,24 +36,16 @@ import com.cartmate.cartmate.shared.post.event.SalesPostHiddenEvent;
 import com.cartmate.cartmate.shared.post.event.SalesPostHideType;
 import com.cartmate.cartmate.boundedContext.productService.product.domain.ProductStatus;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostProductStatus;
+import com.cartmate.cartmate.support.ProductServiceTestSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.context.event.ApplicationEvents;
 import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.net.ServerSocket;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -73,18 +65,9 @@ import static org.mockito.Mockito.reset;
  * <p>테스트는 스케줄링을 끄므로 outbox 릴레이를 직접 돌린다. Kafka는 꺼져 있어 같은 앱 안으로 전달된다.
  * 판매글 · 상품 · 복제본은 실제 등록 흐름(상품 API를 실제 HTTP로 부름)으로 만들어 두므로 웹 서버를 빈 포트로 띄운다.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT,
-        properties = {
-        "cartmate.scheduling.enabled=false",
-        // ManualOutboxRelayConfig의 릴레이도 @Scheduled가 붙어 있어 저절로 돈다. 테스트가 직접 돌리도록 첫 실행을 미룬다(order-service와 같은 방식)
-        "custom.outbox.relay.initial-delay=PT1H"
-})
-@ActiveProfiles("test")
 @RecordApplicationEvents
-@Import(ManualOutboxRelayConfig.class)
-class SalesPostDeleteFlowTest {
+class SalesPostDeleteFlowTest extends ProductServiceTestSupport {
 
-    private static final int PORT = freePort();
     private static final Long SELLER_ID = 7L;
     private static final Long OTHER_SELLER_ID = 8L;
 
@@ -92,16 +75,8 @@ class SalesPostDeleteFlowTest {
     private static final String PRODUCTS_DELETED_BY_POST = "ProductsDeletedByPostEvent";
     private static final String SALES_POST_HIDDEN = "SalesPostHiddenEvent";
 
-    @DynamicPropertySource
-    static void serverAndProductUrl(DynamicPropertyRegistry registry) {
-        registry.add("server.port", () -> PORT);
-        registry.add("product.global.internalUrl", () -> "http://localhost:" + PORT);
-    }
-
     @Autowired
     SalesPostFacade salesPostFacade;
-    @MockitoSpyBean
-    SalesPostDeleteUseCase salesPostDeleteUseCase;
     @Autowired
     OutboxRelay outboxRelay;
     @Autowired
@@ -344,11 +319,4 @@ class SalesPostDeleteFlowTest {
         return new CreateSalesPostRequest(null, SELLER_ID, "아이폰 팝니다", "상태 좋아요", List.of(iphone, charger));
     }
 
-    private static int freePort() {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
 }

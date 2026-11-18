@@ -16,8 +16,8 @@ import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostPro
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostRepository;
 import com.cartmate.cartmate.boundedContext.productService.search.domain.SalesPostSearchCondition;
 import com.cartmate.cartmate.boundedContext.productService.search.domain.SalesPostSearchHits;
-import com.cartmate.cartmate.boundedContext.productService.search.out.SalesPostSearchClient;
 import com.cartmate.cartmate.global.page.PageResponse;
+import com.cartmate.cartmate.support.ProductServiceTestSupport;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -27,15 +27,10 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 // 검색 색인 응답은 목으로 정하고, DB 조립과 대체 검색은 실제 MySQL로 본다
-@SpringBootTest(properties = "cartmate.scheduling.enabled=false")
-@ActiveProfiles("test")
-class SalesPostSearchUseCaseTest {
+class SalesPostSearchUseCaseTest extends ProductServiceTestSupport {
 
     private static final AtomicLong PRODUCT_SEQ = new AtomicLong(9_300_000L);
     private static final Long SELLER_ID = 7L;
@@ -45,7 +40,6 @@ class SalesPostSearchUseCaseTest {
     @Autowired SalesPostProductRepository salesPostProductRepository;
     @Autowired MeterRegistry meterRegistry;
     @Autowired SalesPostIndexHealth indexHealth;
-    @MockitoBean SalesPostSearchClient searchClient;
 
     @BeforeEach
     void setUp() {
@@ -58,7 +52,7 @@ class SalesPostSearchUseCaseTest {
         Long a = savePost("가", SalesPostSaleStatus.ON_SALE);
         Long b = savePost("나", SalesPostSaleStatus.ON_SALE);
         Long c = savePost("다", SalesPostSaleStatus.ON_SALE);
-        given(searchClient.search(any(), any())).willReturn(new SalesPostSearchHits(List.of(c, a, b), 3));
+        given(salesPostSearchClient.search(any(), any())).willReturn(new SalesPostSearchHits(List.of(c, a, b), 3));
 
         PageResponse<SelectSalesPostResponse> page = search("아무거나");
 
@@ -70,7 +64,7 @@ class SalesPostSearchUseCaseTest {
     void ES가_돌려준_id라도_판매_중이_아니면_응답에서_뺀다() {
         Long onSale = savePost("판매 중", SalesPostSaleStatus.ON_SALE);
         Long paused = savePost("방금 중지", SalesPostSaleStatus.PAUSED);
-        given(searchClient.search(any(), any())).willReturn(new SalesPostSearchHits(List.of(paused, onSale), 2));
+        given(salesPostSearchClient.search(any(), any())).willReturn(new SalesPostSearchHits(List.of(paused, onSale), 2));
 
         PageResponse<SelectSalesPostResponse> page = search("아무거나");
 
@@ -84,7 +78,7 @@ class SalesPostSearchUseCaseTest {
         Long older = savePost("무선 이어폰", SalesPostSaleStatus.ON_SALE);
         Long newer = savePost("유선 이어폰", SalesPostSaleStatus.ON_SALE);
         savePost("가방", SalesPostSaleStatus.ON_SALE);
-        given(searchClient.search(any(), any())).willThrow(new UncheckedIOException(new IOException("연결 실패")));
+        given(salesPostSearchClient.search(any(), any())).willThrow(new UncheckedIOException(new IOException("연결 실패")));
         double before = fallbackCount("error");
         indexHealth.markFixed(indexHealth.snapshot());
 
@@ -98,7 +92,7 @@ class SalesPostSearchUseCaseTest {
 
     @Test
     void 색인이_없어서_검색이_실패하면_낡음으로_표시한다() {
-        given(searchClient.search(any(), any())).willThrow(new ElasticsearchException("search",
+        given(salesPostSearchClient.search(any(), any())).willThrow(new ElasticsearchException("search",
                 ErrorResponse.of(r -> r.status(404).error(e -> e.type("index_not_found_exception").reason("no such index")))));
         indexHealth.markFixed(indexHealth.snapshot());
 
@@ -116,7 +110,7 @@ class SalesPostSearchUseCaseTest {
         // 카테고리와 가격을 서로 다른 상품이 맞춘다(신발은 비싸고, 범위 안 가격은 다른 카테고리)
         savePost("축구화 + 양말", SalesPostSaleStatus.ON_SALE,
                 product(3L, 100_000L, SalesPostProductStatus.ON_SALE), product(1L, 40_000L, SalesPostProductStatus.ON_SALE));
-        given(searchClient.search(any(), any())).willThrow(new UncheckedIOException(new IOException("연결 실패")));
+        given(salesPostSearchClient.search(any(), any())).willThrow(new UncheckedIOException(new IOException("연결 실패")));
 
         PageResponse<SelectSalesPostResponse> page = searchUseCase.search(
                 new SalesPostSearchCondition(null, List.of(3L), 30_000L, 50_000L, null), PageRequest.of(0, 20));

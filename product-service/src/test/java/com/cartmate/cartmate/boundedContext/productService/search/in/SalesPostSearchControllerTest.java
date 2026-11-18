@@ -20,25 +20,18 @@ import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostRep
 import com.cartmate.cartmate.boundedContext.productService.search.domain.SalesPostSearchCondition;
 import com.cartmate.cartmate.boundedContext.productService.search.domain.SalesPostSearchHits;
 import com.cartmate.cartmate.boundedContext.productService.search.domain.SalesPostSearchSort;
-import com.cartmate.cartmate.boundedContext.productService.search.out.SalesPostSearchClient;
+import com.cartmate.cartmate.support.ProductServiceTestSupport;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.data.domain.Pageable;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 // 보안 필터와 open-in-view가 꺼진 실제 설정으로 주소를 호출한다. 검색 색인 응답만 목으로 정한다
-@SpringBootTest(properties = "cartmate.scheduling.enabled=false")
-@AutoConfigureMockMvc
-@ActiveProfiles("test")
-class SalesPostSearchControllerTest {
+class SalesPostSearchControllerTest extends ProductServiceTestSupport {
 
     private static final Long SELLER_ID = 7L;
 
@@ -46,14 +39,13 @@ class SalesPostSearchControllerTest {
     @Autowired SalesPostRepository salesPostRepository;
     @Autowired SalesPostProductRepository salesPostProductRepository;
     @Autowired SalesPostProductImageRepository salesPostProductImageRepository;
-    @MockitoBean SalesPostSearchClient searchClient;
 
     @BeforeEach
     void setUp() {
         salesPostProductImageRepository.deleteAll();
         salesPostProductRepository.deleteAll();
         salesPostRepository.deleteAll();
-        given(searchClient.search(any(), any())).willReturn(new SalesPostSearchHits(List.of(), 0));
+        given(salesPostSearchClient.search(any(), any())).willReturn(new SalesPostSearchHits(List.of(), 0));
     }
 
     @Test
@@ -69,7 +61,7 @@ class SalesPostSearchControllerTest {
         mvc.perform(get("/api/sales-posts/search").param("q", "   ")).andExpect(status().isOk());
 
         ArgumentCaptor<SalesPostSearchCondition> condition = ArgumentCaptor.forClass(SalesPostSearchCondition.class);
-        verify(searchClient).search(condition.capture(), any(Pageable.class));
+        verify(salesPostSearchClient).search(condition.capture(), any(Pageable.class));
         assertThat(condition.getValue().keyword()).isNull();
         assertThat(condition.getValue().sort()).isEqualTo(SalesPostSearchSort.LATEST);
     }
@@ -88,7 +80,7 @@ class SalesPostSearchControllerTest {
                 "이어폰", "설명", 30_000L, SalesPostProductStatus.ON_SALE, LocalDateTime.now(), LocalDateTime.now()));
         salesPostProductImageRepository.save(new SalesPostProductImage(9_400_101L, SELLER_ID, product, "posts/earphone.jpg",
                 1, SalesPostProductStatus.ACTIVE, LocalDateTime.now(), LocalDateTime.now()));   // 사진은 ACTIVE만 불러온다
-        given(searchClient.search(any(), any())).willReturn(new SalesPostSearchHits(List.of(post.getId()), 1));
+        given(salesPostSearchClient.search(any(), any())).willReturn(new SalesPostSearchHits(List.of(post.getId()), 1));
 
         mvc.perform(get("/api/sales-posts/search").param("q", "이어폰"))
                 .andExpect(status().isOk())

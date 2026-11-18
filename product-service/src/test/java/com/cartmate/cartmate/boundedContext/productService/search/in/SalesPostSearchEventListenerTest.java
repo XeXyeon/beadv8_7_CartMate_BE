@@ -13,12 +13,11 @@ import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPost
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostRepository;
 import com.cartmate.cartmate.boundedContext.productService.search.app.SalesPostIndexHealth;
-import com.cartmate.cartmate.boundedContext.productService.search.app.SalesPostIndexer;
 import com.cartmate.cartmate.boundedContext.productService.search.out.SalesPostIndexAdmin;
 import com.cartmate.cartmate.global.event.EventEnvelope;
 import com.cartmate.cartmate.global.event.OutboxMessageRelayed;
 import com.cartmate.cartmate.shared.post.event.SalesPostChangedEvent;
-import com.cartmate.cartmate.support.ProductServiceElasticsearchContainer;
+import com.cartmate.cartmate.support.ProductServiceSearchTestSupport;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.time.LocalDateTime;
@@ -27,21 +26,13 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.context.ImportTestcontainers;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
-@SpringBootTest(properties = "cartmate.scheduling.enabled=false")
-@ActiveProfiles("test")
-@ImportTestcontainers(ProductServiceElasticsearchContainer.class)
-class SalesPostSearchEventListenerTest {
+class SalesPostSearchEventListenerTest extends ProductServiceSearchTestSupport {
 
     private static final Long SELLER_ID = 7L;
 
     @Autowired ApplicationEventPublisher applicationEventPublisher;
-    @MockitoSpyBean SalesPostIndexer indexer;
     @Autowired SalesPostIndexHealth indexHealth;
     @Autowired SalesPostIndexAdmin indexAdmin;
     @Autowired ElasticsearchClient client;

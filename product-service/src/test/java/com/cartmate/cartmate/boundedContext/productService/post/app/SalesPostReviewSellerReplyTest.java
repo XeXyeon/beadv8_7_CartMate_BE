@@ -10,7 +10,6 @@ import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPost
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostUpdateStatus;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.CreateSalesPostReviewRequest;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.SalesPostReviewSellerReplyRequest;
-import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostMemberClient;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductImageRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductOptionRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductRepository;
@@ -21,14 +20,12 @@ import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostRev
 import com.cartmate.cartmate.global.exception.ErrorCode;
 import com.cartmate.cartmate.global.exception.ServiceException;
 import com.cartmate.cartmate.shared.delivery.PurchaseType;
+import com.cartmate.cartmate.support.ProductServiceTestSupport;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.time.LocalDateTime;
 import java.util.concurrent.atomic.AtomicLong;
@@ -41,9 +38,7 @@ import static org.mockito.BDDMockito.given;
 /**
  * 리뷰의 판매자 답글: 그 판매글의 판매자만, 리뷰마다 1개, 수정하면 "(수정됨)", 삭제하면 칸을 비워 다시 쓸 수 있다.
  */
-@SpringBootTest(properties = "cartmate.scheduling.enabled=false")
-@ActiveProfiles("test")
-class SalesPostReviewSellerReplyTest {
+class SalesPostReviewSellerReplyTest extends ProductServiceTestSupport {
 
     private static final Long SELLER_ID = 7L;              // 이 판매글의 판매자
     private static final Long SELLER_MEMBER_ID = 70L;
@@ -70,9 +65,6 @@ class SalesPostReviewSellerReplyTest {
     SalesPostReviewRepository salesPostReviewRepository;
     @Autowired
     SalesPostReviewHistoryRepository salesPostReviewHistoryRepository;
-
-    @MockitoBean
-    SalesPostMemberClient salesPostMemberClient;
 
     Long postId;
     Long reviewId;
