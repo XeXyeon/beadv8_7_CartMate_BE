@@ -27,3 +27,8 @@ product:
   # 내부 전용 포트는 임의 포트로 연다. 고정 포트(9982)면 테스트 컨텍스트가 여러 개 뜰 때 포트가 겹친다
   internal-server:
     port: 0
+
+cartmate:
+  search:
+    init:
+      enabled: false   # 테스트마다 앱이 뜰 때 ES 색인을 만들지 않는다. 필요한 테스트만 켠다
