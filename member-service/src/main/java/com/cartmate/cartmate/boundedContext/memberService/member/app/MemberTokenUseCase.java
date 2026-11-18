@@ -3,6 +3,7 @@ package com.cartmate.cartmate.boundedContext.memberService.member.app;
 import com.cartmate.cartmate.boundedContext.memberService.member.exception.MemberErrorCode;
 import com.cartmate.cartmate.boundedContext.memberService.member.domain.Member;
 import com.cartmate.cartmate.boundedContext.memberService.member.domain.MemberRole;
+import com.cartmate.cartmate.boundedContext.memberService.member.domain.MemberStatus;
 import com.cartmate.cartmate.boundedContext.memberService.member.domain.RefreshToken;
 import com.cartmate.cartmate.boundedContext.memberService.member.domain.Seller;
 import com.cartmate.cartmate.boundedContext.memberService.member.dto.TokenPair;
@@ -76,21 +77,35 @@ public class MemberTokenUseCase {
                 : now.plus(admin ? adminSessionTtl : keep ? rememberTtl : sessionTtl);
         Duration remaining = Duration.between(now, expiresAt);
 
-        // 판매자면 판매자 ID를 토큰에 넣는다. 재발급도 이 메서드를 거치므로 항상 DB 기준 최신 값이다.
-        Long sellerId = member.getRole() == MemberRole.SELLER
-                ? sellerRepository.findByMemberId(member.getId()).map(Seller::getId).orElse(null)
-                : null;
         long accessSeconds = admin
                 ? Math.min(adminAccessTokenSeconds, Math.max(1, remaining.toSeconds()))
                 : jwtProvider.getAccessTokenExpireSeconds();
-        String accessToken = jwtProvider.createAccessToken(member.getId(), member.getEmail(), member.getRole().name(),
-                sellerId, amr, accessSeconds);
+        String accessToken = createAccessToken(member, amr, accessSeconds);
 
         String rawRefresh = SecureTokens.newToken();
         refreshTokenRepository.save(RefreshToken.issue(
                 member.getId(), hash(rawRefresh), expiresAt, keep, String.join(",", amr)));
 
         return new TokenPair(accessToken, rawRefresh, keep, remaining);
+    }
+
+    // 회원 상태가 바뀐 직후(탈퇴 신청·취소) Access Token만 새로 준다. 리프레시 토큰·세션 끝 시각은 그대로.
+    // amr: 지금 토큰의 인증 수단을 이어 받는다 (관리자 OTP 세션이 풀리지 않게)
+    public String reissueAccessToken(Member member, List<String> amr) {
+        long accessSeconds = member.getRole() == MemberRole.ADMIN
+                ? adminAccessTokenSeconds
+                : jwtProvider.getAccessTokenExpireSeconds();
+        return createAccessToken(member, amr, accessSeconds);
+    }
+
+    // 판매자 ID·탈퇴 대기 표시는 발급할 때마다 DB 기준 지금 값으로 넣는다 (로그인·재발급·상태 변경 모두 여기를 거친다)
+    private String createAccessToken(Member member, List<String> amr, long accessSeconds) {
+        Long sellerId = member.getRole() == MemberRole.SELLER
+                ? sellerRepository.findByMemberId(member.getId()).map(Seller::getId).orElse(null)
+                : null;
+        boolean withdrawalPending = member.getStatus() == MemberStatus.WITHDRAWAL_PENDING;
+        return jwtProvider.createAccessToken(member.getId(), member.getEmail(), member.getRole().name(),
+                sellerId, amr, withdrawalPending, accessSeconds);
     }
 
     // 재발급: 쓴 리프레시 토큰은 지우고 새로 발급한다 (회전)

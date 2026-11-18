@@ -92,6 +92,20 @@ class MemberTokenUseCaseTest {
                 .hasMessageContaining("다시 로그인");
     }
 
+    // 다른 서비스의 WithdrawalPendingFilter는 토큰의 wp만 본다 → 발급·재발급마다 DB 상태로 넣어야 한다
+    @Test
+    void 탈퇴_대기_회원의_토큰에는_탈퇴_대기_표시가_들어가고_취소하면_빠진다() {
+        Member member = member(1L, MemberRole.BUYER);
+        member.requestWithdrawal(LocalDateTime.now());
+
+        assertThat(jwtProvider.parse(useCase.issue(member, false).accessToken()))
+                .hasValueSatisfying(user -> assertThat(user.withdrawalPending()).isTrue());
+
+        member.cancelWithdrawal();
+        assertThat(jwtProvider.parse(useCase.reissueAccessToken(member, List.of("pwd"))))
+                .hasValueSatisfying(user -> assertThat(user.withdrawalPending()).isFalse());
+    }
+
     @Test
     void 일반_회원_재발급은_지금부터_새_수명이고_amr이_없던_예전_토큰은_비밀번호만으로_본다() {
         member(1L, MemberRole.BUYER);
