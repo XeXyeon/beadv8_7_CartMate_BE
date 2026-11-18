@@ -42,6 +42,7 @@ class SalesPostSearchUseCaseTest {
     @Autowired SalesPostRepository salesPostRepository;
     @Autowired SalesPostProductRepository salesPostProductRepository;
     @Autowired MeterRegistry meterRegistry;
+    @Autowired SalesPostIndexHealth indexHealth;
     @MockitoBean SalesPostSearchClient searchClient;
 
     @BeforeEach
@@ -81,11 +82,14 @@ class SalesPostSearchUseCaseTest {
         savePost("가방", SalesPostSaleStatus.ON_SALE);
         given(searchClient.search(any(), any())).willThrow(new UncheckedIOException(new IOException("연결 실패")));
         double before = fallbackCount("error");
+        indexHealth.markFixed(indexHealth.snapshot());
 
         PageResponse<SelectSalesPostResponse> page = search("이어폰");
 
         assertThat(page.content()).extracting(SelectSalesPostResponse::getId).containsExactly(newer, older);
         assertThat(fallbackCount("error")).isEqualTo(before + 1);
+        // 검색에서 ES 장애를 알아채도 복구 재색인 대상이 된다
+        assertThat(indexHealth.isStale()).isTrue();
     }
 
     @Test

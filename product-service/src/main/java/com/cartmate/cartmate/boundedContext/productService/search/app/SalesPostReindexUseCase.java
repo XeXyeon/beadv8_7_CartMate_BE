@@ -33,13 +33,15 @@ public class SalesPostReindexUseCase {
     private final SalesPostIndexAdmin indexAdmin;
     private final SalesPostIndexer indexer;
     private final SalesPostRepository salesPostRepository;
+    private final SalesPostIndexHealth indexHealth;
 
-    public SalesPostReindexUseCase(LockProvider lockProvider, SalesPostIndexAdmin indexAdmin,
-                                   SalesPostIndexer indexer, SalesPostRepository salesPostRepository) {
+    public SalesPostReindexUseCase(LockProvider lockProvider, SalesPostIndexAdmin indexAdmin, SalesPostIndexer indexer,
+                                   SalesPostRepository salesPostRepository, SalesPostIndexHealth indexHealth) {
         this.lockExecutor = new DefaultLockingTaskExecutor(lockProvider);
         this.indexAdmin = indexAdmin;
         this.indexer = indexer;
         this.salesPostRepository = salesPostRepository;
+        this.indexHealth = indexHealth;
     }
 
     /** 새 색인 이름을 돌려준다. 이미 다른 곳에서 재색인 중이면 기다리지 않고 실패한다. */
@@ -59,6 +61,8 @@ public class SalesPostReindexUseCase {
     }
 
     private String reindexLocked() {
+        // 이 시점까지 쌓인 낡음 표시만 이번 재색인이 해결한다
+        long staleSnapshot = indexHealth.snapshot();
         Optional<String> oldIndex = indexAdmin.currentIndex();
         String newIndex = indexAdmin.createIndex();
         try {
@@ -76,6 +80,7 @@ public class SalesPostReindexUseCase {
             throw e;
         }
         oldIndex.filter(old -> !old.equals(newIndex)).ifPresent(indexAdmin::deleteIndex);
+        indexHealth.markFixed(staleSnapshot);
         log.info("판매글 검색 재색인 완료: {} (이전 {})", newIndex, oldIndex.orElse("없음"));
         return newIndex;
     }

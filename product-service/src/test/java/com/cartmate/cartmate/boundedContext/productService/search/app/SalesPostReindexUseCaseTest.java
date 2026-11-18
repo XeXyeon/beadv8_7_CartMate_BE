@@ -43,6 +43,7 @@ class SalesPostReindexUseCaseTest {
     @Autowired SalesPostRepository salesPostRepository;
     @Autowired SalesPostProductRepository salesPostProductRepository;
     @MockitoSpyBean SalesPostIndexer indexer;
+    @Autowired SalesPostIndexHealth indexHealth;
 
     @BeforeEach
     @AfterEach
@@ -105,6 +106,15 @@ class SalesPostReindexUseCaseTest {
         assertThat(indexAdmin.currentIndex()).contains(old);
         assertThat(indexAdmin.reindexingIndex()).isEmpty();
         assertThat(client.indices().get(g -> g.index("sales-posts-*")).indices()).containsOnlyKeys(old);
+    }
+
+    @Test
+    void 재색인이_끝나면_낡음_표시가_풀린다() {
+        indexHealth.markStale();
+
+        reindexUseCase.reindex();
+
+        assertThat(indexHealth.isStale()).isFalse();
     }
 
     private Long savePost(SalesPostSaleStatus status) {

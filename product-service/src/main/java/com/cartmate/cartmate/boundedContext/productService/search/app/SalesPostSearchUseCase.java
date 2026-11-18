@@ -27,6 +27,7 @@ public class SalesPostSearchUseCase {
     private final SalesPostSearchClient searchClient;
     private final SalesPostSelectUseCase selectUseCase;
     private final MeterRegistry meterRegistry;
+    private final SalesPostIndexHealth indexHealth;
 
     // 트랜잭션을 걸지 않는다. ES를 기다리는 동안(최대 1초) DB 커넥션을 붙잡지 않도록, DB 읽기는 SalesPostSelectUseCase가 따로 트랜잭션을 연다
     public PageResponse<SelectSalesPostResponse> search(SalesPostSearchCondition condition, Pageable pageable) {
@@ -37,6 +38,9 @@ public class SalesPostSearchUseCase {
             String reason = isTimeout(e) ? "timeout" : "error";
             log.warn("판매글 검색 색인을 쓰지 못해 MySQL로 대신 검색합니다. reason={}", reason, e);
             meterRegistry.counter(FALLBACK_METRIC, "reason", reason).increment();
+            if (SalesPostIndexHealth.fixableByReindex(e)) {
+                indexHealth.markStale();
+            }
             return selectUseCase.selectForSearchFallback(condition, pageable);
         }
         // 전체 건수는 색인 값 그대로 둔다. 반영 전에 판매 중이 아니게 된 글이 빠지면 이 페이지만 조금 짧아진다

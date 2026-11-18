@@ -70,6 +70,15 @@ public class SalesPostIndexAdmin {
         return targets;
     }
 
+    /** ES가 응답하면 true. 복구 스케줄러가 재색인을 시도할지 정할 때 쓴다. */
+    public boolean isAvailable() {
+        try {
+            return client.ping().value();
+        } catch (IOException | RuntimeException e) {
+            return false;
+        }
+    }
+
     private Optional<String> indexOf(String alias) {
         try {
             if (!client.indices().existsAlias(e -> e.name(alias)).value()) {
