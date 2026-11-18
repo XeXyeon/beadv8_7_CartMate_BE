@@ -8,6 +8,7 @@ import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostRep
 import com.cartmate.cartmate.boundedContext.productService.code.SalesPostErrorCode;
 import com.cartmate.cartmate.global.event.DomainEventPublisher;
 import com.cartmate.cartmate.global.exception.ServiceException;
+import com.cartmate.cartmate.shared.post.event.SalesPostChangedEvent;
 import com.cartmate.cartmate.shared.post.event.SalesPostDeletedEvent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Limit;
@@ -46,6 +47,7 @@ public class SalesPostDeleteUseCase {
 
         // DELETING 변경과 같은 트랜잭션으로 outbox에 저장한다. 상품 삭제는 product가 이벤트를 받아 처리한다
         eventPublisher.publish(new SalesPostDeletedEvent(postId, sellerId));
+        eventPublisher.publish(new SalesPostChangedEvent(postId));
         return post;
     }
 
@@ -54,7 +56,11 @@ public class SalesPostDeleteUseCase {
     public Optional<SalesPost> completeDelete(Long postId) {
         return salesPostRepository.findById(postId)
                 .filter(post -> post.getStatus() == SalesPostSaleStatus.DELETING)
-                .map(SalesPost::deleteComplete);
+                .map(post -> {
+                    post.deleteComplete();
+                    eventPublisher.publish(new SalesPostChangedEvent(postId));
+                    return post;
+                });
     }
 
     // 삭제 대사: 삭제를 시작한 지 STUCK_AFTER가 지나도록 DELETING인 판매글 ID

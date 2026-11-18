@@ -1,0 +1,36 @@
+{
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 0,
+    "analysis": {
+      "tokenizer": {
+        "ko_nori_tokenizer": { "type": "nori_tokenizer", "decompound_mode": "mixed" },
+        "ko_bigram_tokenizer": { "type": "ngram", "min_gram": 2, "max_gram": 2, "token_chars": ["letter", "digit"] }
+      },
+      "analyzer": {
+        "ko_nori": { "type": "custom", "tokenizer": "ko_nori_tokenizer", "filter": ["lowercase"] },
+        "ko_bigram": { "type": "custom", "tokenizer": "ko_bigram_tokenizer", "filter": ["lowercase"] }
+      }
+    }
+  },
+  "mappings": {
+    "dynamic": "strict",
+    "properties": {
+      "postId": { "type": "long" },
+      "sellerId": { "type": "long" },
+      "createdAt": { "type": "date" },
+      "title": { "type": "text", "analyzer": "ko_nori", "fields": { "bigram": { "type": "text", "analyzer": "ko_bigram" } } },
+      "content": { "type": "text", "analyzer": "ko_nori", "fields": { "bigram": { "type": "text", "analyzer": "ko_bigram" } } },
+      "productNames": { "type": "text", "analyzer": "ko_nori", "fields": { "bigram": { "type": "text", "analyzer": "ko_bigram" } } },
+      "productDescriptions": { "type": "text", "analyzer": "ko_nori", "fields": { "bigram": { "type": "text", "analyzer": "ko_bigram" } } },
+      "categoryNames": { "type": "text", "analyzer": "ko_nori", "fields": { "bigram": { "type": "text", "analyzer": "ko_bigram" } } },
+      "products": {
+        "type": "nested",
+        "properties": {
+          "categoryId": { "type": "long" },
+          "price": { "type": "long" }
+        }
+      }
+    }
+  }
+}
