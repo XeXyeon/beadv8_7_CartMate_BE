@@ -6,7 +6,7 @@ import com.cartmate.cartmate.boundedContext.etcService.delivery.domain.Delivery;
 import com.cartmate.cartmate.boundedContext.etcService.delivery.domain.DeliveryClaim;
 import com.cartmate.cartmate.boundedContext.etcService.delivery.out.DeliveryClaimItemRepository;
 import com.cartmate.cartmate.boundedContext.etcService.delivery.out.DeliveryClaimRepository;
-import com.cartmate.cartmate.global.eventPublisher.EventPublisher;
+import com.cartmate.cartmate.global.event.DomainEventPublisher;
 import com.cartmate.cartmate.shared.delivery.event.DeliveryClaimCompletedEvent;
 import com.cartmate.cartmate.shared.member.SellerQuery;
 import org.junit.jupiter.api.DisplayName;
@@ -33,7 +33,7 @@ class DeliveryClaimCompleteUseCaseTest {
     private final DeliveryClaimRepository claimRepository = mock(DeliveryClaimRepository.class);
     private final DeliveryClaimItemRepository claimItemRepository = mock(DeliveryClaimItemRepository.class);
     private final SellerQuery sellerQuery = mock(SellerQuery.class);
-    private final EventPublisher eventPublisher = mock(EventPublisher.class);
+    private final DomainEventPublisher eventPublisher = mock(DomainEventPublisher.class);
     private final DeliveryClaimCompleteUseCase useCase =
             new DeliveryClaimCompleteUseCase(claimRepository, claimItemRepository, sellerQuery, eventPublisher);
 

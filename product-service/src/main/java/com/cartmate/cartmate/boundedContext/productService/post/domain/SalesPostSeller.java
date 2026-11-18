@@ -26,10 +26,13 @@ public class SalesPostSeller extends BaseManualIdAndTime {
     @Column(name = "representative_name", length = 50)
     private String representativeName;
 
+    // 사업자번호 · 전화번호 · 계좌는 더 이상 채우지 않는다 (SellerRegisteredEvent에서 뺐다, 민감 정보 복제 금지).
+    // 칸 삭제는 상품 담당과 따로 정한다. 기존 행의 값은 남아 있다.
+    // phone_number는 NULL 허용으로 바꿨다 → 기존 DB는 ALTER TABLE POST_SELLER MODIFY phone_number VARCHAR(20) NULL 필요
     @Column(name = "business_number", length = 20, unique = true)
     private String businessNumber;
 
-    @Column(name = "phone_number", nullable = false, length = 20)
+    @Column(name = "phone_number", length = 20)
     private String phoneNumber;
 
     @Column(name = "bank_name", length = 50)
@@ -44,18 +47,23 @@ public class SalesPostSeller extends BaseManualIdAndTime {
     @Column(nullable = false, length = 20)
     private String status;
 
-    public SalesPostSeller(Long id, Long memberId, String sellerType, String businessName, String businessNumber, String phoneNumber, String bankName,
-                      String accountHolder, String accountNumber, String status, LocalDateTime createDate, LocalDateTime modifyDate) {
+    public SalesPostSeller(Long id, Long memberId, String sellerType, String businessName, String representativeName,
+                           String status, LocalDateTime createDate, LocalDateTime modifyDate) {
         super(id, createDate, modifyDate);
         this.memberId = memberId;
         this.sellerType = sellerType;
         this.businessName = businessName;
-        this.businessNumber = businessNumber;
-        this.phoneNumber = phoneNumber;
-        this.bankName = bankName;
-        this.accountHolder = accountHolder;
-        this.accountNumber = accountNumber;
+        this.representativeName = representativeName;
         this.status = status;
     }
 
+    // 같은 판매자 이벤트가 다시 오면(Kafka 재전송, 백필) 새로 만들지 않고 표시 정보만 맞춘다
+    public void sync(String sellerType, String businessName, String representativeName, String status,
+                     LocalDateTime modifyDate) {
+        this.sellerType = sellerType;
+        this.businessName = businessName;
+        this.representativeName = representativeName;
+        this.status = status;
+        copyModifyDate(modifyDate);
+    }
 }

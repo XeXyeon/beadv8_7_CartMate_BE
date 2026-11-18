@@ -7,6 +7,9 @@ import com.cartmate.cartmate.shared.cart.event.IndividualGroupPurchaseOpenedEven
 import com.cartmate.cartmate.shared.cart.event.IndividualGroupPurchaseUpdatedEvent;
 import com.cartmate.cartmate.shared.delivery.event.DeliveryConfirmedEvent;
 import com.cartmate.cartmate.shared.member.event.MemberSignedUpEvent;
+import com.cartmate.cartmate.shared.member.event.MemberWithdrawalRequestedEvent;
+import com.cartmate.cartmate.shared.member.event.SellerRegisteredEvent;
+import com.cartmate.cartmate.shared.trust.event.SellerTrustScoreChangedEvent;
 import com.cartmate.cartmate.shared.order.event.OrderCanceledEvent;
 import com.cartmate.cartmate.shared.order.event.OrderCreatedEvent;
 import com.cartmate.cartmate.shared.order.event.OrderPaidEvent;
@@ -95,6 +98,24 @@ public class ProductServiceKafkaConfig {
     @Bean
     public InboundEventBinding memberSignedUpBinding() {
         return binding(MemberSignedUpEvent.class);
+    }
+
+    // 판매자 등록 → 판매글에 보여줄 판매자 복제 (SalesPostEventListener, 멱등)
+    @Bean
+    public InboundEventBinding sellerRegisteredBinding() {
+        return binding(SellerRegisteredEvent.class);
+    }
+
+    // 탈퇴 신청 → 그 판매자의 판매 중 판매글 판매 중지 (SalesPostMemberEventListener)
+    @Bean
+    public InboundEventBinding memberWithdrawalRequestedBinding() {
+        return binding(MemberWithdrawalRequestedEvent.class);
+    }
+
+    // 신뢰도 변경 → 판매글에 보여줄 판매자 신뢰도 복제 (SalesPostEventListener, 늦게 온 이전 점수는 무시)
+    @Bean
+    public InboundEventBinding sellerTrustScoreChangedBinding() {
+        return binding(SellerTrustScoreChangedEvent.class);
     }
 
     private static InboundEventBinding binding(Class<?> eventType) {
