@@ -26,15 +26,14 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 탈퇴한 회원의 댓글 · 리뷰 작성자를 "탈퇴한 회원"으로 바꾸는 처리.
- *
- * <p>member-service에 탈퇴 완료 처리가 없고 탈퇴 이벤트가 서버 간으로 오지 않아, 아직 이벤트로 연결하지 않았다.
- * 그래서 이벤트 수신이 아니라 UseCase를 직접 불러 product-service 쪽 동작만 확인한다.
+ * 탈퇴가 완료된 회원들이 쓴 댓글 · 답글 · 리뷰의 삭제 처리(soft delete)와 판매글 리뷰 집계 반영.
+ * 탈퇴 완료 회원 ID는 스케줄러가 회원 서버에서 받아 넘긴다 — 여기서는 UseCase를 직접 부른다.
  */
 @SpringBootTest(properties = "cartmate.scheduling.enabled=false")
 @ActiveProfiles("test")
@@ -42,6 +41,7 @@ class SalesPostWriterWithdrawTest {
 
     private static final Long SELLER_ID = 7L;
     private static final Long WITHDRAWN_MEMBER_ID = 100L;
+    private static final Long OTHER_WITHDRAWN_MEMBER_ID = 101L;
     private static final Long OTHER_MEMBER_ID = 200L;
     private static final AtomicLong ORDER_ITEM_SEQ = new AtomicLong(5000);
 
@@ -90,81 +90,102 @@ class SalesPostWriterWithdrawTest {
     }
 
     @Test
-    @DisplayName("그 회원이 쓴 원댓글 · 답글 · 삭제된 글까지 판매글과 상관없이 작성자만 \"탈퇴한 회원\"으로 바뀌고 내용은 남는다")
-    void anonymizesOnlyThatMembersComments() {
-        SalesPostComment root = save(SalesPostComment.root(postId, WITHDRAWN_MEMBER_ID, "탈퇴할회원", "정사이즈인가요?", true));
-        SalesPostComment othersRoot = save(SalesPostComment.root(otherPostId, OTHER_MEMBER_ID, "남은회원", "배송 얼마나?", false));
-        SalesPostComment replyOnOthers = save(SalesPostComment.reply(othersRoot, WITHDRAWN_MEMBER_ID, "탈퇴할회원", "저도 궁금", false));
-        SalesPostComment deleted = save(SalesPostComment.root(postId, WITHDRAWN_MEMBER_ID, "탈퇴할회원", "지운 글", false));
-        deleted.delete(WITHDRAWN_MEMBER_ID);
-        salesPostCommentRepository.save(deleted);
+    @DisplayName("그 회원들이 쓴 원댓글 · 답글만 판매글과 상관없이 삭제 처리되고, 다른 회원의 댓글은 그대로다")
+    void deletesOnlyThoseMembersComments() {
+        SalesPostComment root = saveComment(SalesPostComment.root(postId, WITHDRAWN_MEMBER_ID, "탈퇴회원", "정사이즈인가요?", true));
+        SalesPostComment othersRoot = saveComment(SalesPostComment.root(otherPostId, OTHER_MEMBER_ID, "남은회원", "배송 얼마나?", false));
+        SalesPostComment replyOnOthers = saveComment(SalesPostComment.reply(othersRoot, OTHER_WITHDRAWN_MEMBER_ID, "탈퇴회원2", "저도 궁금", false));
 
-        int changed = salesPostWriterWithdrawUseCase.anonymizeWriter(WITHDRAWN_MEMBER_ID);
+        SalesPostWriterWithdrawUseCase.Result result =
+                salesPostWriterWithdrawUseCase.deleteWrittenBy(List.of(WITHDRAWN_MEMBER_ID, OTHER_WITHDRAWN_MEMBER_ID));
 
-        assertThat(changed).isEqualTo(3);
-        for (Long id : new Long[]{root.getId(), replyOnOthers.getId(), deleted.getId()}) {
-            assertThat(salesPostCommentRepository.findById(id).orElseThrow().getWriterNickname())
-                    .isEqualTo(SalesPostComment.WITHDRAWN_NICKNAME);
-        }
-        SalesPostComment reloadedRoot = salesPostCommentRepository.findById(root.getId()).orElseThrow();
-        assertThat(reloadedRoot.getContent()).isEqualTo("정사이즈인가요?");
-        assertThat(reloadedRoot.isSecret()).isTrue();
-        assertThat(reloadedRoot.getWriterMemberId()).isEqualTo(WITHDRAWN_MEMBER_ID);
-
-        assertThat(salesPostCommentRepository.findById(othersRoot.getId()).orElseThrow().getWriterNickname())
-                .isEqualTo("남은회원");
+        assertThat(result.deletedComments()).isEqualTo(2);
+        assertThat(comment(root).isDeleted()).isTrue();
+        assertThat(comment(root).getContent()).isEqualTo("정사이즈인가요?");   // soft delete: 내용은 DB에 남는다
+        assertThat(comment(replyOnOthers).isDeleted()).isTrue();
+        assertThat(comment(othersRoot).isDeleted()).isFalse();
     }
 
     @Test
-    @DisplayName("그 회원이 쓴 리뷰(삭제된 리뷰 포함)도 작성자만 \"탈퇴한 회원\"으로 바뀌고 별점 · 내용은 남는다")
-    void anonymizesOnlyThatMembersReviews() {
-        SalesPostReview mine = saveReview(WITHDRAWN_MEMBER_ID, "탈퇴할회원", 4, "사이즈가 딱 맞아요. 좋아요.");
-        SalesPostReview deletedMine = saveReview(WITHDRAWN_MEMBER_ID, "탈퇴할회원", 1, "별로였어요. 환불하고 싶어요.");
-        deletedMine.delete(WITHDRAWN_MEMBER_ID);
-        salesPostReviewRepository.save(deletedMine);
-        SalesPostReview others = saveReview(OTHER_MEMBER_ID, "남은회원", 5, "배송이 빨라서 좋았어요.");
-        save(SalesPostComment.root(postId, WITHDRAWN_MEMBER_ID, "탈퇴할회원", "문의", false));
+    @DisplayName("그 회원들의 리뷰가 삭제 처리되고, 판매글마다 리뷰 수 · 별점 합계에서 빠진다")
+    void deletesReviewsAndAdjustsSummaryPerPost() {
+        SalesPostReview onPost = saveReview(postId, WITHDRAWN_MEMBER_ID, 5);
+        SalesPostReview onPost2 = saveReview(postId, OTHER_WITHDRAWN_MEMBER_ID, 2);
+        SalesPostReview onOtherPost = saveReview(otherPostId, WITHDRAWN_MEMBER_ID, 4);
+        SalesPostReview others = saveReview(postId, OTHER_MEMBER_ID, 3);
 
-        int changed = salesPostWriterWithdrawUseCase.anonymizeWriter(WITHDRAWN_MEMBER_ID);
+        SalesPostWriterWithdrawUseCase.Result result =
+                salesPostWriterWithdrawUseCase.deleteWrittenBy(List.of(WITHDRAWN_MEMBER_ID, OTHER_WITHDRAWN_MEMBER_ID));
 
-        assertThat(changed).isEqualTo(3);   // 리뷰 2 + 댓글 1
-        for (Long id : new Long[]{mine.getId(), deletedMine.getId()}) {
-            assertThat(salesPostReviewRepository.findById(id).orElseThrow().getWriterNickname())
-                    .isEqualTo(SalesPostComment.WITHDRAWN_NICKNAME);
-        }
-        SalesPostReview reloaded = salesPostReviewRepository.findById(mine.getId()).orElseThrow();
-        assertThat(reloaded.getRating()).isEqualTo(4);
-        assertThat(reloaded.getContent()).isEqualTo("사이즈가 딱 맞아요. 좋아요.");
-        assertThat(reloaded.getWriterMemberId()).isEqualTo(WITHDRAWN_MEMBER_ID);
+        assertThat(result.deletedReviews()).isEqualTo(3);
+        assertThat(review(onPost).isDeleted()).isTrue();
+        assertThat(review(onPost2).isDeleted()).isTrue();
+        assertThat(review(onOtherPost).isDeleted()).isTrue();
+        assertThat(review(others).isDeleted()).isFalse();
 
-        assertThat(salesPostReviewRepository.findById(others.getId()).orElseThrow().getWriterNickname())
-                .isEqualTo("남은회원");
+        SalesPost post = salesPostRepository.findById(postId).orElseThrow();
+        assertThat(post.getReviewCount()).isEqualTo(1);
+        assertThat(post.getReviewRatingSum()).isEqualTo(3);
+        SalesPost otherPost = salesPostRepository.findById(otherPostId).orElseThrow();
+        assertThat(otherPost.getReviewCount()).isZero();
+        assertThat(otherPost.getReviewRatingSum()).isZero();
     }
 
     @Test
-    @DisplayName("댓글 · 리뷰가 없는 회원이면 아무것도 바뀌지 않는다")
-    void noCommentsChangesNothing() {
-        save(SalesPostComment.root(postId, OTHER_MEMBER_ID, "남은회원", "문의", false));
-        saveReview(OTHER_MEMBER_ID, "남은회원", 5, "배송이 빨라서 좋았어요.");
+    @DisplayName("이미 삭제된 리뷰는 집계에서 다시 빼지 않고, 같은 회원으로 두 번 실행해도 결과가 같다")
+    void idempotent() {
+        SalesPostReview alreadyDeleted = saveReview(postId, WITHDRAWN_MEMBER_ID, 1);
+        alreadyDeleted.delete(WITHDRAWN_MEMBER_ID);
+        salesPostReviewRepository.save(alreadyDeleted);
+        salesPostRepository.applyReviewSummary(postId, -1, -1);   // 작성자가 지웠을 때 이미 빠진 집계
+        saveReview(postId, WITHDRAWN_MEMBER_ID, 5);
+        saveReview(postId, OTHER_MEMBER_ID, 3);
+        saveComment(SalesPostComment.root(postId, WITHDRAWN_MEMBER_ID, "탈퇴회원", "문의", false));
 
-        assertThat(salesPostWriterWithdrawUseCase.anonymizeWriter(999L)).isZero();
-        assertThat(salesPostCommentRepository.findAll()).extracting(SalesPostComment::getWriterNickname)
-                .containsExactly("남은회원");
-        assertThat(salesPostReviewRepository.findAll()).extracting(SalesPostReview::getWriterNickname)
-                .containsExactly("남은회원");
+        SalesPostWriterWithdrawUseCase.Result first = salesPostWriterWithdrawUseCase.deleteWrittenBy(List.of(WITHDRAWN_MEMBER_ID));
+        SalesPostWriterWithdrawUseCase.Result second = salesPostWriterWithdrawUseCase.deleteWrittenBy(List.of(WITHDRAWN_MEMBER_ID));
+
+        assertThat(first).isEqualTo(new SalesPostWriterWithdrawUseCase.Result(1, 1));
+        assertThat(second).isEqualTo(new SalesPostWriterWithdrawUseCase.Result(0, 0));
+        SalesPost post = salesPostRepository.findById(postId).orElseThrow();
+        assertThat(post.getReviewCount()).isEqualTo(1);
+        assertThat(post.getReviewRatingSum()).isEqualTo(3);
     }
 
-    private SalesPostComment save(SalesPostComment comment) {
+    @Test
+    @DisplayName("빈 목록이면 아무것도 하지 않는다")
+    void emptyDoesNothing() {
+        SalesPostComment comment = saveComment(SalesPostComment.root(postId, WITHDRAWN_MEMBER_ID, "회원", "문의", false));
+        saveReview(postId, WITHDRAWN_MEMBER_ID, 5);
+
+        assertThat(salesPostWriterWithdrawUseCase.deleteWrittenBy(List.of()))
+                .isEqualTo(new SalesPostWriterWithdrawUseCase.Result(0, 0));
+        assertThat(comment(comment).isDeleted()).isFalse();
+        assertThat(salesPostRepository.findById(postId).orElseThrow().getReviewCount()).isEqualTo(1);
+    }
+
+    private SalesPostComment saveComment(SalesPostComment comment) {
         return salesPostCommentRepository.save(comment);
     }
 
-    // 구매확정된 구매 기록으로 리뷰를 바로 저장한다 (작성 자격은 SalesPostReviewCreateTest에서 확인)
-    private SalesPostReview saveReview(Long memberId, String nickname, int rating, String content) {
+    private SalesPostComment comment(SalesPostComment saved) {
+        return salesPostCommentRepository.findById(saved.getId()).orElseThrow();
+    }
+
+    private SalesPostReview review(SalesPostReview saved) {
+        return salesPostReviewRepository.findById(saved.getId()).orElseThrow();
+    }
+
+    // 구매확정된 구매 기록으로 리뷰를 저장하고, 작성 API처럼 판매글 집계에도 더한다 (작성 자격은 SalesPostReviewCreateTest에서 확인)
+    private SalesPostReview saveReview(Long postId, Long memberId, int rating) {
         SalesPostPurchase purchase = SalesPostPurchase.purchased(PurchaseType.INDIVIDUAL_GROUP, 31L,
                 ORDER_ITEM_SEQ.incrementAndGet(), memberId, 9L, 90L, SELLER_ID, "반팔 티셔츠", "블랙 / L");
         purchase.confirm(LocalDateTime.now().minusDays(1));
         SalesPostPurchase saved = salesPostPurchaseRepository.save(purchase);
-        return salesPostReviewRepository.save(SalesPostReview.write(saved, postId, nickname, rating, content));
+        SalesPostReview review = salesPostReviewRepository.save(
+                SalesPostReview.write(saved, postId, "회원" + memberId, rating, "사이즈가 딱 맞아요. 좋아요."));
+        salesPostRepository.applyReviewSummary(postId, 1, rating);
+        return review;
     }
 
     private Long savePost() {
