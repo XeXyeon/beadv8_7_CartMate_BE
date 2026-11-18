@@ -73,12 +73,11 @@ public class OrderFacade {
         return orderPaymentUseCase.getPaymentInfo(orderId, memberId, now);
     }
 
-    @Transactional
+    // 트랜잭션 없이 부른다: 다른 서버 호출이 많아 결제 쪽이 짧은 트랜잭션을 단계마다 나눠 연다(OrderPaymentUseCase.pay)
     public PaymentResult payOrder(Long memberId, Long orderId) {
         return payOrder(memberId, orderId, null);
     }
 
-    @Transactional
     public PaymentResult payOrder(Long memberId, Long orderId, Long memberCouponId) {
         return orderPaymentUseCase.pay(orderId, memberId, memberCouponId, LocalDateTime.now(clock));
     }

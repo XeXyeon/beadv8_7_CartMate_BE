@@ -302,6 +302,7 @@ CREATE TABLE IF NOT EXISTS `orders` (
   `partially_canceled` bit(1) NOT NULL,
   `payment_deadline_at` datetime(6) NOT NULL,
   `payment_id` bigint DEFAULT NULL,
+  `payment_locked_until` datetime(6) DEFAULT NULL,
   `pending_individual_group_purchase_id` bigint DEFAULT NULL,
   `status` varchar(20) NOT NULL,
   `total_amount` bigint NOT NULL,

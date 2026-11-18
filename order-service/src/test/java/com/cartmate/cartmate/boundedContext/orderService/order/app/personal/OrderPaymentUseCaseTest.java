@@ -56,6 +56,8 @@ class OrderPaymentUseCaseTest {
     private static final Long PAYMENT_ID = 500L;
     private static final LocalDateTime CREATED_AT = LocalDateTime.of(2026, 10, 19, 12, 0);
     private static final Long PURCHASE_ID = 10L;
+    private static final org.springframework.transaction.support.TransactionOperations TX =
+            org.springframework.transaction.support.TransactionOperations.withoutTransaction();
 
     @Mock
     private OrderRepository orderRepository;
@@ -78,7 +80,7 @@ class OrderPaymentUseCaseTest {
                         .toList();
                 paymentUseCase = new OrderPaymentUseCase(orderRepository, new OrderSupport(orderRepository), eventPublisher, allOnSale,
                         replicaUseCase, org.mockito.Mockito.mock(com.cartmate.cartmate.boundedContext.orderService.order.out.OrderPaymentClient.class),
-                        org.mockito.Mockito.mock(com.cartmate.cartmate.boundedContext.orderService.order.out.OrderCouponClient.class), inventoryClient);
+                        org.mockito.Mockito.mock(com.cartmate.cartmate.boundedContext.orderService.order.out.OrderCouponClient.class), inventoryClient, TX);
     }
 
     @Test
@@ -166,7 +168,7 @@ class OrderPaymentUseCaseTest {
     @DisplayName("공동구매가 닫히면 닫히기 전에 만든 주문도 결제 정보에서 결제 불가이고 결제 반영도 거절한다 (결제 마감 = 판매 마감)")
     void rejectIndividualGroupAfterClose() {
         Order order = individualGroupOrder(CREATED_AT);
-        given(orderRepository.findById(ORDER_ID)).willReturn(Optional.of(order));
+        givenOrder(order);
         given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(order));
         IndividualGroupPurchaseReplica closed = IndividualGroupPurchaseReplica.of(
                 PURCHASE_ID, CREATED_AT.plusDays(1), true, CREATED_AT.plusMinutes(1), List.of(2L), 3);
@@ -210,9 +212,9 @@ class OrderPaymentUseCaseTest {
         };
         OrderPaymentUseCase useCase = new OrderPaymentUseCase(orderRepository, new OrderSupport(orderRepository),
                 eventPublisher, flaky, replicaUseCase, paymentClient,
-                org.mockito.Mockito.mock(com.cartmate.cartmate.boundedContext.orderService.order.out.OrderCouponClient.class), inventoryClient);
+                org.mockito.Mockito.mock(com.cartmate.cartmate.boundedContext.orderService.order.out.OrderCouponClient.class), inventoryClient, TX);
         Order order = personalOrder(BUYER, ballLine(9L, 2), CREATED_AT);
-        given(orderRepository.findById(ORDER_ID)).willReturn(Optional.of(order));
+        givenOrder(order);
         given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(order));
         given(paymentClient.findPayment(any(), any(), any())).willReturn(Optional.empty());
         given(paymentClient.charge(any(), any(), any(), org.mockito.ArgumentMatchers.anyLong())).willReturn(new PaymentResult(
@@ -233,7 +235,7 @@ class OrderPaymentUseCaseTest {
         };
         OrderPaymentUseCase useCase = new OrderPaymentUseCase(orderRepository, new OrderSupport(orderRepository),
                 eventPublisher, mustNotBeCalled, replicaUseCase, paymentClient,
-                org.mockito.Mockito.mock(com.cartmate.cartmate.boundedContext.orderService.order.out.OrderCouponClient.class), inventoryClient);
+                org.mockito.Mockito.mock(com.cartmate.cartmate.boundedContext.orderService.order.out.OrderCouponClient.class), inventoryClient, TX);
         Order order = personalOrder(BUYER, ballLine(9L, 2), CREATED_AT);
         order.cancelByBuyer(BUYER, CREATED_AT.plusMinutes(1));
         given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(order));
@@ -265,7 +267,7 @@ class OrderPaymentUseCaseTest {
         OrderPaymentClient paymentClient = org.mockito.Mockito.mock(OrderPaymentClient.class);
         OrderPaymentUseCase useCase = payingUseCase(paymentClient);
         Order order = personalOrder(BUYER, ballLine(9L, 2), CREATED_AT);
-        given(orderRepository.findById(ORDER_ID)).willReturn(Optional.of(order));
+        givenOrder(order);
         given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(order));
         given(paymentClient.findPayment(any(), any(), any())).willReturn(Optional.empty());
         given(paymentClient.charge(any(), any(), any(), org.mockito.ArgumentMatchers.anyLong())).willReturn(new PaymentResult(
@@ -327,11 +329,11 @@ class OrderPaymentUseCaseTest {
         return new OrderPaymentUseCase(orderRepository, new OrderSupport(orderRepository), eventPublisher, productClient,
                 replicaUseCase, paymentClient,
                 org.mockito.Mockito.mock(com.cartmate.cartmate.boundedContext.orderService.order.out.OrderCouponClient.class),
-                inventoryClient);
+                inventoryClient, TX);
     }
 
     private void givenPayable(OrderPaymentClient paymentClient, Order order) {
-        given(orderRepository.findById(ORDER_ID)).willReturn(Optional.of(order));
+        givenOrder(order);
         given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(order));
         given(paymentClient.findPayment(any(), any(), any())).willReturn(Optional.empty());
         given(paymentClient.charge(any(), any(), any(), org.mockito.ArgumentMatchers.anyLong())).willReturn(new PaymentResult(
@@ -344,7 +346,8 @@ class OrderPaymentUseCaseTest {
         OrderPaymentClient paymentClient = org.mockito.Mockito.mock(OrderPaymentClient.class);
         OrderPaymentUseCase useCase = payingUseCase(paymentClient);
         Order order = personalOrder(BUYER, ballLine(9L, 2), CREATED_AT);
-        given(orderRepository.findById(ORDER_ID)).willReturn(Optional.of(order));
+        givenOrder(order);
+        given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(order));
         given(paymentClient.findPayment(any(), any(), any())).willReturn(Optional.empty());
         org.mockito.BDDMockito.willThrow(new ServiceException(OrderErrorCode.ORDER_OUT_OF_STOCK))
                 .given(inventoryClient).reserve(any(), any(), any());
@@ -362,14 +365,43 @@ class OrderPaymentUseCaseTest {
         assertChargeFailureLeavesOrderPending(new ServiceException("400-INSUFFICIENT_BALANCE", "예치금이 부족합니다."));
 
         then(inventoryClient).should().release(OrderType.PERSONAL, ORDER_ID);
+        then(orderRepository).should().unlockPayment(org.mockito.ArgumentMatchers.eq(ORDER_ID), any());
     }
 
     @Test
-    @DisplayName("선점 해제 안 함: 차감에 응답이 없으면(결제됐는지 모름) 선점을 그대로 둔다")
+    @DisplayName("선점 해제 안 함: 차감에 응답이 없으면(결제됐는지 모름) 선점도 결제 진행 표시도 그대로 둔다")
     void chargeUnavailableKeepsReservation() {
         assertChargeFailureLeavesOrderPending(new InternalServerUnavailableException("PAYMENT", "결제", null));
 
         then(inventoryClient).should(never()).release(any(), any());
+        then(orderRepository).should(never()).unlockPayment(any(), any());
+    }
+
+    @Test
+    @DisplayName("선점 해제 안 함: 같은 주문의 차감이 아직 진행 중이면(결과 모름) 선점도 결제 진행 표시도 그대로 둔다 — 남의 선점을 풀던 버그")
+    void chargeInProgressKeepsReservation() {
+        assertChargeFailureLeavesOrderPending(new ServiceException(OrderErrorCode.ORDER_PAYMENT_IN_PROGRESS));
+
+        then(inventoryClient).should(never()).release(any(), any());
+        then(orderRepository).should(never()).unlockPayment(any(), any());
+    }
+
+    @Test
+    @DisplayName("다른 결제가 진행 중인 주문은 재고 선점 · 차감 없이 409(ORDER_PAYMENT_IN_PROGRESS)로 바로 거절한다")
+    void rejectWhilePaymentLocked() {
+        OrderPaymentClient paymentClient = org.mockito.Mockito.mock(OrderPaymentClient.class);
+        OrderPaymentUseCase useCase = payingUseCase(paymentClient);
+        Order order = personalOrder(BUYER, ballLine(9L, 2), CREATED_AT);
+        order.lockPayment(CREATED_AT.plusMinutes(1));
+        givenOrder(order);
+        given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(order));
+        given(paymentClient.findPayment(any(), any(), any())).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> useCase.pay(ORDER_ID, BUYER, CREATED_AT.plusMinutes(1).plusSeconds(30)))
+                .hasMessageContaining(OrderErrorCode.ORDER_PAYMENT_IN_PROGRESS.getMsg());
+        then(inventoryClient).should(never()).reserve(any(), any(), any());
+        then(inventoryClient).should(never()).release(any(), any());
+        then(paymentClient).should(never()).charge(any(), any(), any(), org.mockito.ArgumentMatchers.anyLong());
     }
 
     @Test
@@ -379,7 +411,7 @@ class OrderPaymentUseCaseTest {
         OrderPaymentUseCase useCase = payingUseCase(paymentClient);
         Order order = personalOrder(BUYER, ballLine(9L, 2), CREATED_AT);
         order.cancelByBuyer(BUYER, CREATED_AT.plusMinutes(1));
-        given(orderRepository.findById(ORDER_ID)).willReturn(Optional.of(order));
+        givenOrder(order);
         given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(order));
         given(paymentClient.findPayment(any(), any(), any())).willReturn(Optional.of(new PaymentResult(PAYMENT_ID, ORDER_ID,
                 50000L, 0L, 50000L, "INDIVIDUAL_GROUP", "PAID", CREATED_AT.plusMinutes(2), null)));
@@ -397,7 +429,7 @@ class OrderPaymentUseCaseTest {
         return new OrderPaymentUseCase(orderRepository, new OrderSupport(orderRepository), eventPublisher, allOnSale,
                 replicaUseCase, paymentClient,
                 org.mockito.Mockito.mock(com.cartmate.cartmate.boundedContext.orderService.order.out.OrderCouponClient.class),
-                inventoryClient);
+                inventoryClient, TX);
     }
 
     private void assertChargeFailureLeavesOrderPending(ServiceException failure) {
@@ -407,15 +439,15 @@ class OrderPaymentUseCaseTest {
                 .toList();
         OrderPaymentUseCase useCase = new OrderPaymentUseCase(orderRepository, new OrderSupport(orderRepository),
                 eventPublisher, allOnSale, replicaUseCase, paymentClient,
-                org.mockito.Mockito.mock(com.cartmate.cartmate.boundedContext.orderService.order.out.OrderCouponClient.class), inventoryClient);
+                org.mockito.Mockito.mock(com.cartmate.cartmate.boundedContext.orderService.order.out.OrderCouponClient.class), inventoryClient, TX);
         Order order = personalOrder(BUYER, ballLine(9L, 2), CREATED_AT);
-        given(orderRepository.findById(ORDER_ID)).willReturn(Optional.of(order));
+        givenOrder(order);
+        given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(order));
         given(paymentClient.findPayment(any(), any(), any())).willReturn(Optional.empty());
         given(paymentClient.charge(any(), any(), any(), org.mockito.ArgumentMatchers.anyLong())).willThrow(failure);
 
         assertThatThrownBy(() -> useCase.pay(ORDER_ID, BUYER, CREATED_AT.plusMinutes(1))).isSameAs(failure);
         then(paymentClient).should(never()).compensateCharge(any(), any(), any());
-        then(orderRepository).should(never()).findByIdForUpdate(any());
         then(eventPublisher).should(never()).publish(any());
         assertThat(order.getStatus()).isEqualTo(OrderStatus.PAYMENT_PENDING);
     }
@@ -541,9 +573,9 @@ class OrderPaymentUseCaseTest {
                 .map(id -> new OrderProductInfo(id, id, 1L, "상품", null, 1000L, null, true, true))
                 .toList();
         OrderPaymentUseCase useCase = new OrderPaymentUseCase(orderRepository, new OrderSupport(orderRepository),
-                eventPublisher, allOnSale, replicaUseCase, paymentClient, couponClient, inventoryClient);
+                eventPublisher, allOnSale, replicaUseCase, paymentClient, couponClient, inventoryClient, TX);
         Order order = personalOrder(BUYER, ballLine(9L, 2), CREATED_AT);
-        given(orderRepository.findById(ORDER_ID)).willReturn(Optional.of(order));
+        givenOrder(order);
         given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(order));
         given(paymentClient.findPayment(any(), any(), any())).willReturn(Optional.empty());
         return new CouponFixture(useCase, paymentClient, couponClient, order);
@@ -552,6 +584,12 @@ class OrderPaymentUseCaseTest {
     private static PaymentResult charged(long amount) {
         return new PaymentResult(PAYMENT_ID, ORDER_ID, amount, 0L, amount, "INDIVIDUAL_GROUP", "PAID",
                 CREATED_AT.plusMinutes(1), null);
+    }
+
+    // 결제 전 확인은 상품까지 읽고(findWithItemsById), 선점 해제 · 쿠폰 복구는 주문만 읽는다(findById)
+    private void givenOrder(Order order) {
+        org.mockito.Mockito.lenient().when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(orderRepository.findWithItemsById(ORDER_ID)).thenReturn(Optional.of(order));
     }
 
     private Order individualGroupOrder(LocalDateTime createdAt) {
