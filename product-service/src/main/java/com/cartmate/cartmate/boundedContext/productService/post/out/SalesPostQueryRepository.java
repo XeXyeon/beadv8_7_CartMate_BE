@@ -41,6 +41,9 @@ public interface SalesPostQueryRepository {
     // 회원 탈퇴 신청: 판매자의 특정 상태 판매글 ID, id 순서
     List<Long> findIdsBySellerIdAndStatus(Long sellerId, SalesPostSaleStatus status);
 
+    // 탈퇴 완료 판매자 정리: 이 판매자들의 판매글 중 삭제를 시작할 수 있는 것 (등록 중 · 삭제 중 · 삭제는 뺀다), id 순서
+    List<SalesPost> findDeletableBySellerIds(Collection<Long> sellerIds);
+
     // 검색 재색인: 판매 중인 판매글 id를 afterId 다음부터 limit개씩 id 순으로 읽는다
     List<Long> findOnSaleIdsAfterId(Long afterId, int limit);
 

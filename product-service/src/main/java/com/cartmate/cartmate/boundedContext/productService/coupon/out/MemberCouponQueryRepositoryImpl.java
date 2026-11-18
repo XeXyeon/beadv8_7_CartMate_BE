@@ -1,5 +1,6 @@
 package com.cartmate.cartmate.boundedContext.productService.coupon.out;
 
+import org.springframework.transaction.annotation.Transactional;
 import com.cartmate.cartmate.boundedContext.productService.coupon.domain.MemberCoupon;
 import com.cartmate.cartmate.boundedContext.productService.coupon.domain.MemberCouponStatus;
 import com.querydsl.jpa.impl.JPAQueryFactory;
@@ -12,6 +13,8 @@ import java.util.Optional;
 
 import static com.cartmate.cartmate.boundedContext.productService.coupon.domain.QMemberCoupon.memberCoupon;
 
+// 예전 @Query 메서드처럼 트랜잭션 밖에서 불러도 동작하게 한다(안에서 부르면 그 트랜잭션에 합류)
+@Transactional
 public class MemberCouponQueryRepositoryImpl implements MemberCouponQueryRepository {
     private final JPAQueryFactory queryFactory;
 

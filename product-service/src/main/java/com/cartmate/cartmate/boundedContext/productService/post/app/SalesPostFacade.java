@@ -69,6 +69,7 @@ public class SalesPostFacade {
     private final SalesPostReviewDeleteUseCase salesPostReviewDeleteUseCase;
     private final SalesPostReviewSellerReplyUseCase salesPostReviewSellerReplyUseCase;
     private final SalesPostPurchaseRecordUseCase salesPostPurchaseRecordUseCase;
+    private final SalesPostWithdrawnCleanupUseCase salesPostWithdrawnCleanupUseCase;
     private final SalesPostMemberClient salesPostMemberClient;
     private final SalesPostProductWishUseCase salesPostProductWishUseCase;
 
@@ -409,6 +410,11 @@ public class SalesPostFacade {
     public void deleteReviewSellerReply(Long reviewId, Long memberId, Long sellerId) {
         requireLogin(memberId);
         salesPostReviewSellerReplyUseCase.delete(reviewId, sellerId);
+    }
+
+    // 탈퇴 회원 댓글 · 리뷰 정리 한 번 실행 (매일 0시 스케줄러). 실패하면 예외 — 마지막 성공 시각은 그대로
+    public SalesPostWithdrawnCleanupUseCase.Result cleanupWithdrawnMembers(LocalDateTime now) {
+        return salesPostWithdrawnCleanupUseCase.run(now);
     }
 
     // 리뷰 자격용 구매 기록: 결제 완료 · 공동 주문 확정 → 구매 정보 저장 (별도 트랜잭션)
