@@ -18,7 +18,7 @@
 #   order만 키 이름이 다르다: ORDER_DB_URL · ORDER_DB_USERNAME · ORDER_DB_PASSWORD
 #   order는 DB 키에 더해: OPENAI_API_KEY (장바구니 상품 매칭의 임베딩 · 라벨 생성)
 #     지금 코드는 아직 GEMINI_API_KEY를 읽는다. 매칭 코드가 OpenAI로 바뀌기 전까지는 키가 있어도 매칭이 꺼진 채(경고 로그만) 뜬다
-#   member는 DB 키에 더해: MFA_CODE_SECRET · MFA_OTP_ENCRYPTION_KEY · MAIL_FROM (메일을 보내면 MAIL_ENABLED=true · MAIL_HOST · MAIL_USERNAME · MAIL_PASSWORD 등)
+#   member는 DB 키에 더해: MFA_CODE_SECRET · MFA_OTP_ENCRYPTION_KEY · 메일(SMTP) MAIL_HOST · MAIL_PORT · MAIL_USERNAME · MAIL_PASSWORD · MAIL_SMTP_AUTH · MAIL_STARTTLS · MAIL_FROM
 #   product는 S3 접근 키가 필요하면: AWS_ACCESS_KEY_ID · AWS_SECRET_ACCESS_KEY (EC2 IAM 역할을 쓰면 넣지 않는다)
 #   MySQL root (infra): kubectl -n cartmate create secret generic cartmate-mysql-root --from-literal=MYSQL_ROOT_PASSWORD=...
 #   Elasticsearch (infra): kubectl -n cartmate create secret generic es-secret --from-literal=elastic-password=...
