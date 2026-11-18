@@ -35,7 +35,7 @@ public final class ProductServiceElasticsearchContainer {
         private SingletonElasticsearchContainer(DockerImageName image) {
             super(image);
             withEnv("xpack.security.enabled", "false");
-            withEnv("ES_JAVA_OPTS", "-Xms512m -Xmx512m");
+            withEnv("ES_JAVA_OPTS", "-Xms448m -Xmx448m");
         }
 
         @Override
