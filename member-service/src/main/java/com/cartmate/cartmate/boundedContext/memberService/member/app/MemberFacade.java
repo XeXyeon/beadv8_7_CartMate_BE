@@ -1,6 +1,7 @@
 package com.cartmate.cartmate.boundedContext.memberService.member.app;
 
 import com.cartmate.cartmate.boundedContext.memberService.member.domain.Member;
+import com.cartmate.cartmate.boundedContext.memberService.member.domain.MemberStatus;
 import com.cartmate.cartmate.boundedContext.memberService.member.domain.SuspensionReleaseType;
 import com.cartmate.cartmate.boundedContext.memberService.member.dto.*;
 import com.cartmate.cartmate.boundedContext.memberService.member.exception.MemberErrorCode;
@@ -265,18 +266,39 @@ public class MemberFacade {
         return memberWithdrawalUseCase.check(memberId);
     }
 
+    // 탈퇴 신청·취소 뒤 상태(탈퇴 대기 표시 wp)가 반영된 새 Access Token을 함께 준다 (다른 서비스 필터는 토큰만 본다)
+    // amr: 지금 토큰의 인증 수단 (새 토큰이 이어 받음)
     @Transactional
-    public WithdrawalCheckResponse requestWithdrawal(Long memberId, String password) {
-        return memberWithdrawalUseCase.request(memberId, password);
+    public WithdrawalResult requestWithdrawal(Long memberId, String password, List<String> amr) {
+        WithdrawalCheckResponse check = memberWithdrawalUseCase.request(memberId, password);
+        return new WithdrawalResult(check, reissueAccessToken(memberId, amr));
     }
 
     @Transactional
-    public WithdrawalCheckResponse cancelWithdrawal(Long memberId) {
-        return memberWithdrawalUseCase.cancel(memberId);
+    public WithdrawalResult cancelWithdrawal(Long memberId, List<String> amr) {
+        WithdrawalCheckResponse check = memberWithdrawalUseCase.cancel(memberId);
+        return new WithdrawalResult(check, reissueAccessToken(memberId, amr));
+    }
+
+    public record WithdrawalResult(WithdrawalCheckResponse check, String accessToken) {
+    }
+
+    private String reissueAccessToken(Long memberId, List<String> amr) {
+        Member member = memberSupport.findById(memberId)
+                .orElseThrow(() -> new ServiceException(MemberErrorCode.MEMBER_NOT_FOUND));
+        return memberTokenUseCase.reissueAccessToken(member, amr);
+    }
+
+    // ===== 정지 회원 Redis 키 동기화 (SuspendedMemberSync) =====
+    @Transactional(readOnly = true)
+    public boolean isSuspended(Long memberId) {
+        return memberSupport.findById(memberId)
+                .map(member -> member.getStatus() == MemberStatus.SUSPENDED)
+                .orElse(false);
     }
 
     @Transactional(readOnly = true)
-    public List<Long> findWithdrawalPendingMemberIds() {
-        return memberWithdrawalUseCase.findPendingMemberIds();
+    public List<Long> findSuspendedMemberIds() {
+        return memberSupport.findIdsByStatus(MemberStatus.SUSPENDED);
     }
 }
