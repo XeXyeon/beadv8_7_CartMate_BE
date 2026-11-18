@@ -23,6 +23,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -47,6 +48,8 @@ import java.util.function.Predicate;
 public class Order {
 
     public static final Duration PAYMENT_PERIOD = Duration.ofMinutes(30);
+    // 결제 한 번(내부 HTTP 최대 7번 × 약 7초)보다 길게. 서버가 도중에 죽어도 이 시간이 지나면 다시 결제할 수 있다
+    public static final Duration PAYMENT_LOCK_PERIOD = Duration.ofSeconds(60);
     public static final String PENDING_BUYER_INDIVIDUAL_GROUP_UNIQUE = "uk_orders_pending_buyer_individual_group";
 
     @Id
@@ -96,6 +99,11 @@ public class Order {
     private LocalDateTime paidAt;
 
     private LocalDateTime canceledAt;
+
+    // 결제 진행 표시. 이 시각 전까지는 다른 결제 요청이 들어올 수 없다(같은 주문 동시 결제 → 409).
+    // 값 자체가 잠근 요청의 표식이라, 자기가 건 값일 때만 푼다
+    @Column(name = "payment_locked_until")
+    private LocalDateTime paymentLockedUntil;
 
     @Column(name = "member_coupon_id")
     private Long memberCouponId;
@@ -191,8 +199,19 @@ public class Order {
         this.status = OrderStatus.PAID;
         this.paymentId = paymentId;
         this.paidAt = paidAt;
+        this.paymentLockedUntil = null;
         releasePending();
         return true;
+    }
+
+    // 주문 행을 잠근(FOR UPDATE) 상태에서 부른다. 다른 결제가 진행 중이면 409, 아니면 잠그고 그 값을 돌려준다
+    public LocalDateTime lockPayment(LocalDateTime now) {
+        if (paymentLockedUntil != null && now.isBefore(paymentLockedUntil)) {
+            throw new ServiceException(OrderErrorCode.ORDER_PAYMENT_IN_PROGRESS);
+        }
+        // DB 시각 정밀도와 상관없이 다시 읽어도 같은 값이 되게 밀리초로 자른다(풀 때 이 값으로 비교)
+        this.paymentLockedUntil = now.plus(PAYMENT_LOCK_PERIOD).truncatedTo(ChronoUnit.MILLIS);
+        return paymentLockedUntil;
     }
 
     // 결제 대기 주문은 배송이 없으므로 구매자가 바로 취소한다. 결제 완료 주문은 상품을 골라 배송 서버에 먼저 요청한다
