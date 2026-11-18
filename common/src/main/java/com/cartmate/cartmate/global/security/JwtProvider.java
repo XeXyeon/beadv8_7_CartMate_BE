@@ -15,6 +15,8 @@ import java.util.Optional;
 
 @Component
 public class JwtProvider {
+    static final String WITHDRAWAL_PENDING_CLAIM = "wp";
+
     private final SecretKey key;
     private final long accessTokenExpireSeconds;
 
@@ -33,6 +35,12 @@ public class JwtProvider {
     // amr: 이 로그인에서 거친 인증 수단 (관리자 API는 otp가 있어야 통과). expireSeconds: 관리자는 더 짧게
     public String createAccessToken(Long memberId, String email, String role, Long sellerId,
                                     List<String> amr, long expireSeconds) {
+        return createAccessToken(memberId, email, role, sellerId, amr, false, expireSeconds);
+    }
+
+    // withdrawalPending: 탈퇴 대기 회원이면 wp=true를 넣는다 → 모든 서비스의 WithdrawalPendingFilter가 변경 요청을 막는다
+    public String createAccessToken(Long memberId, String email, String role, Long sellerId,
+                                    List<String> amr, boolean withdrawalPending, long expireSeconds) {
         Date now = new Date();
         var builder = Jwts.builder()
                 .subject(String.valueOf(memberId))
@@ -43,6 +51,9 @@ public class JwtProvider {
         }
         if (amr != null && !amr.isEmpty()) {
             builder.claim("amr", amr);
+        }
+        if (withdrawalPending) {
+            builder.claim(WITHDRAWAL_PENDING_CLAIM, true); // 탈퇴 대기일 때만 넣는다
         }
         return builder
                 .issuedAt(now)
@@ -67,7 +78,8 @@ public class JwtProvider {
                     claims.get("email", String.class),
                     claims.get("role", String.class),
                     sellerId == null ? null : sellerId.longValue(),
-                    amr == null ? List.of() : amr.stream().map(String::valueOf).toList()
+                    amr == null ? List.of() : amr.stream().map(String::valueOf).toList(),
+                    Boolean.TRUE.equals(claims.get(WITHDRAWAL_PENDING_CLAIM, Boolean.class))
             ));
         } catch (JwtException | IllegalArgumentException e) {
             return Optional.empty(); // 위조, 만료, 형식 오류 모두 "인증 안 됨"으로 처리

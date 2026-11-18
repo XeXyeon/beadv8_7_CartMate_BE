@@ -1,10 +1,12 @@
 package com.cartmate.cartmate.boundedContext.memberService.member.app;
 
 import com.cartmate.cartmate.boundedContext.memberService.member.domain.Member;
+import com.cartmate.cartmate.boundedContext.memberService.member.domain.MemberStatus;
 import com.cartmate.cartmate.boundedContext.memberService.member.out.MemberRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.Optional;
 
 @Service
@@ -30,5 +32,9 @@ public class MemberSupport {
 
     public Optional<Member> findById(Long id) {
         return memberRepository.findById(id);
+    }
+
+    public List<Long> findIdsByStatus(MemberStatus status) {
+        return memberRepository.findIdsByStatus(status);
     }
 }
