@@ -53,6 +53,11 @@ spring:
     # 트랜잭션이 끝나면 DB 커넥션을 바로 반납한다. 기본값(true)이면 요청이 끝날 때까지 커넥션을 쥐고 있어서,
     # 판매글 상세가 커넥션을 쥔 채 판매글 → 상품 HTTP 응답을 기다리다 커넥션 풀(10개)이 막힌다(교착상태)
     open-in-view: false
+    properties:
+      hibernate:
+        # 지연 로딩하는 연관(판매글 → 상품, 상품 → 사진 · 옵션 등)을 하나씩이 아니라 IN으로 100개씩 묶어 읽는다
+        # 판매글 목록 20개 조회: 103번 → 판매글 수와 관계없는 몇 번(SalesPostListQueryCountTest)
+        default_batch_fetch_size: 100
 custom:
   wallet:
     platform-member-id: ${PLATFORM_MEMBER_ID:1} # 판매 수수료를 받는 관리자 회원 ID. 환경마다 PLATFORM_MEMBER_ID로 바꾼다
