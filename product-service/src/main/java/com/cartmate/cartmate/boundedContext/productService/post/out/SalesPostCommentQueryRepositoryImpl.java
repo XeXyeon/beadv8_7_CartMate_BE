@@ -1,5 +1,6 @@
 package com.cartmate.cartmate.boundedContext.productService.post.out;
 
+import org.springframework.transaction.annotation.Transactional;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.QSalesPostComment;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostComment;
 import com.querydsl.core.types.dsl.BooleanExpression;
@@ -15,6 +16,8 @@ import java.util.List;
 
 import static com.cartmate.cartmate.boundedContext.productService.post.domain.QSalesPostComment.salesPostComment;
 
+// 예전 @Query 메서드처럼 트랜잭션 밖에서 불러도 동작하게 한다(안에서 부르면 그 트랜잭션에 합류)
+@Transactional
 public class SalesPostCommentQueryRepositoryImpl implements SalesPostCommentQueryRepository {
     private final EntityManager entityManager;
     private final JPAQueryFactory queryFactory;

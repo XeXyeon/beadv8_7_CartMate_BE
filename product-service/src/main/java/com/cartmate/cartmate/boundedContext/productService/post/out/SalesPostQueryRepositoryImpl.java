@@ -12,6 +12,7 @@ import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.support.PageableExecutionUtils;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.Collection;
@@ -212,6 +213,7 @@ public class SalesPostQueryRepositoryImpl implements SalesPostQueryRepository {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<Long> findIdsBySellerIdAndStatus(Long sellerId, SalesPostSaleStatus status) {
         return queryFactory
                 .select(salesPost.id)
@@ -223,6 +225,7 @@ public class SalesPostQueryRepositoryImpl implements SalesPostQueryRepository {
 
     // @Modifying(flushAutomatically = true, clearAutomatically = true)와 같게: 실행 전 flush, 실행 뒤 비우기
     @Override
+    @Transactional   // 예전 @Modifying 쿼리처럼 트랜잭션 밖에서 불러도 동작하게
     public int applyReviewSummary(Long postId, long countDelta, long ratingDelta) {
         em.flush();
         long changed = queryFactory.update(salesPost)

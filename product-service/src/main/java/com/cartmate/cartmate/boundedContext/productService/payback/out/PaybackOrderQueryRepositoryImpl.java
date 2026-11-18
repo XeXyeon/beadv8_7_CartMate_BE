@@ -1,5 +1,6 @@
 package com.cartmate.cartmate.boundedContext.productService.payback.out;
 
+import org.springframework.transaction.annotation.Transactional;
 import com.cartmate.cartmate.boundedContext.productService.payback.domain.PaybackOrder;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import jakarta.persistence.EntityManager;
@@ -9,6 +10,8 @@ import java.util.Optional;
 
 import static com.cartmate.cartmate.boundedContext.productService.payback.domain.QPaybackOrder.paybackOrder;
 
+// 예전 @Query 메서드처럼 트랜잭션 밖에서 불러도 동작하게 한다(안에서 부르면 그 트랜잭션에 합류)
+@Transactional
 public class PaybackOrderQueryRepositoryImpl implements PaybackOrderQueryRepository {
     private final JPAQueryFactory queryFactory;
 
