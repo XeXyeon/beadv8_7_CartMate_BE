@@ -27,6 +27,17 @@ spring:
       observation-enabled: true
     listener:
       observation-enabled: true
+  # 판매글 검색 색인. 응답이 늦으면 오래 기다리지 않고 MySQL 검색으로 대신한다
+  elasticsearch:
+    uris: ${ES_URL:http://localhost:9200}
+    username: ${ES_USERNAME:}
+    password: ${ES_PASSWORD:}
+    connection-timeout: 1s
+    socket-timeout: 1s
+  data:
+    elasticsearch:
+      repositories:
+        enabled: false   # 색인은 ElasticsearchClient로 직접 다룬다
   batch:
     job:
       enabled: false # Job은 스케줄러가 실행하므로 애플리케이션 시작 시 자동 실행하지 않는다
