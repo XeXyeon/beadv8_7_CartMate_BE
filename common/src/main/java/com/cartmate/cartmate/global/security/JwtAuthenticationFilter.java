@@ -18,14 +18,15 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final JwtProvider jwtProvider;
-    private final BlockedMemberRegistry blockedMemberRegistry;
+    private final SuspendedMemberChecker suspendedMemberChecker;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
         resolveToken(request)
                 .flatMap(jwtProvider::parse)
-                .filter(user -> !blockedMemberRegistry.isBlocked(user.memberId())) // 정지 회원은 즉시 차단
+                // 정지 회원은 남은 토큰이 있어도 로그인하지 않은 것으로 본다 (Redis 키 기준, 모든 서비스 공통)
+                .filter(user -> !suspendedMemberChecker.isSuspended(user.memberId()))
                 .ifPresent(user -> {
                     var authentication = new UsernamePasswordAuthenticationToken(
                             user, null, List.of(new SimpleGrantedAuthority(authorityOf(user))));

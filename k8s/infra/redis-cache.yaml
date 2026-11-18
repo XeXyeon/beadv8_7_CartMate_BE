@@ -1,0 +1,67 @@
+# 캐시 Redis. 앱 설정 REDIS_CACHE_HOST · REDIS_CACHE_PORT (k8s/config.yaml)
+#   메모리가 차면 오래 안 쓴 키부터 지운다(allkeys-lru). 디스크에 저장하지 않으므로 Deployment로 띄운다
+#   비밀번호는 앱과 같은 cartmate-app-secret의 REDIS_PASSWORD (redis-core와 같은 값)
+#   노드: agent. 조회가 많은 상품 서버와 같은 노드이고, 락(redis-core)과는 다른 노드에 둔다
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-cache
+  labels:
+    app: redis-cache
+spec:
+  selector:
+    app: redis-cache
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: redis
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-cache
+  labels:
+    app: redis-cache
+spec:
+  replicas: 1
+  # 새 Pod를 먼저 띄우면 hostPort 6379가 겹치므로 기존 Pod를 내린 뒤 띄운다
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: redis-cache
+  template:
+    metadata:
+      labels:
+        app: redis-cache
+    spec:
+      nodeSelector:
+        cartmate/node: agent
+      containers:
+        - name: redis
+          image: redis:7.4.11-alpine@sha256:d9436322172a5b482c187bf1f363d3c4fea086fcca6b9c8a94de8f0f39ed3193
+          args: ["redis-server", "--requirepass", "$(REDIS_PASSWORD)", "--maxmemory", "192mb", "--maxmemory-policy", "allkeys-lru", "--save", "", "--appendonly", "no"]
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: cartmate-app-secret
+                  key: REDIS_PASSWORD
+          ports:
+            - name: redis
+              containerPort: 6379
+              hostPort: 6379   # 로컬 개발에서 노드 포트로 직접 붙을 때 쓴다. 방화벽으로 접근을 제한한다
+          resources:
+            requests:
+              cpu: 100m
+              memory: 300Mi
+            limits:
+              memory: 300Mi
+          readinessProbe:
+            tcpSocket:
+              port: redis
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: redis
+            periodSeconds: 20

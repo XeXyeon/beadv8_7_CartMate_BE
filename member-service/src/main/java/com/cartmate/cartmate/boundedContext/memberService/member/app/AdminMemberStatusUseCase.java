@@ -11,7 +11,7 @@ import com.cartmate.cartmate.boundedContext.memberService.member.dto.AdminBulkSt
 import com.cartmate.cartmate.boundedContext.memberService.member.dto.AdminSuspendRequest;
 import com.cartmate.cartmate.boundedContext.memberService.member.out.MemberRepository;
 import com.cartmate.cartmate.boundedContext.memberService.member.out.MemberSuspensionRepository;
-import com.cartmate.cartmate.global.eventPublisher.EventPublisher;
+import com.cartmate.cartmate.global.event.DomainEventPublisher;
 import com.cartmate.cartmate.global.exception.ServiceException;
 import com.cartmate.cartmate.shared.member.event.MemberStatusChangedEvent;
 import lombok.RequiredArgsConstructor;
@@ -26,7 +26,7 @@ import java.util.List;
 public class AdminMemberStatusUseCase {
     private final MemberRepository memberRepository;
     private final MemberSuspensionRepository memberSuspensionRepository;
-    private final EventPublisher eventPublisher;
+    private final DomainEventPublisher eventPublisher; // Outbox: 정지·해제와 같은 트랜잭션에 저장
     private final MemberTokenUseCase memberTokenUseCase;
 
     public void suspend(Long adminId, Long memberId, AdminSuspendRequest request) {

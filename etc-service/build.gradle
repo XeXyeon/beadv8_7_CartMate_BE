@@ -7,6 +7,8 @@ plugins {
 dependencies {
     // global(예외 · RsData · 보안 · outbox · 내부 API 클라이언트 · Redis · S3) + shared(서비스 간 이벤트 · DTO 계약)
     implementation project(':common')
+    // 분산 락(배송 · 클레임). common은 컴파일만 하므로 락을 쓰는 이 서버가 직접 넣는다 → common의 RedissonConfig · global/lock이 켜진다
+    implementation 'org.redisson:redisson:4.8.0'
     // 관측: 분산 추적(Micrometer Tracing + OTel 브리지 + OTLP 내보내기) · health · 예외 수집(SENTRY_DSN 없으면 꺼짐)
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-opentelemetry'

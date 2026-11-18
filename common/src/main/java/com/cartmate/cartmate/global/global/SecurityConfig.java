@@ -26,8 +26,7 @@ public class SecurityConfig {
     @Value("${cartmate.internal.api-key}")
     private String internalApiKey;
     private final JwtProvider jwtProvider;
-    private final BlockedMemberRegistry blockedMemberRegistry;
-    private final WithdrawalPendingRegistry withdrawalPendingRegistry;
+    private final SuspendedMemberChecker suspendedMemberChecker;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -66,10 +65,10 @@ public class SecurityConfig {
                                     "{\"resultCode\":\"403-AUTH_FORBIDDEN\",\"msg\":\"접근 권한이 없습니다.\",\"data\":null}");
                         })
                 )
-                .addFilterBefore(new JwtAuthenticationFilter(jwtProvider, blockedMemberRegistry),
+                .addFilterBefore(new JwtAuthenticationFilter(jwtProvider, suspendedMemberChecker),
                         UsernamePasswordAuthenticationFilter.class)
-                // 인증 다음에 실행: 탈퇴 대기 회원의 변경 요청 차단
-                .addFilterAfter(new WithdrawalPendingFilter(withdrawalPendingRegistry), JwtAuthenticationFilter.class)
+                // 인증 다음에 실행: 탈퇴 대기 회원(토큰의 wp)의 변경 요청 차단
+                .addFilterAfter(new WithdrawalPendingFilter(), JwtAuthenticationFilter.class)
                 .addFilterBefore(new InternalApiKeyFilter(internalApiKey), JwtAuthenticationFilter.class);
         return http.build();
     }

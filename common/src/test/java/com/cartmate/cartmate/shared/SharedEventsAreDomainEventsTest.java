@@ -19,11 +19,8 @@ class SharedEventsAreDomainEventsTest {
 
     private static final String SHARED_PACKAGE = "com.cartmate.cartmate.shared";
 
-    // 같은 모듈(member) 안에서만 쓰는 이벤트. 다른 모듈·서비스가 받게 되면 DomainEvent로 바꾸고 여기서 뺀다.
-    private static final Set<String> SAME_MODULE_ONLY = Set.of(
-            "com.cartmate.cartmate.shared.member.event.MemberStatusChangedEvent",      // 정지 회원 차단 목록 (회원 안)
-            "com.cartmate.cartmate.shared.member.event.MemberWithdrawalCanceledEvent"  // 탈퇴 대기 목록 (회원 안)
-    );
+    // 같은 모듈 안에서만 쓰는 이벤트를 shared에 둘 수밖에 없을 때만, 이유 주석과 함께 여기에 넣는다. 지금은 없다.
+    private static final Set<String> SAME_MODULE_ONLY = Set.of();
 
     @Test
     void shared_event_패키지의_이벤트는_모두_DomainEvent다() {

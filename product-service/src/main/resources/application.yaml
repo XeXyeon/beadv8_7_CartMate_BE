@@ -2,6 +2,9 @@
 # 이 서비스에 필요 없는 항목은 담당자가 정리한다. 로컬 DB 등 개인 설정은 application-dev.yaml(커밋 안 함)에 둔다.
 server:
   port: ${PRODUCT_SERVICE_PORT:8982}
+  tomcat:
+    threads:
+      max: ${TOMCAT_MAX_THREADS:50}   # 기본 200. 동시 처리 = TPS × 응답 시간(100 TPS × 0.1초 = 10개)이라 50이면 5배 여유. 응답이 늦어질 때 스레드가 쌓이는 최대치를 제한한다
 spring:
   application:
     name: product-service
@@ -36,6 +39,9 @@ spring:
       encoding: UTF-8   # 한글 데이터. Windows 기본 인코딩(MS949)으로 읽으면 깨진다
   jpa:
     defer-datasource-initialization: true   # Hibernate(ddl-auto)가 테이블을 만든 뒤에 data.sql 실행
+    # 트랜잭션이 끝나면 DB 커넥션을 바로 반납한다. 기본값(true)이면 요청이 끝날 때까지 커넥션을 쥐고 있어서,
+    # 판매글 상세가 커넥션을 쥔 채 판매글 → 상품 HTTP 응답을 기다리다 커넥션 풀(10개)이 막힌다(교착상태)
+    open-in-view: false
 custom:
   wallet:
     platform-member-id: ${PLATFORM_MEMBER_ID:1} # 판매 수수료를 받는 관리자 회원 ID. 환경마다 PLATFORM_MEMBER_ID로 바꾼다
@@ -98,7 +104,12 @@ cartmate:
     api-key: ${INTERNAL_API_KEY:local-internal-key}   # /internal/** 서버 간 호출 키. 운영은 반드시 환경 변수로
 product:
   global:
-    internalUrl: ${PRODUCT_URL:http://localhost:8982}   # 판매글이 상품 API를 부르는 주소(같은 상품 서버). 운영은 application-prod.yaml의 PRODUCT_URL
+    # 판매글이 상품 API를 부르는 주소. 같은 서버의 내부 전용 포트(internal-server.port)로 보낸다. 운영은 application-prod.yaml의 PRODUCT_URL
+    internalUrl: ${PRODUCT_URL:http://localhost:9982}
+  # 판매글 → 상품 내부 요청 전용 포트(ProductInternalServerConfig). 바깥 요청(server.port)과 스레드 풀을 나눠 교착상태를 막는다
+  internal-server:
+    port: ${PRODUCT_INTERNAL_PORT:9982}
+    max-threads: 20
 
 # 관측 가능성 (서비스 공통 — 바꾸면 다른 서비스 application.yaml도 같이)
 management:

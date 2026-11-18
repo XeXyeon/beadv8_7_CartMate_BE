@@ -14,10 +14,8 @@ import com.cartmate.cartmate.boundedContext.memberService.member.out.WithdrawalT
 import com.cartmate.cartmate.boundedContext.memberService.member.out.WithdrawalTradeClient.SellerTrades;
 import com.cartmate.cartmate.global.event.DomainEventPublisher;
 import com.cartmate.cartmate.global.exception.ServiceException;
-import com.cartmate.cartmate.shared.member.event.MemberWithdrawalCanceledEvent;
 import com.cartmate.cartmate.shared.member.event.MemberWithdrawalRequestedEvent;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -41,7 +39,6 @@ class MemberWithdrawalUseCase {
     private final SellerRepository sellerRepository;
     private final WithdrawalTradeClient withdrawalTradeClient;
     private final PasswordEncoder passwordEncoder;
-    private final ApplicationEventPublisher eventPublisher;
     private final DomainEventPublisher domainEventPublisher;
 
     // 트랜잭션 없이 부른다: 진행 중 거래 확인이 다른 서비스 HTTP라 DB 연결을 잡지 않는다 (조회는 저장소가 각자 연다)
@@ -75,20 +72,15 @@ class MemberWithdrawalUseCase {
         member.requestWithdrawal(now);
         memberRepository.save(member);
 
-        MemberWithdrawalRequestedEvent event = new MemberWithdrawalRequestedEvent(member.getId(), sellerIdOf(member), now);
-        eventPublisher.publishEvent(event);        // 회원 안: 탈퇴 대기 목록 (WithdrawalPendingSync)
-        domainEventPublisher.publish(event);       // 다른 서비스: Outbox → product 판매글 판매 중지
+        // 다른 서비스: Outbox → product 판매글 판매 중지. 회원 안 차단은 새 토큰의 탈퇴 대기 표시(wp)가 맡는다
+        domainEventPublisher.publish(new MemberWithdrawalRequestedEvent(member.getId(), sellerIdOf(member), now));
     }
 
+    // 탈퇴 취소. 판매 중지한 판매글은 판매자가 직접 재개하므로 다른 서비스에 알리지 않는다
     void cancel(Long memberId) {
         Member member = findMember(memberId);
         member.cancelWithdrawal();
         memberRepository.save(member);
-        eventPublisher.publishEvent(new MemberWithdrawalCanceledEvent(member.getId()));
-    }
-
-    List<Long> findPendingMemberIds() {
-        return memberRepository.findIdsByStatus(MemberStatus.WITHDRAWAL_PENDING);
     }
 
     // 구매자로서 + (판매자면) 판매자로서 진행 중인 거래를 모은다

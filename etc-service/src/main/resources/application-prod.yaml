@@ -17,6 +17,13 @@ logging:
 sentry:
   environment: ${SENTRY_ENVIRONMENT:prod}
 
+# 운영에서는 API 문서(/v3/api-docs)와 Swagger UI를 끈다 → springdoc 빈과 클래스를 만들지 않는다. dev 프로필에서는 그대로 쓴다
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
 custom:
   jwt:
     secret: ${JWT_SECRET}

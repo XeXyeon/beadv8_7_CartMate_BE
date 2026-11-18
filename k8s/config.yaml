@@ -1,0 +1,31 @@
+# 서비스 5개가 같이 쓰는 비밀이 아닌 설정. 비밀값은 Secret(cartmate-app-secret, <서비스>-secret)에 둔다 (kustomization.yaml 참고)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cartmate-app-config
+data:
+  SPRING_PROFILES_ACTIVE: prod
+  SENTRY_ENVIRONMENT: prod
+
+  # 서비스 간 호출 주소. 같은 네임스페이스라 Service 이름으로 부른다
+  MEMBER_SERVICE_BASE_URL: http://member-service:8981
+  PRODUCT_SERVICE_BASE_URL: http://product-service:8982
+  # member · payment · etc의 application-prod.yaml이 읽는 값(코드에서는 쓰지 않음). product는 product-service.yaml에서 localhost로 덮어쓴다
+  PRODUCT_URL: http://product-service:8982
+  PAYMENT_BASE_URL: http://payment-service:8983
+  ETC_SERVICE_BASE_URL: http://etc-service:8984
+  ORDER_SERVICE_BASE_URL: http://order-service:8986
+
+  # Redis: cache(캐시)와 core(분산 락). 클러스터 안에서는 둘 다 Service 포트 6379로 부른다 (infra/redis-cache.yaml · redis-core.yaml)
+  REDIS_CACHE_HOST: redis-cache
+  REDIS_CACHE_PORT: "6379"
+  REDIS_CORE_HOST: redis-core
+  REDIS_CORE_PORT: "6379"
+  REDIS_DATABASE: "1"
+
+  KAFKA_ENABLED: "true"
+  KAFKA_BOOTSTRAP_SERVERS: cartmate-kafka-bootstrap:9092   # infra/kafka.yaml
+
+  # trace는 Alloy로 보낸다. 남길 trace는 Alloy가 고르므로 앱은 전부 보낸다 (observability/k8s/README.md 4절)
+  OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://alloy.monitoring.svc:4318/v1/traces
+  TRACING_SAMPLING: "1.0"

@@ -1,0 +1,79 @@
+# 코어 Redis(분산 락). 앱 설정 REDIS_CORE_HOST · REDIS_CORE_PORT (k8s/config.yaml)
+#   락 키가 지워지면 안 되므로 메모리가 차도 지우지 않는다(noeviction)
+#   AOF(appendonly)로 디스크에 저장해 재시작해도 락이 남는다
+#   메모리: AOF 재작성(fork) 때 최악 2배를 쓰므로 128mb × 2 + 여유가 300Mi 안에 들어가게 maxmemory를 128mb로 둔다
+#   비밀번호는 앱과 같은 cartmate-app-secret의 REDIS_PASSWORD (redis-cache와 같은 값)
+#   노드: server. 락을 주로 쓰는 주문 서버와 같은 노드이고, 캐시(redis-cache)와는 다른 노드에 둔다
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-core
+  labels:
+    app: redis-core
+spec:
+  selector:
+    app: redis-core
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: redis
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis-core
+  labels:
+    app: redis-core
+spec:
+  serviceName: redis-core
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis-core
+  template:
+    metadata:
+      labels:
+        app: redis-core
+    spec:
+      nodeSelector:
+        cartmate/node: server
+      containers:
+        - name: redis
+          image: redis:7.4.11-alpine@sha256:d9436322172a5b482c187bf1f363d3c4fea086fcca6b9c8a94de8f0f39ed3193
+          args: ["redis-server", "--requirepass", "$(REDIS_PASSWORD)", "--maxmemory", "128mb", "--maxmemory-policy", "noeviction", "--save", "", "--appendonly", "yes", "--appendfsync", "everysec"]
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: cartmate-app-secret
+                  key: REDIS_PASSWORD
+          ports:
+            - name: redis
+              containerPort: 6379
+              hostPort: 6380   # 로컬 개발에서 노드 포트로 직접 붙을 때 쓴다(앱 기본값 REDIS_CORE_PORT 6380). 방화벽으로 접근을 제한한다
+          resources:
+            requests:
+              cpu: 50m
+              memory: 300Mi
+            limits:
+              memory: 300Mi
+          readinessProbe:
+            tcpSocket:
+              port: redis
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: redis
+            periodSeconds: 20
+          volumeMounts:
+            - name: data
+              mountPath: /data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ ReadWriteOnce ]
+        storageClassName: local-path
+        resources:
+          requests:
+            storage: 1Gi
