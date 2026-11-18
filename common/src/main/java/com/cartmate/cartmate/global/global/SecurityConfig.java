@@ -48,6 +48,10 @@ public class SecurityConfig {
                         .requestMatchers("/api/claims/**").authenticated()
                         .requestMatchers("/api/payments/**").authenticated()
                         .requestMatchers("/api/carts/**", "/api/group-purchases/**", "/api/group-orders/**", "/api/orders/**").authenticated()
+                        // 판매자 판매글 관리(등록 · 수정 · 내 글 목록 · 삭제 · 중지 · 재개): 로그인 필수. 판매자 본인인지는 컨트롤러에서 JWT의 sellerId로 확인
+                        .requestMatchers(HttpMethod.POST, "/api/sales-posts").authenticated()
+                        .requestMatchers(HttpMethod.PATCH, "/api/sales-posts").authenticated()
+                        .requestMatchers("/api/sales-posts/sellers/**").authenticated()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .anyRequest().permitAll() // 다른 모듈 개발 중이라 임시 허용
                 )
