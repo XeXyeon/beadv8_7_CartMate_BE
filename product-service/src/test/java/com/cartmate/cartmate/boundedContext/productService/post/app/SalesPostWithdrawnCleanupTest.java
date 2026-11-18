@@ -3,6 +3,8 @@ package com.cartmate.cartmate.boundedContext.productService.post.app;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPost;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostComment;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostSaleStatus;
+import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostSeller;
+import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostSellerRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostUpdateStatus;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.WithdrawnMemberCleanup;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostCommentHistoryRepository;
@@ -39,6 +41,8 @@ class SalesPostWithdrawnCleanupTest {
 
     private static final Long WITHDRAWN_MEMBER_ID = 100L;
     private static final Long OTHER_MEMBER_ID = 200L;
+    private static final Long SELLER_ID = 7L;          // 회원 100의 판매자 ID
+    private static final Long OTHER_SELLER_ID = 8L;    // 회원 200의 판매자 ID
     private static final LocalDateTime DAY1 = LocalDateTime.of(2026, 11, 19, 0, 0);
     private static final LocalDateTime DAY2 = LocalDateTime.of(2026, 11, 20, 0, 0);
     private static final LocalDateTime DAY3 = LocalDateTime.of(2026, 11, 21, 0, 0);
@@ -60,6 +64,9 @@ class SalesPostWithdrawnCleanupTest {
     @Autowired
     SalesPostProductOptionRepository salesPostProductOptionRepository;
 
+    @Autowired
+    SalesPostSellerRepository salesPostSellerRepository;
+
     @MockitoBean
     SalesPostMemberClient salesPostMemberClient;
 
@@ -67,6 +74,7 @@ class SalesPostWithdrawnCleanupTest {
 
     @BeforeEach
     void setUp() {
+        salesPostSellerRepository.deleteAll();
         withdrawnMemberCleanupRepository.deleteAll();
         salesPostCommentHistoryRepository.deleteAll();
         salesPostCommentRepository.deleteAll();
@@ -75,7 +83,8 @@ class SalesPostWithdrawnCleanupTest {
         salesPostProductRepository.deleteAll();
         salesPostRepository.deleteAll();
 
-        postId = salesPostRepository.save(new SalesPost(7L, "판매글", "내용", SalesPostSaleStatus.ON_SALE, 0L,
+        // 댓글이 달리는 판매글. 탈퇴 판매자(7)와 관계없는 판매자(9)의 글
+        postId = salesPostRepository.save(new SalesPost(9L, "판매글", "내용", SalesPostSaleStatus.ON_SALE, 0L,
                 SalesPostUpdateStatus.NEW, LocalDateTime.now())).getId();
     }
 
@@ -147,6 +156,70 @@ class SalesPostWithdrawnCleanupTest {
         assertThat(result.deletedComments()).isZero();
         assertThat(result.deletedReviews()).isZero();
         assertThat(lastSucceededAt()).isEqualTo(DAY1);
+    }
+
+    @Test
+    @DisplayName("탈퇴 완료 회원이 판매자면 그 판매자의 판매글(판매 중 · 판매 중지 · 판매 종료)을 삭제 중으로 바꾸고, 다른 판매자 글과 이미 삭제된 글은 그대로다")
+    void deletesPostsOfWithdrawnSeller() {
+        saveSeller(SELLER_ID, WITHDRAWN_MEMBER_ID);
+        saveSeller(OTHER_SELLER_ID, OTHER_MEMBER_ID);
+        Long onSale = savePost(SELLER_ID, SalesPostSaleStatus.ON_SALE, SalesPostUpdateStatus.NEW);
+        Long paused = savePost(SELLER_ID, SalesPostSaleStatus.PAUSED, SalesPostUpdateStatus.NEW);
+        Long closed = savePost(SELLER_ID, SalesPostSaleStatus.CLOSED, SalesPostUpdateStatus.NEW);
+        Long alreadyDeleted = savePost(SELLER_ID, SalesPostSaleStatus.DELETED, SalesPostUpdateStatus.NEW);
+        Long othersPost = savePost(OTHER_SELLER_ID, SalesPostSaleStatus.ON_SALE, SalesPostUpdateStatus.NEW);
+        given(salesPostMemberClient.findWithdrawnMemberIds(null, DAY1)).willReturn(List.of(WITHDRAWN_MEMBER_ID));
+
+        SalesPostWithdrawnCleanupUseCase.Result result = salesPostFacade.cleanupWithdrawnMembers(DAY1);
+
+        assertThat(result.deletedPosts()).isEqualTo(3);
+        assertThat(statusOf(onSale)).isEqualTo(SalesPostSaleStatus.DELETING);
+        assertThat(statusOf(paused)).isEqualTo(SalesPostSaleStatus.DELETING);
+        assertThat(statusOf(closed)).isEqualTo(SalesPostSaleStatus.DELETING);
+        assertThat(statusOf(alreadyDeleted)).isEqualTo(SalesPostSaleStatus.DELETED);
+        assertThat(statusOf(othersPost)).isEqualTo(SalesPostSaleStatus.ON_SALE);
+        assertThat(lastSucceededAt()).isEqualTo(DAY1);
+    }
+
+    @Test
+    @DisplayName("판매자가 아닌 탈퇴 회원이면 판매글은 건드리지 않는다")
+    void nonSellerDoesNotTouchPosts() {
+        given(salesPostMemberClient.findWithdrawnMemberIds(null, DAY1)).willReturn(List.of(WITHDRAWN_MEMBER_ID));
+
+        SalesPostWithdrawnCleanupUseCase.Result result = salesPostFacade.cleanupWithdrawnMembers(DAY1);
+
+        assertThat(result.deletedPosts()).isZero();
+        assertThat(statusOf(postId)).isEqualTo(SalesPostSaleStatus.ON_SALE);
+    }
+
+    @Test
+    @DisplayName("판매글 하나라도 삭제를 시작하지 못하면(수정 중) 댓글 · 리뷰 삭제와 시각 저장까지 전체가 롤백된다")
+    void rollsBackWhenPostDeleteBlocked() {
+        saveSeller(SELLER_ID, WITHDRAWN_MEMBER_ID);
+        Long deletable = savePost(SELLER_ID, SalesPostSaleStatus.ON_SALE, SalesPostUpdateStatus.NEW);
+        savePost(SELLER_ID, SalesPostSaleStatus.ON_SALE, SalesPostUpdateStatus.PENDING);   // 수정 중이라 삭제 불가
+        SalesPostComment comment = saveComment(WITHDRAWN_MEMBER_ID);
+        given(salesPostMemberClient.findWithdrawnMemberIds(null, DAY1)).willReturn(List.of(WITHDRAWN_MEMBER_ID));
+
+        assertThatThrownBy(() -> salesPostFacade.cleanupWithdrawnMembers(DAY1)).isInstanceOf(RuntimeException.class);
+
+        assertThat(statusOf(deletable)).isEqualTo(SalesPostSaleStatus.ON_SALE);
+        assertThat(isDeleted(comment)).isFalse();
+        assertThat(withdrawnMemberCleanupRepository.findById(WithdrawnMemberCleanup.SINGLE_ROW_ID)).isEmpty();
+    }
+
+    private void saveSeller(Long sellerId, Long memberId) {
+        salesPostSellerRepository.save(new SalesPostSeller(sellerId, memberId, "INDIVIDUAL", null, null,
+                "010-0000-0000", null, null, null, "ACTIVE", LocalDateTime.now(), LocalDateTime.now()));
+    }
+
+    private Long savePost(Long sellerId, SalesPostSaleStatus status, SalesPostUpdateStatus updateStatus) {
+        return salesPostRepository.save(new SalesPost(sellerId, "판매글", "내용", status, 0L,
+                updateStatus, LocalDateTime.now())).getId();
+    }
+
+    private SalesPostSaleStatus statusOf(Long id) {
+        return salesPostRepository.findById(id).orElseThrow().getStatus();
     }
 
     private SalesPostComment saveComment(Long memberId) {

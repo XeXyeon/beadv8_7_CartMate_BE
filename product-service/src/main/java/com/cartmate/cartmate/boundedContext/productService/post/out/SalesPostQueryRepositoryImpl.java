@@ -223,6 +223,21 @@ public class SalesPostQueryRepositoryImpl implements SalesPostQueryRepository {
                 .fetch();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<SalesPost> findDeletableBySellerIds(Collection<Long> sellerIds) {
+        if (sellerIds.isEmpty()) {
+            return List.of();
+        }
+        return queryFactory
+                .selectFrom(salesPost)
+                .where(salesPost.sellerId.in(sellerIds),
+                        salesPost.status.notIn(SalesPostSaleStatus.PENDING, SalesPostSaleStatus.DELETING,
+                                SalesPostSaleStatus.DELETED))
+                .orderBy(salesPost.id.asc())
+                .fetch();
+    }
+
     // @Modifying(flushAutomatically = true, clearAutomatically = true)와 같게: 실행 전 flush, 실행 뒤 비우기
     @Override
     @Transactional   // 예전 @Modifying 쿼리처럼 트랜잭션 밖에서 불러도 동작하게

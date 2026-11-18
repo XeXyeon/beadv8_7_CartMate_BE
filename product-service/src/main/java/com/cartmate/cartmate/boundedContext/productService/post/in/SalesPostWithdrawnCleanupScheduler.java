@@ -13,9 +13,10 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDateTime;
 
 /**
- * 탈퇴 회원 댓글 · 리뷰 정리. 매일 0시에 한 번 돈다.
+ * 탈퇴 회원 정리. 매일 0시에 한 번 돈다.
  *
- * <p>회원 서버에서 마지막 성공 시각 이후 탈퇴 완료된 회원 ID를 받아, 그 회원들의 댓글 · 리뷰를 삭제 처리한다.
+ * <p>회원 서버에서 마지막 성공 시각 이후 탈퇴 완료된 회원 ID를 받아, 그 회원들의 댓글 · 리뷰를 삭제 처리하고
+ * 판매자면 판매글도 삭제한다.
  * 실패하면(회원 서버 응답 없음 등) 마지막 성공 시각이 그대로라 다음 날 그 기간까지 함께 처리한다.
  * 탈퇴가 완료된 뒤 다음 실행까지(최대 하루) 글이 보이는 것은 감수한다.
  */
@@ -35,11 +36,11 @@ public class SalesPostWithdrawnCleanupScheduler {
     public void cleanup() {
         try {
             SalesPostWithdrawnCleanupUseCase.Result result = salesPostFacade.cleanupWithdrawnMembers(LocalDateTime.now());
-            log.info("탈퇴 회원 댓글 · 리뷰 정리: 기간 {} ~ {}, 탈퇴 회원 {}명, 댓글 {}개 · 리뷰 {}개 삭제",
+            log.info("탈퇴 회원 정리: 기간 {} ~ {}, 탈퇴 회원 {}명, 댓글 {}개 · 리뷰 {}개 삭제, 판매글 {}개 삭제 시작",
                     result.from(), result.to(), result.withdrawnMembers(),
-                    result.deletedComments(), result.deletedReviews());
+                    result.deletedComments(), result.deletedReviews(), result.deletedPosts());
         } catch (RuntimeException e) {
-            log.error("탈퇴 회원 댓글 · 리뷰 정리 실패 — 마지막 성공 시각은 그대로, 다음 실행에서 이 기간까지 다시 처리", e);
+            log.error("탈퇴 회원 정리 실패 — 마지막 성공 시각은 그대로, 다음 실행에서 이 기간까지 다시 처리", e);
         }
     }
 }
