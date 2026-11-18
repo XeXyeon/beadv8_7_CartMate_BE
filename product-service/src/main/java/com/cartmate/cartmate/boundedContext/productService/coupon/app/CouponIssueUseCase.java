@@ -56,10 +56,12 @@ class CouponIssueUseCase {
         issue(coupon, memberId, now);
     }
 
-    // 가입 쿠폰 자동 발급. 하나가 실패해도 다른 쿠폰은 계속 발급한다 (로그만 남김)
-    // 가입 쿠폰 자동 발급. 쿠폰마다 트랜잭션을 따로 둬서, 한 장이 실패해도(소진·동시 중복) 다른 쿠폰은 발급된다
+    // 가입 쿠폰 자동 발급. 쿠폰마다 트랜잭션을 따로 둬서, 한 장이 실패해도(소진·동시 중복) 다른 쿠폰은 발급된다.
+    // 예상 못 한 실패(DB 오류 등)는 나머지를 다 발급한 뒤 다시 던진다 → 가입 이벤트 Inbox가 롤백되고 다시 받는다.
+    // 다시 받으면 이미 발급된 쿠폰은 건너뛰고(회원당 한 장) 실패한 쿠폰만 다시 시도한다.
     int issueOnSignup(Long memberId, LocalDateTime now) {
         int issued = 0;
+        RuntimeException unexpected = null;
         for (Coupon coupon : couponRepository.findAllByIssueTypeAndAutoTriggerAndStatus(
                 CouponIssueType.AUTO, CouponAutoTrigger.SIGNUP, CouponStatus.ACTIVE)) {
             if (!coupon.isIssuable(now) || memberCouponRepository.existsByCouponIdAndMemberId(coupon.getId(), memberId)) {
@@ -72,9 +74,15 @@ class CouponIssueUseCase {
                 // 예상된 실패: 수량 소진, 이미 발급됨(같은 이벤트가 두 번 옴) 등 → 정상 흐름
                 log.info("가입 쿠폰 자동 발급 건너뜀: 쿠폰 #{} 회원 #{} ({})", coupon.getId(), memberId, e.getMessage());
             } catch (RuntimeException e) {
-                // 예상 못 한 실패: DB 오류, 버그 등 → 사람이 확인해야 함. 다른 쿠폰은 계속 발급한다
-                log.error("가입 쿠폰 자동 발급 실패 — 확인 필요: 쿠폰 #{} 회원 #{}", coupon.getId(), memberId, e);
+                // 예상 못 한 실패: DB 오류, 버그 등. 다른 쿠폰은 계속 발급하고 끝에 다시 던진다
+                log.warn("가입 쿠폰 자동 발급 실패, 다시 받을 때 재시도: 쿠폰 #{} 회원 #{}", coupon.getId(), memberId, e);
+                if (unexpected == null) {
+                    unexpected = e;
+                }
             }
+        }
+        if (unexpected != null) {
+            throw unexpected;
         }
         return issued;
     }

@@ -6,7 +6,7 @@ import com.cartmate.cartmate.boundedContext.etcService.trust.domain.TrustLevel;
 import com.cartmate.cartmate.boundedContext.etcService.trust.domain.TrustMetrics;
 import com.cartmate.cartmate.boundedContext.etcService.trust.domain.TrustScorePolicy;
 import com.cartmate.cartmate.boundedContext.etcService.trust.out.SellerTrustScoreRepository;
-import com.cartmate.cartmate.global.eventPublisher.EventPublisher;
+import com.cartmate.cartmate.global.event.DomainEventPublisher;
 import com.cartmate.cartmate.shared.trust.event.SellerTrustScoreChangedEvent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -18,7 +18,7 @@ import java.time.LocalDateTime;
 public class SellerTrustRecalculateUseCase {
 
     private final SellerTrustScoreRepository sellerTrustScoreRepository;
-    private final EventPublisher eventPublisher;
+    private final DomainEventPublisher eventPublisher; // 점수 저장과 같은 트랜잭션에서 Outbox → product
 
     // 판매자 한 명의 집계값으로 점수와 등급을 다시 계산해 저장한다. 점수 행이 없으면 새로 만들고 있으면 덮어쓴다.
     // 집계 건수와 점수·등급이 모두 그대로이면 아무것도 쓰지 않아, 매일 전체 판매자를 돌려도 달라진 판매자만 저장된다.

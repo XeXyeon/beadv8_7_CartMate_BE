@@ -26,6 +26,7 @@ import com.cartmate.cartmate.boundedContext.productService.product.out.ProductIm
 import com.cartmate.cartmate.boundedContext.productService.product.out.InventoryRepository;
 import com.cartmate.cartmate.boundedContext.productService.product.out.ProductOptionRepository;
 import com.cartmate.cartmate.boundedContext.productService.product.out.ProductRepository;
+import com.cartmate.cartmate.global.event.OutboxMessageRelayed;
 import com.cartmate.cartmate.global.exception.ServiceException;
 import com.cartmate.cartmate.global.outbox.ManualOutboxRelayConfig;
 import com.cartmate.cartmate.global.outbox.OutboxEventStatus;
@@ -227,20 +228,26 @@ class ProductDeleteTest {
                 .where(processedEvent.consumer.eq(ProductServiceConsumers.PRODUCT_DELETED))
                 .fetchOne()).isEqualTo(1);
         assertThat(salesPostProductRepository.findById(productId).orElseThrow().getStatus()).isEqualTo(SalesPostProductStatus.DELETED);
-        assertThat(events.stream(SalesPostHiddenEvent.class)).hasSize(1); // 진행 중 거래 정리 알림도 한 번만
+        assertThat(hiddenOutboxCount()).isEqualTo(1); // 진행 중 거래 정리 알림도 한 번만
     }
 
-    // 숨김 이벤트는 아직 앱 안 이벤트(EventPublisher)라 발행된 이벤트를 기록해서 확인한다 (outbox 전환은 다음 작업)
+    // 숨김 이벤트는 Outbox로 나간다(order-service가 Kafka로 받는다). 행 수와, 한 번 더 릴레이한 내용을 확인한다
     @Test
     @DisplayName("상품 하나를 삭제하면 그 상품만 담은 판매글 숨김 이벤트(PRODUCT_DELETED)를 발행한다")
     void deleteProductPublishesHiddenEventForThatProduct() {
         SalesPostSaleStatus postStatusBefore = salesPostRepository.findAll().getFirst().getStatus();
         productFacade.deleteProductByUser(productId, SELLER_ID);
-        assertThat(events.stream(SalesPostHiddenEvent.class)).isEmpty(); // 복제본을 지우는 처리에서 함께 나간다
+        assertThat(hiddenOutboxCount()).isZero(); // 복제본을 지우는 처리에서 함께 나간다
 
         relay();
+        assertThat(hiddenOutboxCount()).isEqualTo(1);
+        relay();
 
-        List<SalesPostHiddenEvent> hidden = events.stream(SalesPostHiddenEvent.class).toList();
+        List<SalesPostHiddenEvent> hidden = events.stream(OutboxMessageRelayed.class)
+                .map(OutboxMessageRelayed::event)
+                .filter(SalesPostHiddenEvent.class::isInstance)
+                .map(SalesPostHiddenEvent.class::cast)
+                .toList();
         assertThat(hidden).hasSize(1);
         SalesPostHiddenEvent event = hidden.getFirst();
         assertThat(event.productIds()).containsExactly(productId);
@@ -283,6 +290,13 @@ class ProductDeleteTest {
     private void relay() {
         ManualOutboxRelayConfig.releaseRelayLock(jdbcTemplate);
         outboxRelay.relay();
+    }
+
+    private long hiddenOutboxCount() {
+        return queryFactory.select(outboxEvent.count())
+                .from(outboxEvent)
+                .where(outboxEvent.eventType.eq("SalesPostHiddenEvent"))
+                .fetchOne();
     }
 
     // 상품 삭제 이벤트 수. status가 null이면 상태와 관계없이 센다

@@ -19,7 +19,8 @@ public class CartPostEventListener {
 
     private final GroupPurchaseSalesStopUseCase salesStopUseCase;
 
-    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
+    // 상품 서비스의 판매글 숨김 (Outbox → Kafka → Inbox 트랜잭션 안). 이미 빠진 상품은 제외 대상에 걸리지 않아 멱등.
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT, fallbackExecution = true)
     public void handle(SalesPostHiddenEvent event) {
         if (event.productIds() == null || event.productIds().isEmpty()) {
             return;

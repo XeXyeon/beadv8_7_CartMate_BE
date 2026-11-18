@@ -26,6 +26,7 @@ import com.cartmate.cartmate.boundedContext.productService.product.out.ProductIm
 import com.cartmate.cartmate.boundedContext.productService.product.out.InventoryRepository;
 import com.cartmate.cartmate.boundedContext.productService.product.out.ProductOptionRepository;
 import com.cartmate.cartmate.boundedContext.productService.product.out.ProductRepository;
+import com.cartmate.cartmate.global.event.OutboxMessageRelayed;
 import com.cartmate.cartmate.global.exception.ServiceException;
 import com.cartmate.cartmate.global.outbox.ManualOutboxRelayConfig;
 import com.cartmate.cartmate.global.outbox.OutboxRelay;
@@ -89,6 +90,7 @@ class SalesPostDeleteFlowTest {
 
     private static final String SALES_POST_DELETED = "SalesPostDeletedEvent";
     private static final String PRODUCTS_DELETED_BY_POST = "ProductsDeletedByPostEvent";
+    private static final String SALES_POST_HIDDEN = "SalesPostHiddenEvent";
 
     @DynamicPropertySource
     static void serverAndProductUrl(DynamicPropertyRegistry registry) {
@@ -219,7 +221,14 @@ class SalesPostDeleteFlowTest {
         relay();
         relay();
 
-        List<SalesPostHiddenEvent> hidden = events.stream(SalesPostHiddenEvent.class).toList();
+        // 숨김 이벤트는 Outbox로 나간다 (order-service가 Kafka로 받는다). 한 번 더 릴레이해 내용을 확인한다
+        assertThat(outboxCount(SALES_POST_HIDDEN, null)).isEqualTo(1);
+        relay();
+        List<SalesPostHiddenEvent> hidden = events.stream(OutboxMessageRelayed.class)
+                .map(OutboxMessageRelayed::event)
+                .filter(SalesPostHiddenEvent.class::isInstance)
+                .map(SalesPostHiddenEvent.class::cast)
+                .toList();
         assertThat(hidden).hasSize(1);
         SalesPostHiddenEvent event = hidden.getFirst();
         assertThat(event.postId()).isEqualTo(postId);
@@ -246,7 +255,7 @@ class SalesPostDeleteFlowTest {
 
         // product가 다시 처리했다면 상품 삭제 완료 이벤트가 하나 더 생긴다
         assertThat(outboxCount(PRODUCTS_DELETED_BY_POST, null)).isEqualTo(1);
-        assertThat(events.stream(SalesPostHiddenEvent.class)).hasSize(1);
+        assertThat(outboxCount(SALES_POST_HIDDEN, null)).isEqualTo(1);
         assertThat(salesPostRepository.findById(postId).orElseThrow().getStatus()).isEqualTo(SalesPostSaleStatus.DELETED);
     }
 

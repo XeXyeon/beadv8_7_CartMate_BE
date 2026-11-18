@@ -10,17 +10,19 @@ import com.cartmate.cartmate.boundedContext.memberService.member.dto.SellerRespo
 import com.cartmate.cartmate.boundedContext.memberService.member.out.AccountVerificationStore;
 import com.cartmate.cartmate.boundedContext.memberService.member.out.MemberRepository;
 import com.cartmate.cartmate.boundedContext.memberService.member.out.SellerRepository;
-import com.cartmate.cartmate.global.eventPublisher.EventPublisher;
+import com.cartmate.cartmate.global.event.DomainEventPublisher;
 import com.cartmate.cartmate.global.exception.ServiceException;
 import com.cartmate.cartmate.global.security.JwtProvider;
 import com.cartmate.cartmate.shared.member.event.SellerRegisteredEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import java.util.List;
 import java.util.Optional;
 
 @Slf4j
@@ -30,7 +32,7 @@ public class MemberSellerUseCase {
     private final MemberRepository memberRepository;
     private final SellerRepository sellerRepository;
     private final AccountVerificationStore accountVerificationStore;
-    private final EventPublisher eventPublisher;
+    private final DomainEventPublisher eventPublisher;
     private final JwtProvider jwtProvider;
 
     public record RegisterResult(SellerResponse seller, String accessToken) {
@@ -99,21 +101,8 @@ public class MemberSellerUseCase {
         // 등록이 성공했을 때만 통과 표시를 지운다. 실패하면 남겨 두어 입력을 고쳐 다시 제출할 수 있다.
         removeVerificationAfterCommit(memberId);
 
-        eventPublisher.publish(
-                new SellerRegisteredEvent(
-                        seller.getId(),
-                        member.getId(),
-                        seller.getSellerType().name(),
-                        seller.getDisplayName(),
-                        seller.getBusinessNumber(),
-                        seller.getPhoneNumber(),
-                        seller.getBankName(),
-                        seller.getAccountHolder(),
-                        seller.getAccountNumber(),
-                        seller.getStatus().name(),
-                        seller.getCreateDate(),
-                        seller.getModifyDate()
-        ));
+        // 판매자 등록과 같은 트랜잭션에서 Outbox에 저장한다 → payment(정산 판매자), product(판매글 판매자)가 받는다
+        eventPublisher.publish(toRegisteredEvent(seller));
 
         // 역할이 SELLER로 바뀌었으니 새 토큰 발급 (다시 로그인하지 않아도 판매자로 인식, 판매자 ID 포함)
         String accessToken = jwtProvider.createAccessToken(
@@ -139,6 +128,31 @@ public class MemberSellerUseCase {
                 }
             }
         });
+    }
+
+    public record RepublishPage(int count, Long lastId) {
+    }
+
+    // 이미 등록된 판매자의 등록 이벤트를 Outbox로 다시 발행한다 (서비스 분리 후 결제·상품 복제본에 빠진 판매자 백필).
+    // 받는 쪽이 멱등이라 이미 복제된 판매자에게 다시 보내도 안전하다. 한 번에 한 페이지 (Facade가 페이지마다 트랜잭션을 연다)
+    RepublishPage republishRegistered(Long afterId, int size) {
+        List<Seller> sellers = sellerRepository.findByIdGreaterThanOrderByIdAsc(afterId, Limit.of(size));
+        sellers.forEach(seller -> eventPublisher.publish(toRegisteredEvent(seller)));
+        return new RepublishPage(sellers.size(), sellers.isEmpty() ? afterId : sellers.getLast().getId());
+    }
+
+    // 계좌·사업자번호·전화번호는 넣지 않는다 (다른 서비스가 쓰지 않고, Outbox·Kafka로 퍼지면 안 된다)
+    static SellerRegisteredEvent toRegisteredEvent(Seller seller) {
+        return new SellerRegisteredEvent(
+                seller.getId(),
+                seller.getMember().getId(),
+                seller.getSellerType().name(),
+                seller.getDisplayName(),
+                seller.getRepresentativeName(),
+                seller.getStatus().name(),
+                seller.getCreateDate(),
+                seller.getModifyDate()
+        );
     }
 
     private String trimToNull(String value) {

@@ -12,24 +12,24 @@ import org.springframework.transaction.annotation.Transactional;
 public class SalesPostSyncSellerUseCase {
     private final SalesPostSellerRepository salesPostSellerRepository;
 
+    // 멱등: 같은 판매자 이벤트가 다시 와도(Kafka 재전송, 회원 서비스 백필) 행은 하나. 이미 있으면 표시 정보만 맞춘다.
     @Transactional
     public SalesPostSeller syncSeller(SellerRegisteredEvent seller) {
-
-        SalesPostSeller newSeller = new SalesPostSeller(
-                seller.sellerId(),
-                seller.memberId(),
-                seller.sellerType(),
-                seller.displayName(),
-                seller.businessNumber(),
-                seller.phoneNumber(),
-                seller.bankName(),
-                seller.accountHolder(),
-                seller.accountNumber(),
-                seller.status(),
-                seller.createDate(),
-                seller.modifyDate()
-        );
-
-        return salesPostSellerRepository.save(newSeller);
+        return salesPostSellerRepository.findById(seller.sellerId())
+                .map(existing -> {
+                    existing.sync(seller.sellerType(), seller.displayName(), seller.representativeName(),
+                            seller.status(), seller.modifyDate());
+                    return existing;
+                })
+                .orElseGet(() -> salesPostSellerRepository.save(new SalesPostSeller(
+                        seller.sellerId(),
+                        seller.memberId(),
+                        seller.sellerType(),
+                        seller.displayName(),
+                        seller.representativeName(),
+                        seller.status(),
+                        seller.createDate(),
+                        seller.modifyDate()
+                )));
     }
 }
