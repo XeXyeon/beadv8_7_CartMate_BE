@@ -11,10 +11,12 @@ public record SalesPostDocument(
         String content,
         List<String> productNames,
         List<String> productDescriptions,
-        List<Long> categoryIds,
         List<String> categoryNames,
-        List<Long> prices,
-        Long minPrice,
+        List<Product> products,
         LocalDateTime createdAt
 ) {
+
+    /** 판매 중인 상품 하나의 카테고리와 가격. 카테고리 · 가격 필터를 같은 상품 기준으로 걸 수 있게 묶어 둔다. */
+    public record Product(Long categoryId, Long price) {
+    }
 }

@@ -46,9 +46,11 @@ public class SalesPostSearchUseCase {
         }
         // 전체 건수는 색인 값 그대로 둔다. 반영 전에 판매 중이 아니게 된 글이 빠지면 이 페이지만 조금 짧아진다
         List<SelectSalesPostResponse> content = selectUseCase.selectOnSaleInOrder(hits.postIds());
+        // 색인 반영 전에 판매 중이 아니게 된 글을 뺀 만큼 전체 건수도 줄인다(다른 페이지의 낡은 글까지는 모른다)
+        long total = Math.max(0, hits.total() - (hits.postIds().size() - content.size()));
         int size = pageable.getPageSize();
-        int totalPages = (int) ((hits.total() + size - 1) / size);
-        return new PageResponse<>(content, pageable.getPageNumber(), size, hits.total(), totalPages);
+        int totalPages = (int) ((total + size - 1) / size);
+        return new PageResponse<>(content, pageable.getPageNumber(), size, total, totalPages);
     }
 
     private static boolean isTimeout(Throwable e) {

@@ -7,6 +7,7 @@ import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPost
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostUpdateStatus;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.SelectSalesPostRequest;
 import com.cartmate.cartmate.boundedContext.productService.search.domain.SalesPostSearchCondition;
+import com.querydsl.core.types.ExpressionUtils;
 import com.querydsl.core.types.Predicate;
 import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.core.types.dsl.NumberExpression;
@@ -227,6 +228,17 @@ public class SalesPostQueryRepositoryImpl implements SalesPostQueryRepository {
                 .fetch();
     }
 
+    @Override
+    public List<Long> findOnSaleIdsAfterId(Long afterId, int limit) {
+        return queryFactory
+                .select(salesPost.id)
+                .from(salesPost)
+                .where(onSale(), salesPost.id.gt(afterId))
+                .orderBy(salesPost.id.asc())
+                .limit(limit)
+                .fetch();
+    }
+
     // @Modifying(flushAutomatically = true, clearAutomatically = true)와 같게: 실행 전 flush, 실행 뒤 비우기
     @Override
     public int applyReviewSummary(Long postId, long countDelta, long ratingDelta) {
@@ -245,12 +257,13 @@ public class SalesPostQueryRepositoryImpl implements SalesPostQueryRepository {
         Predicate[] where = {
                 onSale(),
                 titleContains(condition.keyword()),
-                // 검색 색인처럼, 살 수 있는 상품이 없는 글은 빼고 카테고리 · 가격은 서로 다른 상품이 맞아도 된다
+                // 검색 색인처럼, 살 수 있는 상품이 없는 글은 뺀다
                 onSaleProductExists("anyProduct", product -> null),
-                condition.categoryIds().isEmpty() ? null
-                        : onSaleProductExists("categoryProduct", product -> product.categoryId.in(condition.categoryIds())),
-                condition.minPrice() == null && condition.maxPrice() == null ? null
-                        : onSaleProductExists("priceProduct", product -> priceBetween(product, condition.minPrice(), condition.maxPrice()))
+                // 카테고리 · 가격은 같은 상품 하나가 모두 맞아야 한다(검색 색인과 같다)
+                condition.categoryIds().isEmpty() && condition.minPrice() == null && condition.maxPrice() == null ? null
+                        : onSaleProductExists("matchingProduct", product -> ExpressionUtils.allOf(
+                                categoryIn(product, condition.categoryIds()),
+                                priceBetween(product, condition.minPrice(), condition.maxPrice())))
         };
         List<SalesPost> content = queryFactory
                 .selectFrom(salesPost)
@@ -265,7 +278,7 @@ public class SalesPostQueryRepositoryImpl implements SalesPostQueryRepository {
         });
     }
 
-    private BooleanExpression onSaleProductExists(String alias, Function<QSalesPostProduct, BooleanExpression> condition) {
+    private BooleanExpression onSaleProductExists(String alias, Function<QSalesPostProduct, Predicate> condition) {
         QSalesPostProduct product = new QSalesPostProduct(alias);
         return JPAExpressions.selectOne()
                 .from(product)
@@ -273,6 +286,10 @@ public class SalesPostQueryRepositoryImpl implements SalesPostQueryRepository {
                         product.status.eq(SalesPostProductStatus.ON_SALE),
                         condition.apply(product))
                 .exists();
+    }
+
+    private BooleanExpression categoryIn(QSalesPostProduct product, List<Long> categoryIds) {
+        return categoryIds.isEmpty() ? null : product.categoryId.in(categoryIds);
     }
 
     private BooleanExpression priceBetween(QSalesPostProduct product, Long minPrice, Long maxPrice) {

@@ -14,8 +14,8 @@ public final class SalesPostIndexSchema {
     public static final String REINDEXING_ALIAS = "sales-posts-reindexing";
 
     private static final String SETTINGS_FILE = "/search/sales-posts-index.json";
-    // 같은 초에 두 번 만들어도 겹치지 않게 밀리초까지 붙인다
-    private static final DateTimeFormatter SUFFIX = DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
+    // 같은 초에 이미 있으면 SalesPostIndexAdmin.newIndexName이 뒤에 번호를 붙인다
+    private static final DateTimeFormatter SUFFIX = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
 
     private SalesPostIndexSchema() {

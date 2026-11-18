@@ -26,8 +26,7 @@ class SalesPostDocumentFactoryTest {
 
         assertThat(doc.postId()).isEqualTo(100L);
         assertThat(doc.productNames()).containsExactly("이어폰");
-        assertThat(doc.prices()).containsExactly(30_000L);
-        assertThat(doc.minPrice()).isEqualTo(30_000L);
+        assertThat(doc.products()).containsExactly(new SalesPostDocument.Product(2L, 30_000L));
     }
 
     @ParameterizedTest
@@ -55,9 +54,10 @@ class SalesPostDocumentFactoryTest {
 
         SalesPostDocument doc = SalesPostDocumentFactory.create(post, CATEGORIES).orElseThrow();
 
-        assertThat(doc.categoryIds()).containsExactly(1L);
         assertThat(doc.categoryNames()).containsExactly("유니폼 / 의류");
-        assertThat(doc.minPrice()).isEqualTo(20_000L);
+        // 카테고리 · 가격은 상품마다 묶어 둔다(같은 상품이 둘 다 맞는지 검색할 수 있게)
+        assertThat(doc.products()).containsExactly(
+                new SalesPostDocument.Product(1L, 20_000L), new SalesPostDocument.Product(1L, 25_000L));
     }
 
     private SalesPost post(SalesPostSaleStatus status) {

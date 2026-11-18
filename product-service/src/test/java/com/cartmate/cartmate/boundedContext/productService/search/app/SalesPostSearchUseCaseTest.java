@@ -75,6 +75,8 @@ class SalesPostSearchUseCaseTest {
         PageResponse<SelectSalesPostResponse> page = search("아무거나");
 
         assertThat(page.content()).extracting(SelectSalesPostResponse::getId).containsExactly(onSale);
+        // 뺀 만큼 전체 건수도 줄인다
+        assertThat(page.totalElements()).isEqualTo(1);
     }
 
     @Test
@@ -111,6 +113,9 @@ class SalesPostSearchUseCaseTest {
         // 조건에 맞는 상품은 지워졌고, 남은 판매 중 상품은 조건에 맞지 않는다
         savePost("축구화 묶음", SalesPostSaleStatus.ON_SALE,
                 product(3L, 40_000L, SalesPostProductStatus.DELETED), product(1L, 10_000L, SalesPostProductStatus.ON_SALE));
+        // 카테고리와 가격을 서로 다른 상품이 맞춘다(신발은 비싸고, 범위 안 가격은 다른 카테고리)
+        savePost("축구화 + 양말", SalesPostSaleStatus.ON_SALE,
+                product(3L, 100_000L, SalesPostProductStatus.ON_SALE), product(1L, 40_000L, SalesPostProductStatus.ON_SALE));
         given(searchClient.search(any(), any())).willThrow(new UncheckedIOException(new IOException("연결 실패")));
 
         PageResponse<SelectSalesPostResponse> page = searchUseCase.search(

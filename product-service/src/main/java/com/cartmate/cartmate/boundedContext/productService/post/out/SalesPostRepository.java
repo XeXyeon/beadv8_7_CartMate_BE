@@ -6,7 +6,6 @@ import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPost
 import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
 
 import java.time.LocalDateTime;
 import java.util.Collection;
@@ -31,8 +30,4 @@ public interface SalesPostRepository extends JpaRepository<SalesPost, Long>, Sal
     // 검색 재색인: 판매글마다 상품을 따로 읽지 않도록 상품까지 한 번에 가져온다
     @EntityGraph(attributePaths = "productList")
     List<SalesPost> findWithProductsByIdIn(Collection<Long> ids);
-
-    // 검색 재색인: 판매 중인 판매글 id를 afterId 다음부터 id 순으로 limit개씩 읽는다
-    @Query("select p.id from SalesPost p where p.status = :status and p.id > :afterId order by p.id")
-    List<Long> findIdsByStatusAfterId(SalesPostSaleStatus status, Long afterId, Limit limit);
 }

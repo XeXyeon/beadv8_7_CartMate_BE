@@ -69,6 +69,15 @@ class SalesPostIndexAdminTest {
         assertThat(admin.reindexingIndex()).isEmpty();
     }
 
+    @Test
+    void 같은_초에_만들어도_이름이_겹치지_않는다() {
+        String first = create();
+        String second = create();
+
+        assertThat(second).isNotEqualTo(first);
+        assertThat(List.of(first, second)).allMatch(name -> name.matches("sales-posts-\\d{14}(-\\d+)?"));
+    }
+
     private String create() {
         String index = admin.createIndex();
         created.add(index);

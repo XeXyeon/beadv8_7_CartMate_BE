@@ -4,7 +4,6 @@ import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPost
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostProduct;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostProductStatus;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostSaleStatus;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -28,11 +27,9 @@ public final class SalesPostDocumentFactory {
             return Optional.empty();
         }
 
-        List<Long> categoryIds = products.stream().map(SalesPostProduct::getCategoryId)
-                .filter(Objects::nonNull).distinct().toList();
-        List<String> categoryNames = categoryIds.stream().map(categoryNameById::get)
-                .filter(Objects::nonNull).distinct().toList();
-        List<Long> prices = products.stream().map(SalesPostProduct::getBasePrice).toList();
+        List<String> categoryNames = products.stream().map(SalesPostProduct::getCategoryId)
+                .filter(Objects::nonNull).distinct()
+                .map(categoryNameById::get).filter(Objects::nonNull).distinct().toList();
 
         return Optional.of(new SalesPostDocument(
                 post.getId(),
@@ -41,10 +38,8 @@ public final class SalesPostDocumentFactory {
                 post.getContent(),
                 products.stream().map(SalesPostProduct::getName).toList(),
                 products.stream().map(SalesPostProduct::getDescription).filter(Objects::nonNull).toList(),
-                categoryIds,
                 categoryNames,
-                prices,
-                prices.stream().min(Comparator.naturalOrder()).orElseThrow(),
+                products.stream().map(p -> new SalesPostDocument.Product(p.getCategoryId(), p.getBasePrice())).toList(),
                 post.getCreateDate()));
     }
 }

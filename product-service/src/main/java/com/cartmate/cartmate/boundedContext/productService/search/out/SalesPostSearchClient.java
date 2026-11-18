@@ -4,10 +4,12 @@ import static com.cartmate.cartmate.boundedContext.productService.search.out.Sal
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.FieldValue;
+import co.elastic.clients.elasticsearch._types.SortMode;
 import co.elastic.clients.elasticsearch._types.SortOptions;
 import co.elastic.clients.elasticsearch._types.SortOrder;
 import co.elastic.clients.elasticsearch._types.query_dsl.BoolQuery;
 import co.elastic.clients.elasticsearch._types.query_dsl.Operator;
+import co.elastic.clients.elasticsearch._types.query_dsl.Query;
 import co.elastic.clients.elasticsearch._types.query_dsl.TextQueryType;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import com.cartmate.cartmate.boundedContext.productService.search.domain.SalesPostSearchCondition;
@@ -18,7 +20,9 @@ import co.elastic.clients.transport.rest5_client.low_level.RequestOptions;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import org.apache.hc.client5.http.config.RequestConfig;
 import org.apache.hc.core5.util.Timeout;
 import org.springframework.beans.factory.annotation.Value;
@@ -37,6 +41,7 @@ public class SalesPostSearchClient {
             "title.bigram^4", "productNames.bigram^3", "content.bigram^1",
             "productDescriptions.bigram^1", "categoryNames.bigram^0.5");
     private static final float BIGRAM_BOOST = 0.3f;
+    private static final String PRODUCTS = "products";
 
     private final ElasticsearchClient client;
 
@@ -71,7 +76,7 @@ public class SalesPostSearchClient {
                     .source(src -> src.fetch(false))   // 문서 id가 판매글 id라 본문은 받지 않는다
                     .trackTotalHits(t -> t.enabled(true))
                     .query(q -> q.bool(b -> query(b, condition)))
-                    .sort(sorts(condition.sort())), Void.class);
+                    .sort(sorts(condition.sort(), productFilter(condition))), Void.class);
             List<Long> postIds = response.hits().hits().stream().map(hit -> Long.valueOf(hit.id())).toList();
             long total = response.hits().total() == null ? postIds.size() : response.hits().total().value();
             return new SalesPostSearchHits(postIds, total);
@@ -93,14 +98,22 @@ public class SalesPostSearchClient {
         } else {
             b.must(m -> m.matchAll(all -> all));
         }
+        // 카테고리 · 가격은 같은 상품 하나가 모두 맞아야 걸린다("신발 + 3만~5만"에 신발 10만원 + 양말 4만원은 안 걸린다)
+        productFilter(condition).ifPresent(filter ->
+                b.filter(f -> f.nested(n -> n.path(PRODUCTS).query(filter))));
+        return b;
+    }
+
+    // 판매글 안 상품 하나에 거는 카테고리 · 가격 조건. 둘 다 없으면 빈 값
+    private static Optional<Query> productFilter(SalesPostSearchCondition condition) {
+        List<Query> conditions = new ArrayList<>();
         if (!condition.categoryIds().isEmpty()) {
             List<FieldValue> ids = condition.categoryIds().stream().map(FieldValue::of).toList();
-            b.filter(f -> f.terms(t -> t.field("categoryIds").terms(v -> v.value(ids))));
+            conditions.add(Query.of(q -> q.terms(t -> t.field(PRODUCTS + ".categoryId").terms(v -> v.value(ids)))));
         }
         if (condition.minPrice() != null || condition.maxPrice() != null) {
-            // 판매글 안 상품 가격 중 하나라도 범위에 들면 걸린다
-            b.filter(f -> f.range(r -> r.number(n -> {
-                n.field("prices");
+            conditions.add(Query.of(q -> q.range(r -> r.number(n -> {
+                n.field(PRODUCTS + ".price");
                 if (condition.minPrice() != null) {
                     n.gte(condition.minPrice().doubleValue());
                 }
@@ -108,18 +121,28 @@ public class SalesPostSearchClient {
                     n.lte(condition.maxPrice().doubleValue());
                 }
                 return n;
-            })));
+            }))));
         }
-        return b;
+        return conditions.isEmpty() ? Optional.empty() : Optional.of(Query.of(q -> q.bool(bb -> bb.filter(conditions))));
     }
 
-    private static List<SortOptions> sorts(SalesPostSearchSort sort) {
+    private static List<SortOptions> sorts(SalesPostSearchSort sort, Optional<Query> productFilter) {
         return switch (sort) {
             case RELEVANCE -> List.of(score(), field("createdAt", SortOrder.Desc));
             case LATEST -> List.of(field("createdAt", SortOrder.Desc), field("postId", SortOrder.Desc));
-            case PRICE_ASC -> List.of(field("minPrice", SortOrder.Asc), field("postId", SortOrder.Desc));
-            case PRICE_DESC -> List.of(field("minPrice", SortOrder.Desc), field("postId", SortOrder.Desc));
+            case PRICE_ASC -> List.of(price(SortOrder.Asc, productFilter), field("postId", SortOrder.Desc));
+            case PRICE_DESC -> List.of(price(SortOrder.Desc, productFilter), field("postId", SortOrder.Desc));
         };
+    }
+
+    // 가격순은 조건에 맞는 상품 중 최저가 기준이다(필터가 없으면 판매 중인 상품 전체의 최저가)
+    private static SortOptions price(SortOrder order, Optional<Query> productFilter) {
+        return SortOptions.of(s -> s.field(f -> f.field(PRODUCTS + ".price").order(order).mode(SortMode.Min)
+                .nested(n -> {
+                    n.path(PRODUCTS);
+                    productFilter.ifPresent(n::filter);
+                    return n;
+                })));
     }
 
     private static SortOptions score() {

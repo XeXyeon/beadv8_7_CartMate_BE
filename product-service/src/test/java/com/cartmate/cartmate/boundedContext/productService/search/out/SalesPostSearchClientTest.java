@@ -10,7 +10,6 @@ import com.cartmate.cartmate.boundedContext.productService.search.domain.SalesPo
 import com.cartmate.cartmate.support.ProductServiceElasticsearchContainer;
 import java.io.IOException;
 import java.time.LocalDateTime;
-import java.util.Collections;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,6 +25,8 @@ import org.springframework.test.context.ActiveProfiles;
 @ImportTestcontainers(ProductServiceElasticsearchContainer.class)
 class SalesPostSearchClientTest {
 
+    private static final Long SHOES = 3L;
+    private static final Long SOCKS = 1L;
     private static final LocalDateTime BASE_TIME = LocalDateTime.of(2026, 11, 1, 12, 0);
 
     @Autowired SalesPostSearchClient searchClient;
@@ -71,17 +72,17 @@ class SalesPostSearchClientTest {
     @Test
     void 제목에_있는_글이_설명에만_있는_글보다_위다() throws IOException {
         save(new SalesPostDocument(1L, 7L, "중고 물품", "축구공 포함", List.of("물건"), List.of(),
-                List.of(1L), List.of(), List.of(10_000L), 10_000L, BASE_TIME));
+                List.of(), List.of(product(1L, 10_000L)), BASE_TIME));
         save(new SalesPostDocument(2L, 7L, "축구공 팝니다", "새것", List.of("물건"), List.of(),
-                List.of(1L), List.of(), List.of(10_000L), 10_000L, BASE_TIME));
+                List.of(), List.of(product(1L, 10_000L)), BASE_TIME));
 
         assertThat(search("축구공").postIds()).containsExactly(2L, 1L);
     }
 
     @Test
     void 카테고리는_상품_중_하나만_맞아도_걸린다() throws IOException {
-        save(withCategoryAndPrices(1L, List.of(1L, 3L), List.of(10_000L)));
-        save(withCategoryAndPrices(2L, List.of(2L), List.of(10_000L)));
+        save(withProducts(1L, product(1L, 10_000L), product(3L, 10_000L)));
+        save(withProducts(2L, product(2L, 10_000L)));
 
         var hits = searchClient.search(new SalesPostSearchCondition(null, List.of(3L), null, null, null), PageRequest.of(0, 20));
 
@@ -90,8 +91,8 @@ class SalesPostSearchClientTest {
 
     @Test
     void 가격은_상품_중_하나만_범위에_들어도_걸린다() throws IOException {
-        save(withCategoryAndPrices(1L, List.of(1L), List.of(10_000L, 50_000L)));
-        save(withCategoryAndPrices(2L, List.of(1L), List.of(70_000L)));
+        save(withProducts(1L, product(1L, 10_000L), product(1L, 50_000L)));
+        save(withProducts(2L, product(1L, 70_000L)));
 
         var hits = searchClient.search(new SalesPostSearchCondition(null, null, 40_000L, 60_000L, null), PageRequest.of(0, 20));
 
@@ -99,9 +100,20 @@ class SalesPostSearchClientTest {
     }
 
     @Test
+    void 카테고리와_가격은_같은_상품이_둘_다_맞아야_걸린다() throws IOException {
+        save(withProducts(1L, product(SHOES, 100_000L), product(SOCKS, 40_000L)));   // 신발은 비싸고 양말만 범위 안
+        save(withProducts(2L, product(SHOES, 40_000L)));
+
+        var hits = searchClient.search(
+                new SalesPostSearchCondition(null, List.of(SHOES), 30_000L, 50_000L, null), PageRequest.of(0, 20));
+
+        assertThat(hits.postIds()).containsExactly(2L);
+    }
+
+    @Test
     void 낮은_가격순은_최저가_기준이다() throws IOException {
-        save(withCategoryAndPrices(1L, List.of(1L), List.of(5_000L, 90_000L)));
-        save(withCategoryAndPrices(2L, List.of(1L), List.of(10_000L)));
+        save(withProducts(1L, product(1L, 5_000L), product(1L, 90_000L)));
+        save(withProducts(2L, product(1L, 10_000L)));
 
         var hits = searchClient.search(
                 new SalesPostSearchCondition(null, null, null, null, SalesPostSearchSort.PRICE_ASC), PageRequest.of(0, 20));
@@ -110,11 +122,23 @@ class SalesPostSearchClientTest {
     }
 
     @Test
+    void 필터가_있으면_가격순은_조건에_맞는_상품의_최저가_기준이다() throws IOException {
+        save(withProducts(1L, product(SHOES, 50_000L), product(SOCKS, 3_000L)));   // 신발 기준 5만원
+        save(withProducts(2L, product(SHOES, 20_000L)));
+
+        var hits = searchClient.search(
+                new SalesPostSearchCondition(null, List.of(SHOES), null, null, SalesPostSearchSort.PRICE_ASC),
+                PageRequest.of(0, 20));
+
+        assertThat(hits.postIds()).containsExactly(2L, 1L);
+    }
+
+    @Test
     void 검색어가_없으면_최신순이다() throws IOException {
         save(new SalesPostDocument(1L, 7L, "예전 글", "", List.of("물건"), List.of(),
-                List.of(1L), List.of(), List.of(10_000L), 10_000L, BASE_TIME));
+                List.of(), List.of(product(1L, 10_000L)), BASE_TIME));
         save(new SalesPostDocument(2L, 7L, "새 글", "", List.of("물건"), List.of(),
-                List.of(1L), List.of(), List.of(10_000L), 10_000L, BASE_TIME.plusDays(1)));
+                List.of(), List.of(product(1L, 10_000L)), BASE_TIME.plusDays(1)));
 
         var condition = new SalesPostSearchCondition(null, null, null, null, null);
         var hits = searchClient.search(condition, PageRequest.of(0, 20));
@@ -153,12 +177,16 @@ class SalesPostSearchClientTest {
 
     private SalesPostDocument doc(Long postId, String title, String productName) {
         return new SalesPostDocument(postId, 7L, title, "", List.of(productName), List.of(),
-                List.of(1L), List.of("유니폼 / 의류"), List.of(10_000L), 10_000L, BASE_TIME);
+                List.of("유니폼 / 의류"), List.of(product(1L, 10_000L)), BASE_TIME);
     }
 
-    private SalesPostDocument withCategoryAndPrices(Long postId, List<Long> categoryIds, List<Long> prices) {
+    private SalesPostDocument withProducts(Long postId, SalesPostDocument.Product... products) {
         return new SalesPostDocument(postId, 7L, "판매글 " + postId, "", List.of("물건"), List.of(),
-                categoryIds, List.of(), prices, Collections.min(prices), BASE_TIME);
+                List.of(), List.of(products), BASE_TIME);
+    }
+
+    private static SalesPostDocument.Product product(Long categoryId, Long price) {
+        return new SalesPostDocument.Product(categoryId, price);
     }
 
     private void save(SalesPostDocument document) throws IOException {

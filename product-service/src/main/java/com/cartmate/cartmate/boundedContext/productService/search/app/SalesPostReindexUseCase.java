@@ -1,6 +1,5 @@
 package com.cartmate.cartmate.boundedContext.productService.search.app;
 
-import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostSaleStatus;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostRepository;
 import com.cartmate.cartmate.boundedContext.productService.search.out.SalesPostIndexAdmin;
 import com.cartmate.cartmate.global.exception.ServiceException;
@@ -15,7 +14,6 @@ import net.javacrumbs.shedlock.core.LockConfiguration;
 import net.javacrumbs.shedlock.core.LockProvider;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor.TaskResult;
-import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 
 /** 판매글 검색 색인을 새로 만들어 채운 뒤 별칭을 옮긴다. 그동안 검색은 옛 색인으로 계속된다. */
@@ -27,7 +25,7 @@ public class SalesPostReindexUseCase {
     private static final String LOCK_NAME = "salesPostSearchReindex";
     // 파드가 재색인 도중 죽어도 이 시간이 지나면 락이 풀린다
     private static final Duration LOCK_AT_MOST = Duration.ofMinutes(30);
-    private static final Limit PAGE = Limit.of(500);
+    private static final int PAGE_SIZE = 500;
 
     private final LockingTaskExecutor lockExecutor;
     private final SalesPostIndexAdmin indexAdmin;
@@ -92,7 +90,7 @@ public class SalesPostReindexUseCase {
     private void fill(String index) {
         long afterId = 0L;
         while (true) {
-            List<Long> ids = salesPostRepository.findIdsByStatusAfterId(SalesPostSaleStatus.ON_SALE, afterId, PAGE);
+            List<Long> ids = salesPostRepository.findOnSaleIdsAfterId(afterId, PAGE_SIZE);
             if (ids.isEmpty()) {
                 return;
             }

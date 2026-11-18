@@ -1,7 +1,5 @@
 package com.cartmate.cartmate.boundedContext.productService.search.in;
 
-import static org.springframework.transaction.event.TransactionPhase.BEFORE_COMMIT;
-
 import co.elastic.clients.elasticsearch._types.ElasticsearchException;
 import com.cartmate.cartmate.boundedContext.productService.search.app.SalesPostIndexHealth;
 import com.cartmate.cartmate.boundedContext.productService.search.app.SalesPostIndexer;
@@ -24,8 +22,7 @@ public class SalesPostSearchEventListener {
 
     // ES 실패는 다시 던지지 않는다. 같은 줄로 오는 판매글 · 상품 이벤트(삭제 흐름 등)가 ES 장애 동안 막히지 않게 하고,
     // 놓친 변경은 ES가 살아난 뒤 복구 스케줄러의 전체 재색인으로 맞춘다
-    @TransactionalEventListener(phase = BEFORE_COMMIT, fallbackExecution = true,
-            condition = "@relayedEventRouting.accepts(#message)")
+    @TransactionalEventListener(fallbackExecution = true, condition = "@relayedEventRouting.accepts(#message)")
     public void handle(OutboxMessageRelayed message) {
         if (!(message.event() instanceof SalesPostChangedEvent event)) {
             return;

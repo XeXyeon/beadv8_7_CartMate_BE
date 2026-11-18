@@ -22,8 +22,22 @@ public class SalesPostIndexAdmin {
 
     private final ElasticsearchClient client;
 
+    /** sales-posts-<서울 시각 초>. 같은 초에 이미 있으면 뒤에 -2, -3 … 을 붙인다. */
     public String newIndexName() {
-        return SalesPostIndexSchema.newIndexName();
+        String base = SalesPostIndexSchema.newIndexName();
+        String name = base;
+        for (int n = 2; exists(name); n++) {
+            name = base + "-" + n;
+        }
+        return name;
+    }
+
+    private boolean exists(String index) {
+        try {
+            return client.indices().exists(e -> e.index(index)).value();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     public String createIndex() {

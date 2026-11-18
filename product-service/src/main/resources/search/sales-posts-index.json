@@ -24,9 +24,13 @@
       "productNames": { "type": "text", "analyzer": "ko_nori", "fields": { "bigram": { "type": "text", "analyzer": "ko_bigram" } } },
       "productDescriptions": { "type": "text", "analyzer": "ko_nori", "fields": { "bigram": { "type": "text", "analyzer": "ko_bigram" } } },
       "categoryNames": { "type": "text", "analyzer": "ko_nori", "fields": { "bigram": { "type": "text", "analyzer": "ko_bigram" } } },
-      "categoryIds": { "type": "long" },
-      "prices": { "type": "long" },
-      "minPrice": { "type": "long" }
+      "products": {
+        "type": "nested",
+        "properties": {
+          "categoryId": { "type": "long" },
+          "price": { "type": "long" }
+        }
+      }
     }
   }
 }
