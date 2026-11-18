@@ -1,0 +1,105 @@
+package com.cartmate.cartmate.boundedContext.productService.search.out;
+
+import static com.cartmate.cartmate.boundedContext.productService.search.out.SalesPostIndexSchema.ALIAS;
+
+import co.elastic.clients.elasticsearch.ElasticsearchClient;
+import co.elastic.clients.elasticsearch._types.FieldValue;
+import co.elastic.clients.elasticsearch._types.SortOptions;
+import co.elastic.clients.elasticsearch._types.SortOrder;
+import co.elastic.clients.elasticsearch._types.query_dsl.BoolQuery;
+import co.elastic.clients.elasticsearch._types.query_dsl.Operator;
+import co.elastic.clients.elasticsearch._types.query_dsl.TextQueryType;
+import co.elastic.clients.elasticsearch.core.SearchResponse;
+import com.cartmate.cartmate.boundedContext.productService.search.domain.SalesPostSearchCondition;
+import com.cartmate.cartmate.boundedContext.productService.search.domain.SalesPostSearchHits;
+import com.cartmate.cartmate.boundedContext.productService.search.domain.SalesPostSearchSort;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.util.List;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Component;
+
+/** 판매글 검색 색인에서 조건에 맞는 판매글 id를 순서대로 가져온다. 응답 내용은 DB에서 채운다. */
+@Component
+@RequiredArgsConstructor
+public class SalesPostSearchClient {
+
+    // 형태소(nori)로 맞추는 필드와 가중치
+    private static final List<String> NORI_FIELDS = List.of(
+            "title^4", "productNames^3", "content^1", "productDescriptions^1", "categoryNames^0.5");
+    // 두 글자 조각으로 맞추는 필드. 형태소로 못 찾는 단어 중간 조각("어폰")을 잡되, 점수는 0.3배로 낮춘다
+    private static final List<String> BIGRAM_FIELDS = List.of(
+            "title.bigram^4", "productNames.bigram^3", "content.bigram^1",
+            "productDescriptions.bigram^1", "categoryNames.bigram^0.5");
+    private static final float BIGRAM_BOOST = 0.3f;
+
+    private final ElasticsearchClient client;
+
+    public SalesPostSearchHits search(SalesPostSearchCondition condition, Pageable pageable) {
+        try {
+            SearchResponse<Void> response = client.search(s -> s
+                    .index(ALIAS)
+                    .from((int) pageable.getOffset())
+                    .size(pageable.getPageSize())
+                    .source(src -> src.fetch(false))   // 문서 id가 판매글 id라 본문은 받지 않는다
+                    .trackTotalHits(t -> t.enabled(true))
+                    .query(q -> q.bool(b -> query(b, condition)))
+                    .sort(sorts(condition.sort())), Void.class);
+            List<Long> postIds = response.hits().hits().stream().map(hit -> Long.valueOf(hit.id())).toList();
+            long total = response.hits().total() == null ? postIds.size() : response.hits().total().value();
+            return new SalesPostSearchHits(postIds, total);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    private BoolQuery.Builder query(BoolQuery.Builder b, SalesPostSearchCondition condition) {
+        if (condition.hasKeyword()) {
+            String keyword = condition.keyword();
+            // 검색어의 조각이 모두 들어 있어야 걸린다(operator and). 둘 중 하나로 맞으면 된다
+            b.should(sh -> sh.multiMatch(m -> m.query(keyword).fields(NORI_FIELDS)
+                            .type(TextQueryType.BestFields).operator(Operator.And)))
+                    .should(sh -> sh.multiMatch(m -> m.query(keyword).fields(BIGRAM_FIELDS)
+                            .type(TextQueryType.BestFields).operator(Operator.And).boost(BIGRAM_BOOST)))
+                    .minimumShouldMatch("1");
+        } else {
+            b.must(m -> m.matchAll(all -> all));
+        }
+        if (!condition.categoryIds().isEmpty()) {
+            List<FieldValue> ids = condition.categoryIds().stream().map(FieldValue::of).toList();
+            b.filter(f -> f.terms(t -> t.field("categoryIds").terms(v -> v.value(ids))));
+        }
+        if (condition.minPrice() != null || condition.maxPrice() != null) {
+            // 판매글 안 상품 가격 중 하나라도 범위에 들면 걸린다
+            b.filter(f -> f.range(r -> r.number(n -> {
+                n.field("prices");
+                if (condition.minPrice() != null) {
+                    n.gte(condition.minPrice().doubleValue());
+                }
+                if (condition.maxPrice() != null) {
+                    n.lte(condition.maxPrice().doubleValue());
+                }
+                return n;
+            })));
+        }
+        return b;
+    }
+
+    private static List<SortOptions> sorts(SalesPostSearchSort sort) {
+        return switch (sort) {
+            case RELEVANCE -> List.of(score(), field("createdAt", SortOrder.Desc));
+            case LATEST -> List.of(field("createdAt", SortOrder.Desc), field("postId", SortOrder.Desc));
+            case PRICE_ASC -> List.of(field("minPrice", SortOrder.Asc), field("postId", SortOrder.Desc));
+            case PRICE_DESC -> List.of(field("minPrice", SortOrder.Desc), field("postId", SortOrder.Desc));
+        };
+    }
+
+    private static SortOptions score() {
+        return SortOptions.of(s -> s.score(sc -> sc.order(SortOrder.Desc)));
+    }
+
+    private static SortOptions field(String name, SortOrder order) {
+        return SortOptions.of(s -> s.field(f -> f.field(name).order(order)));
+    }
+}
