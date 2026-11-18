@@ -9,6 +9,8 @@ import com.cartmate.cartmate.boundedContext.productService.post.dto.UpdateSalesP
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostRepository;
 import com.cartmate.cartmate.boundedContext.productService.code.SalesPostErrorCode;
 import com.cartmate.cartmate.global.exception.ServiceException;
+import com.cartmate.cartmate.shared.post.event.SalesPostChangedEvent;
+import com.cartmate.cartmate.global.event.DomainEventPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -23,6 +25,7 @@ import java.util.Objects;
 @Slf4j
 public class SalesPostUpdateUseCase {
     private final SalesPostRepository salesPostRepository;
+    private final DomainEventPublisher domainEventPublisher;
     private final SalesPostSupport salesPostSupport;
 
     @Transactional
@@ -30,6 +33,7 @@ public class SalesPostUpdateUseCase {
         SalesPost post = salesPostRepository.findById(request.getId())
                 .orElseThrow(() -> new ServiceException(SalesPostErrorCode.POST_NOT_FOUND));
         post.updateContent(request.getTitle(), request.getContent());
+        domainEventPublisher.publish(new SalesPostChangedEvent(post.getId()));
     }
 
     public SalesPostUpdateStatus markPending(SalesPost post) {
