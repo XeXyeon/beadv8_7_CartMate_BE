@@ -15,9 +15,11 @@ import org.springframework.data.domain.Pageable;
 import com.cartmate.cartmate.boundedContext.paymentService.wallet.out.WalletRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import com.cartmate.cartmate.boundedContext.paymentService.wallet.exception.WalletErrorCode;
@@ -31,11 +33,18 @@ public class WalletQueryUseCase {
     private final HoldingSettlementRepository holdingSettlementRepository;
 
     // 회원 ID로 지갑을 조회하고 잔액 DTO를 반환한다. 홀딩 중인 금액(동결 금액)도 함께 담는다.
+    @Transactional(readOnly = true)
     public WalletBalanceResponse getWallet(Long memberId) {
-        Wallet wallet = walletRepository.findByMemberId(memberId)
+        return findWallet(memberId)
                 .orElseThrow(() ->
                         new ServiceException(WalletErrorCode.WALLET_NOT_FOUND));
-        return WalletBalanceResponse.from(wallet, heldBalanceOf(wallet.getId()));
+    }
+
+    // 지갑이 없으면 빈 값 (WalletFacade가 그 자리에서 만든다)
+    @Transactional(readOnly = true)
+    public Optional<WalletBalanceResponse> findWallet(Long memberId) {
+        return walletRepository.findByMemberId(memberId)
+                .map(wallet -> WalletBalanceResponse.from(wallet, heldBalanceOf(wallet.getId())));
     }
 
     // 홀딩 중(RESERVED)인 홀딩의 남은 금액 합계다. 홀딩 한 건의 남은 금액은 홀딩 금액 - 환불 누적액 - 정산으로 꺼낸 금액이다.
