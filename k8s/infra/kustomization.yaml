@@ -7,6 +7,7 @@
 #
 # CD는 이 폴더를 적용하지 않는다. 앱 배포 때마다 DB가 다시 적용되지 않도록 서버에서 직접 적용한다
 #   kubectl apply -k k8s/infra
+# Traefik 설정(traefik-config.yaml)은 kube-system이라 여기 넣지 않는다. 따로 kubectl apply -f k8s/infra/traefik-config.yaml
 # 먼저 필요한 것: cartmate 네임스페이스, 노드 라벨(cartmate/node=server · agent),
 #   Secret cartmate-mysql-root · cartmate-app-secret · <서비스>-service-secret · es-secret
 #
