@@ -45,10 +45,22 @@ class TrustedDeviceUseCase {
         return repository.findUsable(memberId, now);
     }
 
-    void revoke(Long memberId, Long deviceId) {
+    // 쿠키의 기기 토큰이 이 기기의 것이면 true (화면의 "지금 이 기기")
+    boolean isCurrent(TrustedDevice device, String rawToken) {
+        return rawToken != null && !rawToken.isBlank() && device.getTokenHash().equals(SecureTokens.sha256(rawToken));
+    }
+
+    // 해제한 기기가 지금 요청한 기기면 true → 쿠키도 지운다
+    boolean revoke(Long memberId, Long deviceId, String rawToken) {
+        TrustedDevice device = repository.findById(deviceId)
+                .filter(d -> d.getMemberId().equals(memberId))
+                .orElseThrow(() -> new ServiceException(MemberErrorCode.MEMBER_TRUSTED_DEVICE_NOT_FOUND));
+        boolean current = isCurrent(device, rawToken);
+        // 동시에 해제된 경우 (다른 탭·전체 해제)
         if (repository.deleteByIdAndMemberId(deviceId, memberId) == 0) {
             throw new ServiceException(MemberErrorCode.MEMBER_TRUSTED_DEVICE_NOT_FOUND);
         }
+        return current;
     }
 
     int revokeAll(Long memberId) {
