@@ -1,0 +1,26 @@
+# k3s가 설치한 Traefik(Ingress)의 설정을 덮어쓴다. kube-system 네임스페이스라 kustomization에 넣지 않고 따로 적용한다
+#   kubectl apply -f k8s/infra/traefik-config.yaml
+# 적용하면 k3s가 Traefik을 다시 띄운다(몇 초 동안 80번 포트 접속이 끊긴다)
+#
+# 왜 필요한가 (부하 테스트, 2026-11-19)
+#   server 노드 CPU가 꽉 차자 CPU 보장량이 없던 Traefik이 CPU를 거의 받지 못했다.
+#   상태 확인(/ping)에 2초 안에 답하지 못해 쿠버네티스가 Traefik을 재시작했고(31시간 동안 11번),
+#   그때마다 새 연결이 거부되고 열려 있던 연결이 끊겼다.
+#   - CPU 보장량 200m: CPU가 꽉 차도 입구가 몫을 받게 한다. 상한(limits)은 걸지 않는다(부하가 몰릴 때 스스로 느려지지 않게)
+#     server 노드 보장량 합계가 2000m을 넘지 않게 elasticsearch를 250m → 150m로 줄였다
+#   - 상태 확인 대기 2초 → 5초: CPU가 잠깐 몰리는 것만으로 재시작되지 않게
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    resources:
+      requests:
+        cpu: 200m
+        memory: 64Mi
+    readinessProbe:
+      timeoutSeconds: 5
+    livenessProbe:
+      timeoutSeconds: 5
