@@ -91,16 +91,41 @@ public class Member extends BaseIdAndTime {
 
     // 탈퇴 신청: 정상 회원만. 유예 기간 동안 로그인·조회는 되고, 변경 요청은 필터에서 막는다.
     public void requestWithdrawal(LocalDateTime requestedAt) {
+        validateCanRequestWithdrawal();
+        this.status = MemberStatus.WITHDRAWAL_PENDING;
+        this.withdrawalRequestedAt = requestedAt;
+    }
+
+    // 관리자 계정은 스스로 탈퇴할 수 없다 (정지 처리자 등 감사 기록이 남아 있어 운영 절차로 정리)
+    public void validateCanRequestWithdrawal() {
+        if (role == MemberRole.ADMIN) {
+            throw new ServiceException(MemberErrorCode.MEMBER_CANNOT_WITHDRAW.resultCode(), "관리자 계정은 탈퇴할 수 없습니다.");
+        }
         if (status == MemberStatus.WITHDRAWAL_PENDING) {
             throw new ServiceException(MemberErrorCode.MEMBER_WITHDRAWAL_ALREADY_REQUESTED);
         }
         if (status != MemberStatus.ACTIVE) {
             throw new ServiceException(MemberErrorCode.MEMBER_CANNOT_WITHDRAW.resultCode(), "%s 상태에서는 탈퇴를 신청할 수 없습니다.".formatted(status.getLabel()));
         }
-        this.status = MemberStatus.WITHDRAWAL_PENDING;
-        this.withdrawalRequestedAt = requestedAt;
     }
-    // 탈퇴 취소: 탈퇴 대기 중일 때만
+
+    // ===== 탈퇴 확정 시 덮어쓸 값 (MemberRepository.finalizeWithdrawal) =====
+    // 닉네임 규칙(한글·영문·숫자)에 없는 '_'를 넣어 실제 회원 닉네임과 겹치지 않게 한다
+    public static String withdrawnNickname(Long id) {
+        return "탈퇴회원_" + id;
+    }
+
+    // .invalid는 메일을 받을 수 없는 예약 도메인이라 이 주소로 가입(이메일 인증)할 수 없다. 원래 이메일은 비워져 재가입할 수 있다
+    public static String withdrawnEmail(Long id) {
+        return "withdrawn-" + id + "@cartmate.invalid";
+    }
+
+    // BCrypt 형식이 아니라 어떤 비밀번호와도 일치하지 않는다 → 로그인 불가
+    public static final String WITHDRAWN_PASSWORD = "{withdrawn}";
+    public static final String WITHDRAWN_PHONE = "";
+    public static final LocalDate WITHDRAWN_BIRTH_DATE = LocalDate.of(1900, 1, 1);
+
+    // 탈퇴 취소: 탈퇴 대기 중일 때만 (실제 취소는 확정과 겹치지 않게 MemberRepository.cancelWithdrawal 조건부 UPDATE로 한다)
     public void cancelWithdrawal() {
         if (status != MemberStatus.WITHDRAWAL_PENDING) {
             throw new ServiceException(MemberErrorCode.MEMBER_WITHDRAWAL_NOT_REQUESTED);

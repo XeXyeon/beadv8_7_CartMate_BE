@@ -24,4 +24,9 @@ public class TrustedDeviceCookie {
         return ResponseCookie.from(NAME, token).httpOnly(true).secure(secure).sameSite("Lax").path(PATH)
                 .maxAge(properties.trustedDeviceTtl()).build();
     }
+
+    // 이 브라우저의 기기를 해제했을 때 쿠키도 지운다
+    public ResponseCookie expired() {
+        return ResponseCookie.from(NAME, "").httpOnly(true).secure(secure).sameSite("Lax").path(PATH).maxAge(0).build();
+    }
 }

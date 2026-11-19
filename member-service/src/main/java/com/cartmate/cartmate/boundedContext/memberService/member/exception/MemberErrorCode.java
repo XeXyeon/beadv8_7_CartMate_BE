@@ -27,6 +27,8 @@ public enum MemberErrorCode implements ErrorCode {
     MEMBER_PHONE_RESEND_TOO_SOON("MEMBER_PHONE_RESEND_TOO_SOON", "잠시 후 다시 요청해주세요.", HttpStatus.TOO_MANY_REQUESTS),
     MEMBER_PHONE_TOO_MANY_SENDS("MEMBER_PHONE_TOO_MANY_SENDS", "인증번호를 너무 많이 요청했습니다. 잠시 후 다시 시도해주세요.", HttpStatus.TOO_MANY_REQUESTS),
     MEMBER_TRUSTED_DEVICE_NOT_FOUND("MEMBER_TRUSTED_DEVICE_NOT_FOUND", "기기를 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
+    // common SecurityConfig의 401 응답과 같은 코드 (/api/auth/** 는 permitAll이라 컨트롤러가 직접 확인할 때)
+    AUTH_UNAUTHORIZED("AUTH_UNAUTHORIZED", "로그인이 필요합니다.", HttpStatus.UNAUTHORIZED),
     AUTH_REFRESH_INVALID("AUTH_REFRESH_INVALID", "로그인이 만료되었습니다. 다시 로그인해주세요.", HttpStatus.UNAUTHORIZED),
     MEMBER_PASSWORD_MISMATCH("MEMBER_PASSWORD_MISMATCH", "현재 비밀번호가 올바르지 않습니다.", HttpStatus.BAD_REQUEST),
     MEMBER_PASSWORD_SAME("MEMBER_PASSWORD_SAME", "새 비밀번호가 현재 비밀번호와 같습니다.", HttpStatus.BAD_REQUEST),
@@ -57,6 +59,7 @@ public enum MemberErrorCode implements ErrorCode {
     MEMBER_WITHDRAWAL_ALREADY_REQUESTED("MEMBER_WITHDRAWAL_ALREADY_REQUESTED", "이미 탈퇴를 신청했습니다.", HttpStatus.CONFLICT),
     MEMBER_CANNOT_WITHDRAW("MEMBER_CANNOT_WITHDRAW", "지금 상태에서는 탈퇴를 신청할 수 없습니다.", HttpStatus.CONFLICT),
     MEMBER_WITHDRAWAL_NOT_REQUESTED("MEMBER_WITHDRAWAL_NOT_REQUESTED", "탈퇴를 신청한 상태가 아닙니다.", HttpStatus.CONFLICT),
+    MEMBER_WITHDRAWAL_ALREADY_FINALIZED("MEMBER_WITHDRAWAL_ALREADY_FINALIZED", "이미 탈퇴가 확정되어 취소할 수 없습니다.", HttpStatus.CONFLICT),
     MEMBER_WITHDRAWN("MEMBER_WITHDRAWN", "탈퇴한 회원은 정지할 수 없습니다.", HttpStatus.CONFLICT),
     MEMBER_ALREADY_SUSPENDED("MEMBER_ALREADY_SUSPENDED", "이미 정지된 회원입니다.", HttpStatus.CONFLICT),
     MEMBER_NOT_SUSPENDED("MEMBER_NOT_SUSPENDED", "정지 상태가 아닌 회원입니다.", HttpStatus.CONFLICT),

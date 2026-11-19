@@ -82,10 +82,12 @@ spec:
               value: "false"
             - name: ES_JAVA_OPTS
               value: "-Xms448m -Xmx448m"
+          # CPU 보장량은 실제 사용량에 맞춰 낮춘다(부하 테스트 최대 185m, 2026-11-19). 남은 몫은 Traefik(traefik-config.yaml)에 준다.
+          # CPU가 꽉 차서 검색이 느려지면 product가 2초 뒤 MySQL 검색으로 대신한다
           resources:
             requests:
               memory: 1Gi
-              cpu: 250m
+              cpu: 150m
             limits:
               memory: 1Gi
           volumeMounts:

@@ -20,6 +20,15 @@ spring:
     hibernate:
       ddl-auto: ${JPA_DDL_AUTO:update}
     open-in-view: false
+  # 정지 회원 즉시 차단(common SuspendedMemberChecker)이 쓰는 Redis. order는 공통 RedisConfig를 빼서(캐시를 안 씀)
+  # Spring Boot 기본 연결을 쓰므로, 다른 서비스와 같은 core Redis · DB 번호를 보게 여기서 맞춘다.
+  # 없으면 localhost:6379로 붙으려다 운영에서 계속 실패해 order API에서는 정지 회원이 차단되지 않았다(부하 테스트 중 확인, 2026-11-19)
+  data:
+    redis:
+      host: ${REDIS_CORE_HOST:localhost}
+      port: ${REDIS_CORE_PORT:6380}
+      database: ${REDIS_DATABASE:1}
+      password: ${REDIS_PASSWORD:}
   kafka:
     # cartmate.kafka.enabled=true일 때만 실제로 연결한다(기본 꺼짐 → 브로커 없이도 지금처럼 동작)
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}

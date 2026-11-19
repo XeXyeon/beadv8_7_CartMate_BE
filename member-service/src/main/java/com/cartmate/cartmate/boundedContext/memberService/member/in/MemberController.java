@@ -9,7 +9,6 @@ import com.cartmate.cartmate.boundedContext.memberService.member.dto.OtpConfirmR
 import com.cartmate.cartmate.boundedContext.memberService.member.dto.OtpConfirmResponse;
 import com.cartmate.cartmate.boundedContext.memberService.member.dto.OtpEnrollmentResponse;
 import com.cartmate.cartmate.boundedContext.memberService.member.dto.TokenPair;
-import com.cartmate.cartmate.boundedContext.memberService.member.dto.TrustedDeviceResponse;
 import com.cartmate.cartmate.boundedContext.memberService.member.dto.UpdateProfileRequest;
 import com.cartmate.cartmate.global.exception.ServiceException;
 import com.cartmate.cartmate.global.rsData.RsData;
@@ -22,8 +21,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/members")
@@ -63,23 +60,7 @@ public class MemberController {
         return new RsData<>("200-1", "비밀번호가 변경되었습니다.");
     }
 
-    // ===== 신뢰 기기 ("이 기기 30일 기억") =====
-    @GetMapping("/me/trusted-devices")
-    public RsData<List<TrustedDeviceResponse>> trustedDevices(@AuthenticationPrincipal SecurityUser user) {
-        return new RsData<>("200-1", "신뢰 기기 목록입니다.", memberFacade.getTrustedDevices(user.memberId()));
-    }
-
-    @DeleteMapping("/me/trusted-devices/{deviceId}")
-    public RsData<Void> revokeTrustedDevice(@AuthenticationPrincipal SecurityUser user, @PathVariable Long deviceId) {
-        memberFacade.revokeTrustedDevice(user.memberId(), deviceId);
-        return new RsData<>("200-1", "이 기기는 다음 로그인부터 인증번호를 다시 받습니다.");
-    }
-
-    @DeleteMapping("/me/trusted-devices")
-    public RsData<Void> revokeAllTrustedDevices(@AuthenticationPrincipal SecurityUser user) {
-        memberFacade.revokeAllTrustedDevices(user.memberId());
-        return new RsData<>("200-1", "모든 기기에서 다음 로그인부터 인증번호를 다시 받습니다.");
-    }
+    // 신뢰 기기 관리는 TrustedDeviceController (/api/auth/trusted-devices — 기기 쿠키가 /api/auth에만 실려서)
 
     // ===== 관리자 OTP 등록 =====
     // 이메일 인증까지 거친 세션에서만 (2차 인증 도입 전 세션은 비밀번호만 거쳤으므로 거절). 이미 등록됐으면 409 — 바꾸거나 지우는 건 Break-glass뿐

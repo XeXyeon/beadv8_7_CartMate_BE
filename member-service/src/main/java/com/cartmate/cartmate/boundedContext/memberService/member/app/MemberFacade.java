@@ -10,6 +10,7 @@ import com.cartmate.cartmate.global.page.PageResponse;
 import com.cartmate.cartmate.global.security.SecurityUser;
 import com.cartmate.cartmate.shared.member.dto.MemberDto;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -20,6 +21,7 @@ import java.util.List;
 import java.util.Optional;
 
 // member 모듈의 정문. Controller와 다른 모듈은 여기만 호출한다.
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class MemberFacade {
@@ -40,6 +42,7 @@ public class MemberFacade {
     private final MemberAddressUseCase memberAddressUseCase;
     private final AdminDashboardUseCase adminDashboardUseCase;
     private final MemberWithdrawalUseCase memberWithdrawalUseCase;
+    private final MemberWithdrawalFinalizeUseCase memberWithdrawalFinalizeUseCase;
     private final TransactionTemplate transactionTemplate;
 
 
@@ -127,13 +130,17 @@ public class MemberFacade {
     }
 
     @Transactional(readOnly = true)
-    public List<TrustedDeviceResponse> getTrustedDevices(Long memberId) {
-        return trustedDeviceUseCase.list(memberId, LocalDateTime.now()).stream().map(TrustedDeviceResponse::from).toList();
+    // currentToken: 요청한 브라우저의 신뢰 기기 쿠키 (없으면 null)
+    public List<TrustedDeviceResponse> getTrustedDevices(Long memberId, String currentToken) {
+        return trustedDeviceUseCase.list(memberId, LocalDateTime.now()).stream()
+                .map(d -> TrustedDeviceResponse.from(d, trustedDeviceUseCase.isCurrent(d, currentToken)))
+                .toList();
     }
 
+    // 해제한 기기가 요청한 브라우저면 true (쿠키도 지우라고)
     @Transactional
-    public void revokeTrustedDevice(Long memberId, Long deviceId) {
-        trustedDeviceUseCase.revoke(memberId, deviceId);
+    public boolean revokeTrustedDevice(Long memberId, Long deviceId, String currentToken) {
+        return trustedDeviceUseCase.revoke(memberId, deviceId, currentToken);
     }
 
     @Transactional
@@ -285,7 +292,7 @@ public class MemberFacade {
     // 진행 중 거래 확인은 다른 서비스 HTTP라 트랜잭션 밖에서 한다 (그동안 DB 연결을 잡지 않는다).
     // 상태 변경 · 이벤트 발행 · 새 토큰 발급만 짧은 트랜잭션으로 묶는다.
     public WithdrawalCheckResponse checkWithdrawal(Long memberId) {
-        return memberWithdrawalUseCase.check(memberId);
+        return memberWithdrawalUseCase.check(memberId, LocalDateTime.now());
     }
 
     // 탈퇴 신청·취소 뒤 상태(탈퇴 대기 표시 wp)가 반영된 새 Access Token을 함께 준다 (다른 서비스 필터는 토큰만 본다)
@@ -297,7 +304,7 @@ public class MemberFacade {
             memberWithdrawalUseCase.request(memberId, now);
             return reissueAccessToken(memberId, amr);
         });
-        return new WithdrawalResult(memberWithdrawalUseCase.check(memberId), accessToken);
+        return new WithdrawalResult(memberWithdrawalUseCase.check(memberId, now), accessToken);
     }
 
     public WithdrawalResult cancelWithdrawal(Long memberId, List<String> amr) {
@@ -305,10 +312,70 @@ public class MemberFacade {
             memberWithdrawalUseCase.cancel(memberId);
             return reissueAccessToken(memberId, amr);
         });
-        return new WithdrawalResult(memberWithdrawalUseCase.check(memberId), accessToken);
+        memberWithdrawalUseCase.clearPendingMark(memberId); // 커밋 뒤 (Redis)
+        return new WithdrawalResult(memberWithdrawalUseCase.check(memberId, LocalDateTime.now()), accessToken);
     }
 
     public record WithdrawalResult(WithdrawalCheckResponse check, String accessToken) {
+    }
+
+    /**
+     * 유예 기간이 끝난 탈퇴 대기 회원을 확정한다 (매일 새벽 스케줄러).
+     * 회원마다: 진행 중 거래·예치금 재검사(트랜잭션 밖 HTTP) → 막히면 건너뜀 → 확정·개인정보 삭제(짧은 트랜잭션) → 커밋 뒤 완료 메일.
+     * 한 명이 실패해도 다음 회원으로 넘어가고, 건너뛰거나 실패한 회원은 다음 실행에서 다시 본다.
+     */
+    public WithdrawalFinalizeResult finalizeDueWithdrawals(LocalDateTime now) {
+        int finalized = 0;
+        int blocked = 0;
+        int failed = 0;
+        Long afterId = 0L;
+        while (true) {
+            List<Long> ids = memberWithdrawalFinalizeUseCase.findDueIds(now, afterId);
+            for (Long memberId : ids) {
+                try {
+                    List<WithdrawalCheckResponse.WithdrawalBlocker> blockers = memberWithdrawalUseCase.blockersOf(memberId);
+                    if (!blockers.isEmpty()) {
+                        blocked++;
+                        log.atWarn().addKeyValue("event", "member.withdrawal.finalize-blocked")
+                                .addKeyValue("memberId", memberId)
+                                .log("탈퇴 확정 보류(진행 중 거래·예치금): memberId={}, 이유={}", memberId,
+                                        blockers.stream().map(WithdrawalCheckResponse.WithdrawalBlocker::code).toList());
+                        continue;
+                    }
+                    if (Boolean.TRUE.equals(transactionTemplate.execute(
+                            status -> memberWithdrawalFinalizeUseCase.finalizeOne(memberId, now)))) {
+                        finalized++;
+                    }
+                } catch (RuntimeException e) {
+                    failed++;
+                    log.atError().addKeyValue("event", "member.withdrawal.finalize-failed")
+                            .addKeyValue("memberId", memberId)
+                            .setCause(e)
+                            .log("탈퇴 확정 실패 → 다음 실행에서 다시 시도: memberId={}", memberId);
+                }
+            }
+            if (ids.size() < MemberWithdrawalFinalizeUseCase.BATCH_SIZE) {
+                return new WithdrawalFinalizeResult(finalized, blocked, failed);
+            }
+            afterId = ids.get(ids.size() - 1);
+        }
+    }
+
+    public record WithdrawalFinalizeResult(int finalized, int blocked, int failed) {
+    }
+
+    // 다른 서비스가 정리할 탈퇴 확정 회원: 확정 시각 [from, to). from이 없으면 처음부터
+    @Transactional(readOnly = true)
+    public List<Long> findWithdrawnMemberIds(LocalDateTime from, LocalDateTime to) {
+        return memberWithdrawalFinalizeUseCase.findWithdrawnIds(from, to);
+    }
+
+    // ===== 탈퇴 대기 Redis 표시 동기화 (WithdrawalPendingSync) =====
+    @Transactional(readOnly = true)
+    public boolean isWithdrawalPending(Long memberId) {
+        return memberSupport.findById(memberId)
+                .map(member -> member.getStatus() == MemberStatus.WITHDRAWAL_PENDING)
+                .orElse(false);
     }
 
     private String reissueAccessToken(Long memberId, List<String> amr) {
