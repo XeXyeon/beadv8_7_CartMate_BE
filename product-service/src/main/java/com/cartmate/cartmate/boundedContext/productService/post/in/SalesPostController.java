@@ -17,6 +17,8 @@ import com.cartmate.cartmate.boundedContext.productService.post.dto.UpdateSalesP
 import com.cartmate.cartmate.boundedContext.productService.post.dto.UpdateSalesPostRequest;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.UpdateSalesPostReviewRequest;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.WritableSalesPostReviewResponse;
+import com.cartmate.cartmate.boundedContext.productService.code.SalesPostErrorCode;
+import com.cartmate.cartmate.global.exception.ServiceException;
 import com.cartmate.cartmate.global.page.PageResponse;
 import com.cartmate.cartmate.global.rsData.RsData;
 import lombok.RequiredArgsConstructor;
@@ -39,10 +41,13 @@ public class SalesPostController {
     private final SalesPostFacade salesPostFacade;
 
 
+    // 등록할 판매자(요청 본문 sellerId)가 로그인한 판매자(JWT sellerId)와 같아야 한다
     @PostMapping
     public ResponseEntity<Void> registerSalesPost(
             @RequestPart("request") CreateSalesPostRequest request,
-            @RequestPart("images") List<MultipartFile> images) {
+            @RequestPart("images") List<MultipartFile> images,
+            @AuthenticationPrincipal SecurityUser user) {
+        requireSameSeller(request.getSellerId(), user);
         salesPostFacade.registerSalesPost(request, images);
         return ResponseEntity.status(HttpStatus.CREATED).build();
     }
@@ -65,20 +70,25 @@ public class SalesPostController {
     }
 
     // 판매자 본인의 판매글 목록(판매글 관리 화면). 삭제된 글만 빼고 모든 상태, 최신순
+    // 주소의 sellerId가 로그인한 판매자(JWT sellerId)와 같아야 한다
     @GetMapping("/sellers/{sellerId}/posts")
     @Operation(operationId = "selectSalesPostsBySeller", summary = "판매자 본인의 판매글 목록")
     public ResponseEntity<RsData<PageResponse<SelectSalesPostResponse>>> selectSalesPostsBySeller(
             @PathVariable Long sellerId,
-            Pageable pageable) {
+            Pageable pageable,
+            @AuthenticationPrincipal SecurityUser user) {
+        requireSameSeller(sellerId, user);
         return ResponseEntity.ok(salesPostFacade.selectSalesPostsBySeller(sellerId, pageable));
     }
 
+    // 삭제 · 중지 · 재개: 주소의 sellerId는 쓰지 않는다. postId로 조회한 판매글의 sellerId를 JWT sellerId와 비교한다(Use Case)
     @DeleteMapping("/sellers/{sellerId}/posts/{postId}")
     public ResponseEntity<Void> deleteSalesPost(
             @PathVariable Long sellerId,
-            @PathVariable Long postId
+            @PathVariable Long postId,
+            @AuthenticationPrincipal SecurityUser user
     ) {
-        salesPostFacade.deleteSalesPostByUser(postId, sellerId);
+        salesPostFacade.deleteSalesPostByUser(postId, requireSellerId(user));
         return ResponseEntity.status(HttpStatus.OK).build();
     }
 
@@ -86,22 +96,26 @@ public class SalesPostController {
     @Operation(operationId = "pauseSalesPost", summary = "판매자 판매 중지")
     public RsData<Void> pause(@PathVariable Long sellerId, @PathVariable Long postId,
                               @AuthenticationPrincipal SecurityUser user) {
-        salesPostFacade.pauseSalesPostBySeller(postId, sellerId, user == null ? null : user.memberId());
+        salesPostFacade.pauseSalesPostBySeller(postId, requireSellerId(user), user.memberId());
         return new RsData<>("200-1", "판매를 중지했습니다. 진행 중인 주문은 취소·환불됩니다.");
     }
 
     @PatchMapping("/sellers/{sellerId}/posts/{postId}/resume")
     @Operation(operationId = "resumeSalesPostBySeller", summary = "판매자 판매 재개")
-    public RsData<Void> resume(@PathVariable Long sellerId, @PathVariable Long postId) {
-        salesPostFacade.resumeSalesPostBySeller(postId, sellerId);
+    public RsData<Void> resume(@PathVariable Long sellerId, @PathVariable Long postId,
+                               @AuthenticationPrincipal SecurityUser user) {
+        salesPostFacade.resumeSalesPostBySeller(postId, requireSellerId(user));
         return new RsData<>("200-1", "판매를 다시 시작했습니다.");
     }
 
+    // 요청 본문 sellerId가 JWT sellerId와 같아야 한다. postId로 조회한 판매글의 sellerId는 SalesPostSupport에서 요청 본문 sellerId와 비교한다
     @PatchMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<Void> updateSalesPost(
             @RequestPart("request") UpdateSalesPostRequest request,
-            @RequestPart(value = "images", required = false) List<MultipartFile> images
+            @RequestPart(value = "images", required = false) List<MultipartFile> images,
+            @AuthenticationPrincipal SecurityUser user
     ) {
+        requireSameSeller(request.getSellerId(), user);
         salesPostFacade.updateSalesPostByUser(request, images);
         return ResponseEntity.noContent().build();
     }
@@ -284,6 +298,22 @@ public class SalesPostController {
 
     private Long sellerIdOf(SecurityUser user) {
         return user == null ? null : user.sellerId();
+    }
+
+    // 판매자 판매글 관리용: JWT에 sellerId가 없으면(로그인 안 함 · 구매자 · 관리자) 거절한다
+    private Long requireSellerId(SecurityUser user) {
+        Long sellerId = sellerIdOf(user);
+        if (sellerId == null) {
+            throw new ServiceException(SalesPostErrorCode.POST_ACCESS_DENIED);
+        }
+        return sellerId;
+    }
+
+    // 요청에 담긴 sellerId가 JWT sellerId와 다르면 거절한다
+    private void requireSameSeller(Long requestedSellerId, SecurityUser user) {
+        if (!requireSellerId(user).equals(requestedSellerId)) {
+            throw new ServiceException(SalesPostErrorCode.POST_ACCESS_DENIED);
+        }
     }
 
     private Long memberIdOf(SecurityUser user) {

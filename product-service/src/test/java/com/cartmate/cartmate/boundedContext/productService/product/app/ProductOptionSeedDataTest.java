@@ -1,14 +1,13 @@
 package com.cartmate.cartmate.boundedContext.productService.product.app;
 
 import com.cartmate.cartmate.boundedContext.productService.product.dto.CategoryResponse;
+import com.cartmate.cartmate.support.ProductServiceTestSupport;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
-import org.springframework.test.context.ActiveProfiles;
 
 import javax.sql.DataSource;
 import java.util.List;
@@ -21,9 +20,7 @@ import static org.assertj.core.api.Assertions.tuple;
 /**
  * 옵션 종류 · 상품옵션 초기 데이터(data.sql): 서버가 시작될 때 들어가고, 다시 실행해도 오류 없이 그대로다.
  */
-@SpringBootTest(properties = "cartmate.scheduling.enabled=false")
-@ActiveProfiles("test")
-class ProductOptionSeedDataTest {
+class ProductOptionSeedDataTest extends ProductServiceTestSupport {
 
     @Autowired
     JdbcTemplate jdbcTemplate;

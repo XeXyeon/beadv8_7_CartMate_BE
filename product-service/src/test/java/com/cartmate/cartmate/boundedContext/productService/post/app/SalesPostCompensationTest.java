@@ -4,24 +4,18 @@ import com.cartmate.cartmate.boundedContext.productService.code.ProductErrorCode
 import com.cartmate.cartmate.boundedContext.productService.post.dto.CreateProductRequest;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.CreateSalesPostRequest;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.SyncProduct;
-import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostApiClient;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostRepository;
-import com.cartmate.cartmate.boundedContext.productService.product.app.ProductFacade;
 import com.cartmate.cartmate.boundedContext.productService.product.app.TestImageFiles;
 import com.cartmate.cartmate.global.exception.ServiceException;
 import com.cartmate.cartmate.global.outbox.ManualOutboxRelayConfig;
 import com.cartmate.cartmate.global.outbox.OutboxRelay;
+import com.cartmate.cartmate.support.ProductServiceTestSupport;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -34,18 +28,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
-@SpringBootTest(properties = {
-        "cartmate.scheduling.enabled=false",
-        // ManualOutboxRelayConfig의 릴레이도 @Scheduled가 붙어 있어 저절로 돈다. 테스트가 직접 돌리도록 첫 실행을 미룬다
-        "custom.outbox.relay.initial-delay=PT1H"
-})
-@ActiveProfiles("test")
-@Import(ManualOutboxRelayConfig.class)
-class SalesPostCompensationTest {
+class SalesPostCompensationTest extends ProductServiceTestSupport {
 
     @Autowired
     SalesPostFacade salesPostFacade;
@@ -59,12 +46,6 @@ class SalesPostCompensationTest {
     JPAQueryFactory queryFactory;
     @Autowired
     TransactionTemplate transactionTemplate;
-
-    // 실제로는 같은 서버의 상품 API를 HTTP로 부르므로 대역으로 바꾼다
-    @MockitoBean
-    SalesPostApiClient salesPostApiClient;
-    @MockitoSpyBean
-    ProductFacade productFacade;
 
     @BeforeEach
     void setUp() {
@@ -90,12 +71,13 @@ class SalesPostCompensationTest {
     @DisplayName("상품 API가 성공하면 글이 남는다")
     void keepPostWhenProductApiSucceeds() {
         // 상품 API 대역도 실제처럼 저장한 상품을 돌려줘야 post가 복제본을 만들고 등록을 끝낸다
-        when(salesPostApiClient.registerProducts(any(), any())).thenAnswer(invocation -> {
+        // salesPostApiClient는 스파이라 when(spy.메서드())로 정하면 정하는 순간 실제 HTTP 호출이 나간다. doAnswer로 정한다
+        doAnswer(invocation -> {
             CreateProductRequest productRequest = invocation.getArgument(0);
             LocalDateTime now = LocalDateTime.now();
             return List.of(new SyncProduct(1L, 7L, productRequest.getPostId(), 1L, "아이폰", "설명", 10000L,
                     now, now, List.of(), List.of(), List.of()));
-        });
+        }).when(salesPostApiClient).registerProducts(any(), any());
 
         List<MultipartFile> images = getDummyImages(TestImageFiles.jpeg(), TestImageFiles.png(), TestImageFiles.png());
         salesPostFacade.registerSalesPost(request(), images);

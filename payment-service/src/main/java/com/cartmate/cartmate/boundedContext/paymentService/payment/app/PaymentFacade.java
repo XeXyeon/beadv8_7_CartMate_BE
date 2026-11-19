@@ -50,7 +50,8 @@ public class PaymentFacade {
         paymentRefundUseCase.compensateCharge(toPaymentType(orderType), orderId, memberId);
     }
 
-    @Transactional(readOnly = true)
+    // 트랜잭션 없음: 지갑이 없으면 지갑 쪽이 별도 트랜잭션으로 만들고 다시 읽는다 (바깥 트랜잭션이 있으면 새 지갑이 안 보임).
+    // 지갑이 없던 회원은 0원 (회원 탈퇴 확인·마이페이지가 "지갑 없음" 오류로 막히지 않게)
     public long getWalletBalance(Long memberId) {
         return paymentWalletClient.getBalance(memberId);
     }

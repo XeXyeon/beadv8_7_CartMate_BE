@@ -1,5 +1,6 @@
 package com.cartmate.cartmate.boundedContext.productService.post.out;
 
+import org.springframework.transaction.annotation.Transactional;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.QSalesPostComment;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostComment;
 import com.querydsl.core.types.dsl.BooleanExpression;
@@ -10,10 +11,13 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.support.PageableExecutionUtils;
 
+import java.util.Collection;
 import java.util.List;
 
 import static com.cartmate.cartmate.boundedContext.productService.post.domain.QSalesPostComment.salesPostComment;
 
+// 예전 @Query 메서드처럼 트랜잭션 밖에서 불러도 동작하게 한다(안에서 부르면 그 트랜잭션에 합류)
+@Transactional
 public class SalesPostCommentQueryRepositoryImpl implements SalesPostCommentQueryRepository {
     private final EntityManager entityManager;
     private final JPAQueryFactory queryFactory;
@@ -43,12 +47,16 @@ public class SalesPostCommentQueryRepositoryImpl implements SalesPostCommentQuer
         });
     }
 
-    // @Modifying(clearAutomatically = true)와 같게: 실행 뒤 비우기
+    // 실행 전 flush, 실행 뒤 비우기 (이미 불러온 댓글의 옛 상태를 다시 쓰지 않게)
     @Override
-    public int anonymizeWriter(Long memberId, String nickname) {
+    public int deleteWrittenBy(Collection<Long> memberIds) {
+        if (memberIds.isEmpty()) {
+            return 0;
+        }
+        entityManager.flush();
         long changed = queryFactory.update(salesPostComment)
-                .set(salesPostComment.writerNickname, nickname)
-                .where(salesPostComment.writerMemberId.eq(memberId))
+                .set(salesPostComment.isDeleted, true)
+                .where(salesPostComment.writerMemberId.in(memberIds), salesPostComment.isDeleted.isFalse())
                 .execute();
         entityManager.clear();
         return (int) changed;

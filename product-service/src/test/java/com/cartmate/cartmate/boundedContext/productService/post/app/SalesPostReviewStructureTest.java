@@ -14,13 +14,12 @@ import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostRep
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostReviewRepository;
 import com.cartmate.cartmate.global.exception.ServiceException;
 import com.cartmate.cartmate.shared.delivery.PurchaseType;
+import com.cartmate.cartmate.support.ProductServiceTestSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDateTime;
 
@@ -31,9 +30,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * 리뷰 저장 구조: 생성 시 별점 · 내용 검증, 구매 기록에서 상품명 · 선택된 옵션 · 수정 기한 복사,
  * 주문항목(구매 기록)마다 리뷰 1개(유니크 키), 판매글 리뷰 집계 칸의 시작값.
  */
-@SpringBootTest(properties = "cartmate.scheduling.enabled=false")
-@ActiveProfiles("test")
-class SalesPostReviewStructureTest {
+class SalesPostReviewStructureTest extends ProductServiceTestSupport {
 
     private static final Long BUYER_ID = 100L;
     private static final LocalDateTime CONFIRMED_AT = LocalDateTime.of(2026, 11, 8, 10, 0);

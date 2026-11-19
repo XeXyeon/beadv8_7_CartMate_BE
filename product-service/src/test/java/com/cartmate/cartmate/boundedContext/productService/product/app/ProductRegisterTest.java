@@ -24,13 +24,11 @@ import com.cartmate.cartmate.boundedContext.productService.product.out.FakeImage
 import com.cartmate.cartmate.boundedContext.productService.product.out.ProductImageRepository;
 import com.cartmate.cartmate.boundedContext.productService.product.out.ProductRepository;
 import com.cartmate.cartmate.global.exception.ServiceException;
+import com.cartmate.cartmate.support.ProductServiceTestSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.ArrayList;
@@ -44,9 +42,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.reset;
 
-@SpringBootTest(properties = "cartmate.scheduling.enabled=false")
-@ActiveProfiles("test")
-class ProductRegisterTest {
+class ProductRegisterTest extends ProductServiceTestSupport {
 
     private static final Long POST_ID = 101L;
     private static final Long SELLER_ID = 7L;
@@ -59,8 +55,6 @@ class ProductRegisterTest {
     ProductImageRepository productImageRepository;
     @Autowired
     FakeImageStorage storage;
-    @MockitoSpyBean
-    ProductCreateUseCase productCreateUseCase;
 
     @Autowired
     SalesPostCreateUseCase salesPostCreateUseCase;

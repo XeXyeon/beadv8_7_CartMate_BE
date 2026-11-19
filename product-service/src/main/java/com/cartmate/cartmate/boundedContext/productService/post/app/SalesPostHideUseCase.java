@@ -10,6 +10,7 @@ import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPost
 import com.cartmate.cartmate.boundedContext.productService.code.SalesPostErrorCode;
 import com.cartmate.cartmate.global.event.DomainEventPublisher;
 import com.cartmate.cartmate.global.exception.ServiceException;
+import com.cartmate.cartmate.shared.post.event.SalesPostChangedEvent;
 import com.cartmate.cartmate.shared.post.event.SalesPostHiddenEvent;
 import com.cartmate.cartmate.shared.post.event.SalesPostHideType;
 import lombok.RequiredArgsConstructor;
@@ -42,6 +43,7 @@ public class SalesPostHideUseCase {
 
         post.pauseBySeller();
         publishHidden(post, SalesPostHideType.SELLER_PAUSED, actorMemberId, null);
+        eventPublisher.publish(new SalesPostChangedEvent(postId));
     }
 
     // 판매자 재개. 내림 중에 취소된 거래는 되돌리지 않는다.
@@ -53,6 +55,7 @@ public class SalesPostHideUseCase {
         salesPostApiClient.changeProductStatus(postId, SalesPostProductStatus.ON_SALE);
 
         post.resumeBySeller();
+        eventPublisher.publish(new SalesPostChangedEvent(postId));
     }
 
     // 판매글 상태를 바꾼 트랜잭션 안에서 호출한다 (Outbox에 같은 트랜잭션으로 저장, 트랜잭션이 없으면 예외).

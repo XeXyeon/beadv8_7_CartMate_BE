@@ -13,6 +13,7 @@ import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostPro
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostRepository;
 import com.cartmate.cartmate.global.exception.ErrorCode;
 import com.cartmate.cartmate.global.exception.ServiceException;
+import com.cartmate.cartmate.support.ProductServiceTestSupport;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -20,9 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -42,9 +41,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * 찜하기는 판매글이 판매 중 · 판매 중지이고 판매글 상품이 삭제되지 않았을 때만 되고, 찜 해제는 언제든 된다.
  * 둘 다 같은 요청을 다시 보내도 결과가 같다.
  */
-@SpringBootTest(properties = "cartmate.scheduling.enabled=false")
-@ActiveProfiles("test")
-class SalesPostProductWishTest {
+class SalesPostProductWishTest extends ProductServiceTestSupport {
 
     private static final Long SELLER_ID = 7L;
     private static final Long MEMBER_ID = 100L;

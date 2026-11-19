@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class WalletFacade {
     private final WalletCreateUseCase walletCreateUseCase;
+    private final WalletEnsureUseCase walletEnsureUseCase;
     private final WalletQueryUseCase walletQueryUseCase;
     private final WalletChargeUseCase walletChargeUseCase;
     private final WalletPaymentUseCase walletPaymentUseCase;
@@ -31,10 +32,14 @@ public class WalletFacade {
         walletCreateUseCase.createWallet(memberId);
     }
 
-    // 회원의 지갑을 조회한다.
-    @Transactional(readOnly = true)
+    // 회원의 지갑을 조회한다. 없으면(가입 이벤트가 끝내 처리되지 못한 회원 등) 그 자리에서 만들어 0원 지갑을 준다.
+    // 트랜잭션을 걸지 않는다: 만들기는 별도 트랜잭션으로 커밋하고 새 트랜잭션에서 다시 읽어야 보인다
+    // (바깥 트랜잭션이 먼저 읽었으면 MySQL 반복 읽기 스냅숏 때문에 방금 만든 지갑이 안 보임). 조회는 WalletQueryUseCase가 연다
     public WalletBalanceResponse getWallet(Long memberId) {
-        return walletQueryUseCase.getWallet(memberId);
+        return walletQueryUseCase.findWallet(memberId).orElseGet(() -> {
+            walletEnsureUseCase.ensure(memberId);
+            return walletQueryUseCase.getWallet(memberId);
+        });
     }
 
     // 지갑 거래 내역을 페이지 조회한다.

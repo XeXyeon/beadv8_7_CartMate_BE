@@ -8,6 +8,7 @@ import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostRep
 import com.cartmate.cartmate.boundedContext.productService.product.domain.ProductUpdateStatus;
 import com.cartmate.cartmate.boundedContext.productService.code.SalesPostErrorCode;
 import com.cartmate.cartmate.global.exception.ServiceException;
+import com.cartmate.cartmate.shared.post.event.SalesPostChangedEvent;
 import com.cartmate.cartmate.global.event.DomainEventPublisher;
 import com.cartmate.cartmate.shared.post.event.SalesPostRegisterFailedEvent;
 import lombok.RequiredArgsConstructor;
@@ -48,6 +49,7 @@ public class SalesPostCreateUseCase {
         SalesPost post = salesPostRepository.findById(postId)
                 .orElseThrow(() -> new ServiceException(SalesPostErrorCode.POST_NOT_FOUND));
         post.saveComplete();
+        domainEventPublisher.publish(new SalesPostChangedEvent(postId));
     }
 
     // 등록 대사: 등록 중(PENDING)으로 오래 남은 판매글

@@ -17,14 +17,13 @@ import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostPro
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostRepository;
 import com.cartmate.cartmate.global.exception.ServiceException;
 import com.cartmate.cartmate.global.page.PageResponse;
+import com.cartmate.cartmate.support.ProductServiceTestSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDateTime;
 import java.util.concurrent.atomic.AtomicLong;
@@ -37,9 +36,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * 삭제된 판매글 상품 · 삭제(중) · 등록 중인 판매글은 빠지고, 나머지는 판매글 · 판매글 상품 상태를 합친 표시 상태를 붙인다.
  * 볼 수 없는 상품(운영 중지)은 상품명 · 대표 이미지 · 가격을 비운다.
  */
-@SpringBootTest(properties = "cartmate.scheduling.enabled=false")
-@ActiveProfiles("test")
-class SalesPostProductWishSelectTest {
+class SalesPostProductWishSelectTest extends ProductServiceTestSupport {
 
     private static final Long SELLER_ID = 7L;
     private static final Long MEMBER_ID = 100L;

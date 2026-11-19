@@ -30,12 +30,11 @@ import com.cartmate.cartmate.global.exception.ServiceException;
 import com.cartmate.cartmate.shared.order.OrderType;
 import com.cartmate.cartmate.shared.product.dto.InventoryReleaseRequest;
 import com.cartmate.cartmate.shared.product.dto.InventoryReserveRequest;
+import com.cartmate.cartmate.support.ProductServiceTestSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.ArrayList;
@@ -56,9 +55,7 @@ import static org.assertj.core.api.Assertions.tuple;
  * 재고 선점 · 선점 해제: 결제 직전에 남은 수량(재고 - 선점)만큼만 잡고, 주문 하나는 전부 선점되거나 하나도 안 된다.
  * 선점 기록(주문 → 재고 · 수량)으로 선점 해제한다.
  */
-@SpringBootTest(properties = "cartmate.scheduling.enabled=false")
-@ActiveProfiles("test")
-class InventoryReservationTest {
+class InventoryReservationTest extends ProductServiceTestSupport {
 
     private static final Long SELLER_ID = 7L;
     private static final OrderType ORDER = OrderType.PERSONAL;

@@ -1,5 +1,6 @@
 package com.cartmate.cartmate.boundedContext.orderService.order.out;
 
+import com.cartmate.cartmate.boundedContext.orderService.order.exception.OrderErrorCode;
 import com.cartmate.cartmate.global.exception.ServiceException;
 import com.cartmate.cartmate.global.http.InternalApiClient;
 import com.cartmate.cartmate.global.http.InternalApiClient.InternalResponse;
@@ -35,6 +36,12 @@ public class HttpOrderPaymentClient implements OrderPaymentClient {
             return findPayment(orderType, orderId, memberId)
                     .filter(PaymentResult::isPaid)
                     .orElseThrow(() -> e);
+        } catch (ServiceException e) {
+            // 같은 키의 차감이 아직 커밋 전: 실패가 아니라 "결과 모름"이다. 호출한 쪽이 선점을 풀지 않게 주문 오류로 바꾼다
+            if (e.getRsData().getResultCode().endsWith("PAYMENT_IN_PROGRESS")) {
+                throw new ServiceException(OrderErrorCode.ORDER_PAYMENT_IN_PROGRESS);
+            }
+            throw e;
         }
     }
 

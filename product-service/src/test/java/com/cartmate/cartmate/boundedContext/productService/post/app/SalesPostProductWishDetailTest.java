@@ -6,7 +6,6 @@ import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPost
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostProductWish;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostSaleStatus;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostUpdateStatus;
-import com.cartmate.cartmate.boundedContext.productService.post.dto.SalesPostDetailInventories;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.SelectSalesPostProduct;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.SelectSalesPostRequest;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductImageRepository;
@@ -14,14 +13,12 @@ import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostPro
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductWishRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostRepository;
+import com.cartmate.cartmate.support.ProductServiceTestSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -30,15 +27,13 @@ import java.util.concurrent.atomic.AtomicLong;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willReturn;
 
 /**
  * 판매글 상세의 찜 표시: 로그인한 회원이 찜한 판매글 상품만 wished = true.
  * 비로그인 · 목록 조회는 모두 false.
  */
-@SpringBootTest(properties = "cartmate.scheduling.enabled=false")
-@ActiveProfiles("test")
-class SalesPostProductWishDetailTest {
+class SalesPostProductWishDetailTest extends ProductServiceTestSupport {
 
     private static final Long SELLER_ID = 7L;
     private static final Long MEMBER_ID = 100L;
@@ -58,10 +53,6 @@ class SalesPostProductWishDetailTest {
     @Autowired
     SalesPostProductOptionRepository salesPostProductOptionRepository;
 
-    // 선택 목록 · 재고는 상품 서버 호출이라 이 테스트에서는 빈 값으로 바꾼다 (실제 호출은 SalesPostDetailFlowTest)
-    @MockitoBean
-    SalesPostDetailInventoryLoader salesPostDetailInventoryLoader;
-
     Long postId;
     Long wishedProduct;
     Long otherProduct;
@@ -73,7 +64,9 @@ class SalesPostProductWishDetailTest {
         salesPostProductOptionRepository.deleteAll();
         salesPostProductRepository.deleteAll();
         salesPostRepository.deleteAll();
-        given(salesPostDetailInventoryLoader.load(anyLong())).willReturn(new SalesPostDetailInventories(List.of()));
+        // 선택 목록 · 재고는 상품 서버 호출이라 빈 값으로 정한다 (실제 호출은 SalesPostDetailFlowTest)
+        // 재고 로더는 @Cacheable 프록시라 스파이로 정하기 어렵다. 그 아래의 상품 API 응답을 빈 목록으로 정한다
+        willReturn(List.of()).given(salesPostApiClient).getProduct(anyLong());
 
         postId = salesPostRepository.save(new SalesPost(SELLER_ID, "판매글", "내용", SalesPostSaleStatus.ON_SALE, 0L,
                 SalesPostUpdateStatus.NEW, LocalDateTime.now())).getId();

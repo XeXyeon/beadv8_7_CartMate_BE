@@ -51,8 +51,9 @@ public class WalletSettlementUseCase {
         }
 
         // 2) 판매자 지갑과 주문의 홀딩(정산이 끝나거나 취소된 것은 제외)을 조회한다. 동시 정산은 호출하는 쪽의 주문 키 분산락이 막는다.
+        // 판매자 지갑이 없으면(가입 이벤트가 처리되지 않은 판매자) 이 트랜잭션에서 만들어 바로 입금한다 → 정산금이 묶이지 않게
         Wallet sellerWallet = walletRepository.findByMemberId(request.sellerMemberId())
-                .orElseThrow(() -> new ServiceException(WalletErrorCode.WALLET_NOT_FOUND));
+                .orElseGet(() -> walletRepository.save(Wallet.createWallet(request.sellerMemberId())));
 
         List<Holding> holdings = holdingRepository
                 .findAllByOrderIdAndPurchaseType(request.orderId(), request.purchaseType()).stream()

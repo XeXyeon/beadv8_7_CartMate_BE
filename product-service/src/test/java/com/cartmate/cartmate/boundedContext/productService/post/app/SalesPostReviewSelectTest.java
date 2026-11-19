@@ -11,7 +11,6 @@ import com.cartmate.cartmate.boundedContext.productService.post.dto.CreateSalesP
 import com.cartmate.cartmate.boundedContext.productService.post.dto.SalesPostReviewResponse;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.SalesPostReviewSellerReplyRequest;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.SelectSalesPostResponse;
-import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostMemberClient;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductImageRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductOptionRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductRepository;
@@ -22,14 +21,12 @@ import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostRev
 import com.cartmate.cartmate.global.exception.ServiceException;
 import com.cartmate.cartmate.global.page.PageResponse;
 import com.cartmate.cartmate.shared.delivery.PurchaseType;
+import com.cartmate.cartmate.support.ProductServiceTestSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -47,9 +44,7 @@ import static org.mockito.BDDMockito.given;
  * 판매글 응답의 리뷰 요약(리뷰 수 · 평균 별점 소수 첫째 자리).
  * 삭제 · 판매자 답글은 실제 API로 만든다.
  */
-@SpringBootTest(properties = "cartmate.scheduling.enabled=false")
-@ActiveProfiles("test")
-class SalesPostReviewSelectTest {
+class SalesPostReviewSelectTest extends ProductServiceTestSupport {
 
     private static final Long SELLER_ID = 7L;
     private static final Long BUYER_ID = 100L;
@@ -76,9 +71,6 @@ class SalesPostReviewSelectTest {
     SalesPostReviewRepository salesPostReviewRepository;
     @Autowired
     SalesPostReviewHistoryRepository salesPostReviewHistoryRepository;
-
-    @MockitoBean
-    SalesPostMemberClient salesPostMemberClient;
 
     Long postId;
     Long productId;

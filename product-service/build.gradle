@@ -19,6 +19,8 @@ dependencies {
     // 공동구매 · 주문 · 구매확정 · wallet 결과 이벤트를 Kafka로 받는다(cartmate.kafka.enabled=true일 때만 연결)
     implementation 'org.springframework.boot:spring-boot-starter-kafka'
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.1'
+    // 판매글 검색 색인(nori 플러그인이 든 ES). 검색이 실패하면 MySQL 검색으로 대신한다
+    implementation 'org.springframework.boot:spring-boot-starter-data-elasticsearch'
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
     runtimeOnly 'com.mysql:mysql-connector-j'
 
@@ -33,6 +35,7 @@ dependencies {
     testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
     testImplementation 'org.testcontainers:testcontainers-mysql'
     testImplementation 'org.testcontainers:testcontainers-kafka'
+    testImplementation 'org.testcontainers:testcontainers-elasticsearch'
     testCompileOnly 'org.projectlombok:lombok'
     testAnnotationProcessor 'org.projectlombok:lombok'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'

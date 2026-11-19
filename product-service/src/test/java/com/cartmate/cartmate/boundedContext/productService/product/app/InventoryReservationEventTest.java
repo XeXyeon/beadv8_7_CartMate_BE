@@ -28,13 +28,12 @@ import com.cartmate.cartmate.shared.order.event.OrderCanceledEvent;
 import com.cartmate.cartmate.shared.order.event.OrderPaidEvent;
 import com.cartmate.cartmate.shared.order.event.OrderSellerItemsCanceledEvent;
 import com.cartmate.cartmate.shared.product.dto.InventoryReserveRequest;
+import com.cartmate.cartmate.support.ProductServiceTestSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
@@ -48,9 +47,7 @@ import static org.assertj.core.api.Assertions.tuple;
  * 주문 이벤트 → 재고: 결제 완료 = 판매 확정, 주문 취소 = 선점 해제(결제 전) · 재고 복구(결제 후),
  * 판매자 몫 취소 = 그 판매자 재고만 재고 복구. 이벤트는 인박스처럼 트랜잭션 안에서 발행한다.
  */
-@SpringBootTest(properties = "cartmate.scheduling.enabled=false")
-@ActiveProfiles("test")
-class InventoryReservationEventTest {
+class InventoryReservationEventTest extends ProductServiceTestSupport {
 
     private static final Long SELLER_ID = 7L;
     private static final Long OTHER_SELLER_ID = 8L;
