@@ -130,13 +130,17 @@ public class MemberFacade {
     }
 
     @Transactional(readOnly = true)
-    public List<TrustedDeviceResponse> getTrustedDevices(Long memberId) {
-        return trustedDeviceUseCase.list(memberId, LocalDateTime.now()).stream().map(TrustedDeviceResponse::from).toList();
+    // currentToken: 요청한 브라우저의 신뢰 기기 쿠키 (없으면 null)
+    public List<TrustedDeviceResponse> getTrustedDevices(Long memberId, String currentToken) {
+        return trustedDeviceUseCase.list(memberId, LocalDateTime.now()).stream()
+                .map(d -> TrustedDeviceResponse.from(d, trustedDeviceUseCase.isCurrent(d, currentToken)))
+                .toList();
     }
 
+    // 해제한 기기가 요청한 브라우저면 true (쿠키도 지우라고)
     @Transactional
-    public void revokeTrustedDevice(Long memberId, Long deviceId) {
-        trustedDeviceUseCase.revoke(memberId, deviceId);
+    public boolean revokeTrustedDevice(Long memberId, Long deviceId, String currentToken) {
+        return trustedDeviceUseCase.revoke(memberId, deviceId, currentToken);
     }
 
     @Transactional
