@@ -65,12 +65,32 @@ public class SuspendedMemberChecker implements DisposableBean {
         return KEY_PREFIX + memberId;
     }
 
+    /**
+     * 탈퇴를 막 신청한 회원 표시 키. 회원 서비스가 신청 직후 짧게(Access Token 수명보다 조금 길게) 둔다.
+     * 신청 전에 받은 토큰(wp 없음)을 다른 기기에서 쓰는 동안에도 변경 요청을 막으려고 WithdrawalPendingFilter가 본다.
+     * 그 뒤에는 재발급된 토큰에 wp가 붙어 있어 키가 필요 없다.
+     */
+    public static final String WITHDRAWAL_PENDING_KEY_PREFIX = "member:withdrawal-pending:";
+
+    public static String withdrawalPendingKeyOf(Long memberId) {
+        return WITHDRAWAL_PENDING_KEY_PREFIX + memberId;
+    }
+
     public boolean isSuspended(Long memberId) {
+        return hasKey(keyOf(memberId), memberId);
+    }
+
+    // 정지와 같은 연결·시간 제한·장애 정책(실패하면 통과)을 쓴다
+    public boolean isWithdrawalPending(Long memberId) {
+        return hasKey(withdrawalPendingKeyOf(memberId), memberId);
+    }
+
+    private boolean hasKey(String key, Long memberId) {
         if (redis == null) {
             return false;
         }
         try {
-            return Boolean.TRUE.equals(redis.hasKey(keyOf(memberId)));
+            return Boolean.TRUE.equals(redis.hasKey(key));
         } catch (RuntimeException e) {
             logFailure(memberId, e);
             return false; // Redis 장애가 전체 장애가 되지 않게 통과시킨다 (사용자 결정: DB·내부 API로 대신 묻지 않음)
@@ -88,7 +108,7 @@ public class SuspendedMemberChecker implements DisposableBean {
                 .addKeyValue("memberId", memberId)
                 .addKeyValue("suppressed", suppressedErrors.getAndSet(0))
                 .setCause(e)
-                .log("정지 회원 조회(Redis) 실패 → 차단하지 않고 통과시킴. 정지 회원도 Access Token 만료 전까지 이용할 수 있다: memberId={}",
+                .log("정지·탈퇴 대기 회원 조회(Redis) 실패 → 차단하지 않고 통과시킴. Access Token 만료 전까지 이용할 수 있다: memberId={}",
                         memberId);
     }
 

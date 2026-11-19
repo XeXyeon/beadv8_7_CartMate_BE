@@ -12,7 +12,7 @@ public class FacadeWithdrawalTradeClient implements WithdrawalTradeClient {
 
     private final MemberOrderServerClient orderServerClient;
     private final MemberDeliveryServerClient deliveryServerClient;
-    private final MemberPaymentServerClient paymentServerClient; // 정산은 결제 서버
+    private final MemberPaymentServerClient paymentServerClient; // 정산·예치금은 결제 서버
 
     @Override
     public BuyerTrades getBuyerTrades(Long memberId) {
@@ -26,7 +26,8 @@ public class FacadeWithdrawalTradeClient implements WithdrawalTradeClient {
                 unconfirmed,
                 orderServerClient.countPayingSharedOrders(memberId),
                 deliveryServerClient.countClaimsInProgressOfBuyer(memberId),
-                orderServerClient.countActiveGroupPurchases(memberId));
+                orderServerClient.countActiveGroupPurchases(memberId),
+                paymentServerClient.getWalletBalance(memberId));
     }
 
     @Override

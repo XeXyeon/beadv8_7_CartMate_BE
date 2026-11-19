@@ -16,4 +16,9 @@ public interface MemberOtpRepository extends JpaRepository<MemberOtp, Long> {
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("update MemberOtp o set o.lastUsedStep = :step where o.memberId = :memberId and o.enabledAt is not null and o.lastUsedStep < :step")
     int markUsed(@Param("memberId") Long memberId, @Param("step") long step);
+
+    // 탈퇴 확정: OTP 비밀키 삭제
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("delete from MemberOtp o where o.memberId = :memberId")
+    int deleteAllOf(@Param("memberId") Long memberId);
 }

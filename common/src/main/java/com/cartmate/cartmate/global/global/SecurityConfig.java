@@ -71,8 +71,8 @@ public class SecurityConfig {
                 )
                 .addFilterBefore(new JwtAuthenticationFilter(jwtProvider, suspendedMemberChecker),
                         UsernamePasswordAuthenticationFilter.class)
-                // 인증 다음에 실행: 탈퇴 대기 회원(토큰의 wp)의 변경 요청 차단
-                .addFilterAfter(new WithdrawalPendingFilter(), JwtAuthenticationFilter.class)
+                // 인증 다음에 실행: 탈퇴 대기 회원(토큰의 wp, 막 신청한 회원은 Redis 표시)의 변경 요청 차단
+                .addFilterAfter(new WithdrawalPendingFilter(suspendedMemberChecker), JwtAuthenticationFilter.class)
                 .addFilterBefore(new InternalApiKeyFilter(internalApiKey), JwtAuthenticationFilter.class);
         return http.build();
     }
