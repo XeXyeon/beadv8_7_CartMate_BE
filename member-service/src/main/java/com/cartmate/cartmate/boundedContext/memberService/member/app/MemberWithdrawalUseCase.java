@@ -9,6 +9,7 @@ import com.cartmate.cartmate.boundedContext.memberService.member.dto.WithdrawalC
 import com.cartmate.cartmate.boundedContext.memberService.member.dto.WithdrawalCheckResponse.WithdrawalBlocker;
 import com.cartmate.cartmate.boundedContext.memberService.member.out.MemberRepository;
 import com.cartmate.cartmate.boundedContext.memberService.member.out.SellerRepository;
+import com.cartmate.cartmate.boundedContext.memberService.member.out.WithdrawalPendingStore;
 import com.cartmate.cartmate.boundedContext.memberService.member.out.WithdrawalTradeClient;
 import com.cartmate.cartmate.boundedContext.memberService.member.out.WithdrawalTradeClient.BuyerTrades;
 import com.cartmate.cartmate.boundedContext.memberService.member.out.WithdrawalTradeClient.SellerTrades;
@@ -16,6 +17,7 @@ import com.cartmate.cartmate.global.event.DomainEventPublisher;
 import com.cartmate.cartmate.global.exception.ServiceException;
 import com.cartmate.cartmate.shared.member.event.MemberWithdrawalRequestedEvent;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -24,11 +26,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 회원 탈퇴 신청·취소 (1단계).
+ * 회원 탈퇴 신청·취소·조회 (1단계). 확정은 {@link MemberWithdrawalFinalizeUseCase}.
  *
- * <p>진행 중인 거래가 있으면 신청할 수 없다. 신청하면 탈퇴 대기가 되고, 유예 기간({@link #GRACE_DAYS}일) 동안
- * 로그인·조회·탈퇴 취소·예치금 환급 신청만 할 수 있다. 유예 기간이 지나면 탈퇴가 확정된다 (3단계).
+ * <p>진행 중인 거래나 예치금이 있으면 신청할 수 없다. 신청하면 탈퇴 대기가 되고, 유예 기간({@link #GRACE_DAYS}일) 동안
+ * 로그인·조회·탈퇴 취소·예치금 환급 신청만 할 수 있다. 유예 기간이 지나면 매일 새벽 스케줄러가 확정한다 (확정 직전에 다시 검사).
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 class MemberWithdrawalUseCase {
@@ -40,22 +43,28 @@ class MemberWithdrawalUseCase {
     private final WithdrawalTradeClient withdrawalTradeClient;
     private final PasswordEncoder passwordEncoder;
     private final DomainEventPublisher domainEventPublisher;
+    private final WithdrawalPendingStore withdrawalPendingStore;
 
     // 트랜잭션 없이 부른다: 진행 중 거래 확인이 다른 서비스 HTTP라 DB 연결을 잡지 않는다 (조회는 저장소가 각자 연다)
-    WithdrawalCheckResponse check(Long memberId) {
+    WithdrawalCheckResponse check(Long memberId, LocalDateTime now) {
         Member member = findMember(memberId);
         if (member.getStatus() == MemberStatus.WITHDRAWAL_PENDING) {
-            return new WithdrawalCheckResponse(false, List.of(), member.getStatus().name(),
-                    member.getWithdrawalRequestedAt(), member.getWithdrawalRequestedAt().plusDays(GRACE_DAYS));
+            LocalDateTime scheduledAt = member.getWithdrawalRequestedAt().plusDays(GRACE_DAYS);
+            // 확정 예정일이 지났는데 아직 대기면 확정이 막혔을 수 있다 → 그때만 이유를 계산해 보여 준다 (그 전엔 HTTP 없이)
+            List<WithdrawalBlocker> blockers = now.isBefore(scheduledAt) ? List.of() : findBlockers(member);
+            return new WithdrawalCheckResponse(false, blockers, member.getStatus().name(),
+                    member.getWithdrawalRequestedAt(), scheduledAt);
         }
         List<WithdrawalBlocker> blockers = findBlockers(member);
-        boolean canWithdraw = member.getStatus() == MemberStatus.ACTIVE && blockers.isEmpty();
+        boolean canWithdraw = member.getStatus() == MemberStatus.ACTIVE && member.getRole() != MemberRole.ADMIN
+                && blockers.isEmpty();
         return new WithdrawalCheckResponse(canWithdraw, blockers, member.getStatus().name(), null, null);
     }
 
-    // 트랜잭션 밖에서 부른다: 비밀번호와 진행 중 거래(다른 서비스 HTTP)를 확인한다. 막히면 예외.
+    // 트랜잭션 밖에서 부른다: 상태·비밀번호와 진행 중 거래(다른 서비스 HTTP)를 확인한다. 막히면 예외.
     void ensureCanRequest(Long memberId, String password) {
         Member member = findMember(memberId);
+        member.validateCanRequestWithdrawal(); // 관리자·이미 신청 등은 HTTP 전에 거른다
         if (!passwordEncoder.matches(password, member.getPassword())) {
             throw new ServiceException(MemberErrorCode.PASSWORD_MISMATCH);
         }
@@ -72,18 +81,43 @@ class MemberWithdrawalUseCase {
         member.requestWithdrawal(now);
         memberRepository.save(member);
 
-        // 다른 서비스: Outbox → product 판매글 판매 중지. 회원 안 차단은 새 토큰의 탈퇴 대기 표시(wp)가 맡는다
+        // 다른 서비스: Outbox → product 판매글 판매 중지.
+        // 회원 서비스 안: 같은 이벤트 릴레이로 Redis 표시(WithdrawalPendingSync) → 신청 전에 받은 토큰(다른 기기)도 바로 막힌다
         domainEventPublisher.publish(new MemberWithdrawalRequestedEvent(member.getId(), sellerIdOf(member), now));
     }
 
-    // 탈퇴 취소. 판매 중지한 판매글은 판매자가 직접 재개하므로 다른 서비스에 알리지 않는다
+    // 탈퇴 취소: 조건부 UPDATE라 확정 스케줄러와 동시에 와도 둘 중 하나만 성공한다.
+    // 판매 중지한 판매글은 판매자가 직접 재개하므로 다른 서비스에 알리지 않는다
     void cancel(Long memberId) {
-        Member member = findMember(memberId);
-        member.cancelWithdrawal();
-        memberRepository.save(member);
+        int updated = memberRepository.cancelWithdrawal(memberId, MemberStatus.WITHDRAWAL_PENDING, MemberStatus.ACTIVE);
+        if (updated == 1) {
+            return;
+        }
+        MemberStatus status = findMember(memberId).getStatus();
+        throw new ServiceException(status == MemberStatus.WITHDRAWN
+                ? MemberErrorCode.MEMBER_WITHDRAWAL_ALREADY_FINALIZED
+                : MemberErrorCode.MEMBER_WITHDRAWAL_NOT_REQUESTED);
     }
 
-    // 구매자로서 + (판매자면) 판매자로서 진행 중인 거래를 모은다
+    // 취소 커밋 뒤에 부른다: 신청 때 둔 Redis 표시를 지운다. 지우지 못해도 취소는 되돌리지 않는다
+    // (표시는 Access Token 수명 + 여유가 지나면 저절로 사라진다. 그동안 wp 없는 새 토큰의 변경 요청이 막힐 수 있다)
+    void clearPendingMark(Long memberId) {
+        try {
+            withdrawalPendingStore.clear(memberId);
+        } catch (RuntimeException e) {
+            log.atWarn().addKeyValue("event", "member.withdrawal.pending-mark-clear-failed")
+                    .addKeyValue("memberId", memberId)
+                    .setCause(e)
+                    .log("탈퇴 취소 후 Redis 탈퇴 대기 표시를 지우지 못함 → 표시가 만료될 때까지 변경 요청이 막힐 수 있다: memberId={}", memberId);
+        }
+    }
+
+    // 확정 직전 재검사 (트랜잭션 밖, 다른 서비스 HTTP)
+    List<WithdrawalBlocker> blockersOf(Long memberId) {
+        return findBlockers(findMember(memberId));
+    }
+
+    // 구매자로서 + (판매자면) 판매자로서 진행 중인 거래와 예치금을 모은다
     private List<WithdrawalBlocker> findBlockers(Member member) {
         List<WithdrawalBlocker> blockers = new ArrayList<>();
 
@@ -93,6 +127,9 @@ class MemberWithdrawalUseCase {
         addIf(blockers, "PAYING_SHARED_ORDERS", "분담금 결제 중인 공동 주문이 있습니다.", buyer.payingSharedOrders());
         addIf(blockers, "CLAIMS_IN_PROGRESS", "처리 중인 교환·반품 요청이 있습니다.", buyer.claimsInProgress());
         addIf(blockers, "ACTIVE_GROUP_PURCHASES", "모집 중인 공동구매에 참여하고 있습니다.", buyer.activeGroupPurchases());
+        // count에는 잔액(원)을 담는다
+        addIf(blockers, "WALLET_BALANCE_REMAINING",
+                "예치금 %,d원이 남아 있습니다. 환급받은 뒤 탈퇴할 수 있습니다.".formatted(buyer.walletBalance()), buyer.walletBalance());
 
         Long sellerId = sellerIdOf(member);
         if (sellerId != null) {
