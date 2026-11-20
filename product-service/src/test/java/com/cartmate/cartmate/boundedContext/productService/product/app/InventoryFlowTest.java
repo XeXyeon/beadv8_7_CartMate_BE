@@ -234,7 +234,7 @@ class InventoryFlowTest extends ProductServiceTestSupport {
     }
 
     private void register(List<CreateInventory> inventories) {
-        CreateProduct product = new CreateProduct(null, SELLER_ID, postId, 1L, "유니폼", "설명", BASE_PRICE,
+        CreateProduct product = new CreateProduct(null, SELLER_ID, 100L, postId, 1L, "유니폼", "설명", BASE_PRICE,
                 List.of(new CreateProductImage(null, SELLER_ID, null, null, 0, null)), inventories);
         productFacade.registerProduct(new CreateProductRequest(postId, List.of(product)), List.of(TestImageFiles.jpeg()));
     }

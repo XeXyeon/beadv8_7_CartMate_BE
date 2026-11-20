@@ -41,9 +41,9 @@ class CartItemUseCaseTest {
             LocalDateTime.of(2026, 10, 19, 12, 0).atZone(ZoneId.systemDefault()).toInstant(), ZoneId.systemDefault());
 
     private static final CartProductInfo UNIFORM_M = new CartProductInfo(
-            1L, 100L, "축구 유니폼", "M / 레드", 39000, "uniform.png", true);
+            1L, 100L, 900L, "축구 유니폼", "M / 레드", 39000, "uniform.png", true);
     private static final CartProductInfo SHIN_GUARD = new CartProductInfo(
-            5L, 300L, "정강이 보호대", "FREE", 15000, "guard.png", false);
+            5L, 300L, 900L, "정강이 보호대", "FREE", 15000, "guard.png", false);
 
     @Mock
     private CartRepository cartRepository;
@@ -129,6 +129,17 @@ class CartItemUseCaseTest {
             assertThatThrownBy(() -> cartItemUseCase.addItem(MEMBER_ID, 5L, 1))
                     .isInstanceOf(ServiceException.class)
                     .hasMessageContaining("구매할 수 없는 상품입니다.");
+            verifyNoInteractions(cartRepository);
+        }
+
+        @Test
+        @DisplayName("판매자가 자기 상품을 담으면 예외가 발생하고 장바구니는 건드리지 않는다")
+        void ownProduct() {
+            given(productClient.findByInventoryId(1L)).willReturn(Optional.of(UNIFORM_M));
+
+            assertThatThrownBy(() -> cartItemUseCase.addItem(UNIFORM_M.sellerMemberId(), 1L, 1))
+                    .isInstanceOf(ServiceException.class)
+                    .hasMessageContaining("본인이 판매하는 상품은 구매할 수 없습니다.");
             verifyNoInteractions(cartRepository);
         }
     }

@@ -164,7 +164,7 @@ class PaybackConditionFlowTest {
     }
 
     private Product product(Long sellerId) {
-        return new Product(sellerId, 1L, category, "상품", "설명", 10_000L, ProductStatus.ON_SALE);
+        return new Product(sellerId, 100L, 1L, category, "상품", "설명", 10_000L, ProductStatus.ON_SALE);
     }
 
     private static IndividualGroupPurchaseOpenedEvent opened(Long purchaseId, List<Long> productIds, long revision) {

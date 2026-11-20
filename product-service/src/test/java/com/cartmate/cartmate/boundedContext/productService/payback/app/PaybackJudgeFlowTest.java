@@ -78,7 +78,7 @@ class PaybackJudgeFlowTest {
     void setUp() {
         eventPublisher.clear();
         Category category = categoryRepository.save(new Category("유니폼 / 의류"));   // JPA 슬라이스 테스트라 data.sql 초기 데이터가 없다
-        productId = productRepository.save(new Product(SELLER_ID, 1L, category, "상품", "설명", 10_000L,
+        productId = productRepository.save(new Product(SELLER_ID, 100L, 1L, category, "상품", "설명", 10_000L,
                 ProductStatus.ON_SALE)).getId();
     }
 

@@ -88,6 +88,7 @@ class HttpProductClient implements ProductClient {
         return new CartProductInfo(
                 inventory.inventoryId(),
                 inventory.productId(),
+                inventory.sellerMemberId(),
                 inventory.productName(),
                 inventory.optionName(),
                 Math.toIntExact(inventory.price()),
@@ -100,6 +101,7 @@ class HttpProductClient implements ProductClient {
         InventoryForPurchase first = inventories.getFirst();
         return new CartProductOptions(
                 first.productId(),
+                first.sellerMemberId(),
                 first.productName(),
                 first.imageUrl(),
                 inventories.stream().anyMatch(InventoryForPurchase::purchasable),

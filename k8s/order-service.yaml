@@ -26,7 +26,7 @@ spec:
       # 같은 네임스페이스 Service마다 쿠버네티스가 <이름>_PORT=tcp://IP:포트 같은 환경변수를 자동으로 넣는다(서비스 링크)
       # 앱 설정의 MEMBER_SERVICE_PORT · REDIS_CACHE_PORT 등과 이름이 겹쳐 server.port 변환이 실패하므로 끈다
       enableServiceLinks: false
-      # 띄울 노드(cartmate/node 라벨). server = k3s server 노드(member · order · payment · etc), agent = k3s agent 노드(트래픽이 가장 많은 상품 서버를 떼어 둔다)
+      # 띄울 노드(cartmate/node 라벨). server = k3s server 노드(member · order · payment), agent = k3s agent 노드(트래픽이 가장 많은 상품 서버와 etc)
       nodeSelector:
         cartmate/node: server
       # Docker Hub에서 이미지를 받을 로그인 정보. 서버에서 한 번 만든다(Secret 이름 dockerhub-pull)
@@ -45,12 +45,14 @@ spec:
                 name: cartmate-app-secret
             - secretRef:
                 name: order-service-secret
+          # 메모리 768Mi → 1Gi: 부하가 이어지면 힙(제한의 60%)이 최대치까지 커지고 힙 밖(스레드 · 연결 · JIT 코드)도 약 300Mi까지 늘어
+          # 합계가 768Mi를 넘어 OOMKilled됐다(156 TPS, 죽을 때 약 785Mi, 2026-11-19). 1Gi면 힙 약 614Mi + 힙 밖 300Mi ≈ 914Mi
           resources:
             requests:
               cpu: 250m
-              memory: 768Mi
+              memory: 1Gi
             limits:
-              memory: 768Mi
+              memory: 1Gi
           # 기동이 끝날 때까지(최대 5초 × 60 = 5분) liveness · readiness 검사를 하지 않는다
           # server 노드는 JVM 4개가 CPU 2코어를 나눠 쓰며 동시에 시작하면 3분을 넘겨 재시작됐다(첫 배포, 2026-11-18)
           startupProbe:

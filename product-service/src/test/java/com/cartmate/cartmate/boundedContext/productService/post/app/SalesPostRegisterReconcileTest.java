@@ -183,7 +183,7 @@ class SalesPostRegisterReconcileTest extends ProductServiceTestSupport {
 
     // 등록 흐름의 ② 상품 등록(사진 2장, 옵션 1개). 저장한 상품을 돌려준다(복제본은 아직 없음)
     private List<SyncProduct> registerProduct(Long postId) {
-        CreateProduct product = new CreateProduct(null, SELLER_ID, postId, 1L, "아이폰", "설명", 10000L,
+        CreateProduct product = new CreateProduct(null, SELLER_ID, 100L, postId, 1L, "아이폰", "설명", 10000L,
                 List.of(new CreateProductImage(null, SELLER_ID, null, null, 0, null),
                         new CreateProductImage(null, SELLER_ID, null, null, 1, null)),
                 List.of(inventory(new CreateProductOption(CLOTHING_SIZE, SIZE_L))));

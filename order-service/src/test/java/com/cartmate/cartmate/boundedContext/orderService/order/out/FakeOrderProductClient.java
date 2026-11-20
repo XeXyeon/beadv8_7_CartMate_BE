@@ -19,7 +19,8 @@ public class FakeOrderProductClient implements OrderProductClient {
 
     private static final Map<Long, OrderProductInfo> PRODUCTS = TestCatalog.PRODUCTS.values().stream()
             .collect(Collectors.toUnmodifiableMap(TestCatalog.Product::inventoryId, product -> new OrderProductInfo(
-                    product.inventoryId(), product.productId(), product.sellerId(), product.productName(),
+                    product.inventoryId(), product.productId(), product.sellerId(), product.sellerMemberId(),
+                    product.productName(),
                     product.optionName(), product.price(), product.imageUrl(), product.purchasable(), product.purchasable())));
 
     private volatile Function<Collection<Long>, List<OrderProductInfo>> override;

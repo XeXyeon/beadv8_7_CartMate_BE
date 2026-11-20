@@ -50,7 +50,7 @@ class OrderCreateUseCase {
         }
         Map<Long, OrderProductInfo> products = productsOf(inventoryIds);
         List<OrderLine> lines = cartItems.stream()
-                .map(item -> toLine(products, item.inventoryId(), item.quantity()))
+                .map(item -> toLine(memberId, products, item.inventoryId(), item.quantity()))
                 .toList();
         Order order = Order.createPersonal(generateOrderNumber(now), memberId, lines, deliveryAddress, now);
         Order saved = saveNew(order);
@@ -67,7 +67,7 @@ class OrderCreateUseCase {
         }
         Map<Long, OrderProductInfo> products = productsOf(inventoryIds);
         List<OrderLine> lines = items.stream()
-                .map(item -> toLine(products, item.inventoryId(), item.quantity()))
+                .map(item -> toLine(memberId, products, item.inventoryId(), item.quantity()))
                 .toList();
         List<Long> productIds = lines.stream().map(OrderLine::productId).distinct().toList();
         IndividualGroupPurchaseReplica purchase = individualGroupPurchaseReplicaUseCase.find(individualGroupPurchaseId)
@@ -138,13 +138,16 @@ class OrderCreateUseCase {
                 .collect(Collectors.toMap(OrderProductInfo::inventoryId, Function.identity()));
     }
 
-    private OrderLine toLine(Map<Long, OrderProductInfo> products, Long inventoryId, int quantity) {
+    private OrderLine toLine(Long memberId, Map<Long, OrderProductInfo> products, Long inventoryId, int quantity) {
         OrderProductInfo product = products.get(inventoryId);
         if (product == null) {
             throw new ServiceException(OrderErrorCode.ORDER_PRODUCT_NOT_FOUND);
         }
         if (!product.purchasable()) {
             throw new ServiceException(OrderErrorCode.ORDER_PRODUCT_NOT_PURCHASABLE);
+        }
+        if (memberId.equals(product.sellerMemberId())) {
+            throw new ServiceException(OrderErrorCode.ORDER_OWN_PRODUCT);
         }
         return new OrderLine(
                 product.productId(),

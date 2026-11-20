@@ -33,11 +33,11 @@ class IndividualGroupPurchaseDashboardResponseTest {
         IndividualGroupPurchase purchase = memberPurchase(1L, List.of(UNIFORM, SOCKS), now);
 
         Map<Long, CartProductOptions> productOptions = Map.of(
-                UNIFORM, new CartProductOptions(UNIFORM, "축구 유니폼", null, true, List.of(
+                UNIFORM, new CartProductOptions(UNIFORM, 900L, "축구 유니폼", null, true, List.of(
                         new CartProductOptions.Option(UNIFORM_M, "M", 39000, true),
                         new CartProductOptions.Option(UNIFORM_L, "L", 39000, true),
                         new CartProductOptions.Option(UNIFORM_XL, "XL", 41000, true))),
-                SOCKS, new CartProductOptions(SOCKS, "양말", null, true, List.of(
+                SOCKS, new CartProductOptions(SOCKS, 900L, "양말", null, true, List.of(
                         new CartProductOptions.Option(SOCKS_FREE, "FREE", 5000, true))));
 
         List<IndividualGroupPurchaseOrderLine> lines = List.of(
@@ -96,7 +96,7 @@ class IndividualGroupPurchaseDashboardResponseTest {
     void noOrders() {
         IndividualGroupPurchase purchase = memberPurchase(1L, List.of(SOCKS), now);
         Map<Long, CartProductOptions> productOptions = Map.of(
-                SOCKS, new CartProductOptions(SOCKS, "양말", null, true, List.of(
+                SOCKS, new CartProductOptions(SOCKS, 900L, "양말", null, true, List.of(
                         new CartProductOptions.Option(SOCKS_FREE, "FREE", 5000, true))));
 
         IndividualGroupPurchaseDashboardResponse response =
@@ -113,9 +113,9 @@ class IndividualGroupPurchaseDashboardResponseTest {
     void nullOptionName() {
         IndividualGroupPurchase purchase = memberPurchase(1L, List.of(UNIFORM, SOCKS), now);
         Map<Long, CartProductOptions> productOptions = Map.of(
-                UNIFORM, new CartProductOptions(UNIFORM, "축구 유니폼", null, true, List.of(
+                UNIFORM, new CartProductOptions(UNIFORM, 900L, "축구 유니폼", null, true, List.of(
                         new CartProductOptions.Option(UNIFORM, null, 39000, true))),
-                SOCKS, new CartProductOptions(SOCKS, "양말", null, true, List.of(
+                SOCKS, new CartProductOptions(SOCKS, 900L, "양말", null, true, List.of(
                         new CartProductOptions.Option(SOCKS, null, 5000, true))));
         List<IndividualGroupPurchaseOrderLine> lines = List.of(
                 line(10L, 101L, UNIFORM, UNIFORM, 2, 39000),
@@ -144,7 +144,7 @@ class IndividualGroupPurchaseDashboardResponseTest {
         LocalDateTime closedAt = now.plusHours(1);
         purchase.close(1L, closedAt);
         Map<Long, CartProductOptions> productOptions = Map.of(
-                SOCKS, new CartProductOptions(SOCKS, "양말", null, true, List.of(
+                SOCKS, new CartProductOptions(SOCKS, 900L, "양말", null, true, List.of(
                         new CartProductOptions.Option(SOCKS, null, 5000, true))));
 
         IndividualGroupPurchaseDashboardResponse response =

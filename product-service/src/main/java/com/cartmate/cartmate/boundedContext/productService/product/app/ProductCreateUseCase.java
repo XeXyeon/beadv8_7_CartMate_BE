@@ -42,6 +42,7 @@ public class ProductCreateUseCase {
             Product product = productRepository.save(
                 new Product(
                     createProduct.getSellerId(),
+                    createProduct.getSellerMemberId(),
                     request.getPostId(),
                     categoryRepository.getCategory(createProduct.getCategoryId()),
                     createProduct.getName(),

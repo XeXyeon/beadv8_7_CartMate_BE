@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.Set;
 
 @Service
@@ -35,7 +36,9 @@ class SharedGroupPurchaseCreateUseCase {
     SharedGroupPurchaseCreateResponse duplicate(Long memberId, Long sharedGroupPurchaseId) {
         sharedGroupPurchaseSupport.validateNotRestricted(memberId);
         SharedGroupPurchase source = getPurchase(sharedGroupPurchaseId);
-        Set<Long> unavailable = sharedGroupPurchaseSupport.findUnavailableInventoryIds(source);
+        // 판매할 수 없게 된 품목처럼, 개설자 본인이 판매하는 상품도 빼고 복사한다
+        Set<Long> unavailable = new HashSet<>(sharedGroupPurchaseSupport.findUnavailableInventoryIds(source));
+        unavailable.addAll(sharedGroupPurchaseSupport.findOwnInventoryIds(source, memberId));
         String inviteCode = generateInviteCode();
         SharedGroupPurchase copy = source.duplicate(memberId, inviteCode, unavailable, LocalDateTime.now(clock));
         SharedGroupPurchase saved = sharedGroupPurchaseRepository.save(copy);

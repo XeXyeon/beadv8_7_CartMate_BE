@@ -36,7 +36,7 @@ class HttpProductClientTest {
                 .willReturn(List.of(inventory(101L, 10L, "L / 블랙", 39000L, true)));
 
         assertThat(productClient.findByInventoryId(101L)).contains(
-                new CartProductInfo(101L, 10L, "축구 유니폼", "L / 블랙", 39000, "https://example.com/10.png", true));
+                new CartProductInfo(101L, 10L, 900L, "축구 유니폼", "L / 블랙", 39000, "https://example.com/10.png", true));
     }
 
     @Test
@@ -92,7 +92,7 @@ class HttpProductClientTest {
 
     private InventoryForPurchase inventory(Long inventoryId, Long productId, String optionName, Long price,
                                            boolean purchasable) {
-        return new InventoryForPurchase(inventoryId, productId, 1L, "축구 유니폼", optionName, price,
+        return new InventoryForPurchase(inventoryId, productId, 1L, 900L, "축구 유니폼", optionName, price,
                 "https://example.com/" + productId + ".png", 3L, purchasable, purchasable);
     }
 }

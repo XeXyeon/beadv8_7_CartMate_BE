@@ -4,10 +4,12 @@ package com.cartmate.cartmate.shared.product.dto;
 // optionName: 재고의 skuName(예: "265 / 블랙", 옵션 없는 상품은 "기본"), price: 적용가(기본가 + 추가금액)
 // purchasable: 상품 판매 중 + 재고 삭제 안 됨 + 남은 수량(재고 - 예약) 1개 이상
 // onSale: 상품 판매 중 + 재고 삭제 안 됨 (남은 수량은 안 본다). 결제 직후 확인처럼 내 선점이 이미 잡힌 뒤에 쓴다
+// sellerMemberId: 판매자 본인의 회원 ID. 판매자가 자기 상품을 사지 못하게 막는 데 쓴다
 public record InventoryForPurchase(
         Long inventoryId,
         Long productId,
         Long sellerId,
+        Long sellerMemberId,
         String productName,
         String optionName,
         Long price,

@@ -27,7 +27,7 @@ class IndividualGroupPurchaseManageUseCase {
     private final Clock clock;
 
     void addProduct(Long memberId, Long individualGroupPurchaseId, Long productId) {
-        individualGroupPurchaseSupport.validatePurchasableProducts(List.of(productId));
+        individualGroupPurchaseSupport.validatePurchasableProductsFor(memberId, List.of(productId));
         IndividualGroupPurchase purchase = getPurchaseForUpdate(individualGroupPurchaseId);
         LocalDateTime now = LocalDateTime.now(clock);
         purchase.addProduct(memberId, productId, now);

@@ -13,6 +13,7 @@ public enum CartErrorCode implements ErrorCode {
     CART_PRODUCT_NOT_FOUND("CART_PRODUCT_NOT_FOUND", "존재하지 않는 상품입니다.", HttpStatus.NOT_FOUND),
     CART_PRODUCT_NOT_PURCHASABLE("CART_PRODUCT_NOT_PURCHASABLE", "구매할 수 없는 상품입니다.", HttpStatus.CONFLICT),
     CART_PRODUCT_NOT_ON_SALE("CART_PRODUCT_NOT_ON_SALE", "판매 중이 아닌 상품입니다.", HttpStatus.CONFLICT),
+    CART_OWN_PRODUCT("CART_OWN_PRODUCT", "본인이 판매하는 상품은 구매할 수 없습니다.", HttpStatus.CONFLICT),
     CART_INVALID_QUANTITY("CART_INVALID_QUANTITY", "수량은 1개 이상 999개 이하여야 합니다.", HttpStatus.BAD_REQUEST),
     CART_INVALID_QUANTITY_DELTA("CART_INVALID_QUANTITY_DELTA", "증감 수량은 0이 아닌 -998 이상 998 이하여야 합니다.", HttpStatus.BAD_REQUEST),
 
@@ -40,6 +41,8 @@ public enum CartErrorCode implements ErrorCode {
 
     CART_SHARED_ITEM_NOT_FOUND("CART_SHARED_ITEM_NOT_FOUND", "공동구매에 없는 상품입니다.", HttpStatus.NOT_FOUND),
     CART_SHARED_ITEM_OPTION_MISMATCH("CART_SHARED_ITEM_OPTION_MISMATCH", "같은 상품의 옵션으로만 변경할 수 있습니다.", HttpStatus.BAD_REQUEST),
+    CART_SHARED_SELLER_PARTICIPANT("CART_SHARED_SELLER_PARTICIPANT", "참가자가 판매하는 상품은 공동구매에 담을 수 없습니다.", HttpStatus.CONFLICT),
+    CART_SHARED_OWN_PRODUCT_INCLUDED("CART_SHARED_OWN_PRODUCT_INCLUDED", "본인이 판매하는 상품이 담긴 공동구매에는 참가할 수 없습니다.", HttpStatus.CONFLICT),
     CART_SHARED_EDIT_CLOSED("CART_SHARED_EDIT_CLOSED", "수정이 마감된 공동구매입니다.", HttpStatus.CONFLICT),
 
     CART_SHARED_NOT_CLOSABLE("CART_SHARED_NOT_CLOSABLE", "마감할 수 없는 상태입니다.", HttpStatus.CONFLICT),
