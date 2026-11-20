@@ -19,7 +19,19 @@ class IndividualGroupPurchaseSupport {
     private final ProductClient productClient;
 
     void validatePurchasableProducts(Collection<Long> productIds) {
+        validatePurchasable(productOptionsOf(productIds), productIds);
+    }
+
+    // 판매자가 자기 상품으로 공동구매를 열면, 링크를 돌린 뒤 주문할 때 가서야 막힌다. 그래서 열거나 상품을 더할 때 막는다
+    void validatePurchasableProductsFor(Long memberId, Collection<Long> productIds) {
         Map<Long, CartProductOptions> found = productOptionsOf(productIds);
+        validatePurchasable(found, productIds);
+        if (found.values().stream().anyMatch(info -> memberId.equals(info.sellerMemberId()))) {
+            throw new ServiceException(CartErrorCode.CART_OWN_PRODUCT);
+        }
+    }
+
+    private void validatePurchasable(Map<Long, CartProductOptions> found, Collection<Long> productIds) {
         for (Long productId : productIds.stream().distinct().toList()) {
             CartProductOptions info = found.get(productId);
             if (info == null) {
