@@ -31,6 +31,13 @@ public class HttpMemberPaymentServerClient implements MemberPaymentServerClient 
     }
 
     @Override
+    public long getWithdrawingAmount(Long memberId) {
+        Long amount = paymentServerApiClient.get("/internal/wallets/withdrawing-amount?memberId={m}",
+                new ParameterizedTypeReference<InternalResponse<Long>>() {}, memberId);
+        return amount == null ? 0L : amount;
+    }
+
+    @Override
     public long countPendingPayouts(Long sellerId) {
         Long count = paymentServerApiClient.get("/internal/payouts/pending-count?sellerId={s}",
                 new ParameterizedTypeReference<InternalResponse<Long>>() {}, sellerId);

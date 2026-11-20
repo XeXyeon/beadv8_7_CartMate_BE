@@ -52,7 +52,7 @@ class MemberWithdrawalUseCaseTest {
     }
 
     private static BuyerTrades buyer(long walletBalance) {
-        return new BuyerTrades(0, 0, 0, 0, 0, walletBalance);
+        return new BuyerTrades(0, 0, 0, 0, 0, walletBalance, 0);
     }
 
     @Test
@@ -74,6 +74,18 @@ class MemberWithdrawalUseCaseTest {
         assertThatThrownBy(() -> useCase.ensureCanRequest(MEMBER, "pw"))
                 .isInstanceOf(ServiceException.class)
                 .hasMessageContaining("예치금 12,000원");
+    }
+
+    // 출금은 신청 때 잔액에서 빠지지만 실패·취소되면 돌아온다 → 잔액이 0이어도 끝날 때까지 막는다
+    @Test
+    void 진행_중인_예치금_출금이_있으면_잔액이_0이어도_탈퇴를_신청할_수_없다() {
+        member();
+        given(passwordEncoder.matches("pw", "encoded")).willReturn(true);
+        given(tradeClient.getBuyerTrades(MEMBER)).willReturn(new BuyerTrades(0, 0, 0, 0, 0, 0, 7_000));
+
+        assertThatThrownBy(() -> useCase.ensureCanRequest(MEMBER, "pw"))
+                .isInstanceOf(ServiceException.class)
+                .hasMessageContaining("출금 7,000원이 처리 중");
     }
 
     @Test

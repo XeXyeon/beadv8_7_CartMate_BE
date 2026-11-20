@@ -1,7 +1,11 @@
 package com.cartmate.cartmate.boundedContext.memberService.member.in.internal;
 
 import com.cartmate.cartmate.boundedContext.memberService.member.app.MemberFacade;
+import com.cartmate.cartmate.boundedContext.memberService.member.app.MemberPayoutAccountFacade;
 import com.cartmate.cartmate.boundedContext.memberService.member.app.SellerQueryAdapter;
+import com.cartmate.cartmate.boundedContext.memberService.member.dto.PayoutAccountInternalResponse;
+import com.cartmate.cartmate.boundedContext.memberService.member.exception.MemberErrorCode;
+import com.cartmate.cartmate.global.exception.ServiceException;
 import com.cartmate.cartmate.global.rsData.RsData;
 import com.cartmate.cartmate.shared.member.MemberQuery;
 import io.swagger.v3.oas.annotations.Hidden;
@@ -27,6 +31,7 @@ public class MemberInternalController {
     private final MemberQuery memberQuery;
     private final SellerQueryAdapter sellerQueryAdapter;
     private final MemberFacade memberFacade;
+    private final MemberPayoutAccountFacade payoutAccountFacade;
 
     @GetMapping("/nicknames")
     public RsData<Map<Long, String>> findNicknames(@RequestParam List<Long> ids) {
@@ -39,6 +44,14 @@ public class MemberInternalController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to) {
         return new RsData<>("200-1", "탈퇴 확정 회원 조회", memberFacade.findWithdrawnMemberIds(from, to));
+    }
+
+    // 결제 서버: 예치금 출금 신청 때 출금 계좌(원문)를 받아 간다. 없으면 404
+    @GetMapping("/{memberId}/payout-account")
+    public RsData<PayoutAccountInternalResponse> findPayoutAccount(@PathVariable Long memberId) {
+        return payoutAccountFacade.getForPayout(memberId)
+                .map(account -> new RsData<>("200-1", "출금 계좌 조회", account))
+                .orElseThrow(() -> new ServiceException(MemberErrorCode.PAYOUT_ACCOUNT_NOT_FOUND));
     }
 
     @GetMapping("/{memberId}/seller-id")

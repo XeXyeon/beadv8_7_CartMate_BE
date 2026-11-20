@@ -14,6 +14,9 @@ public interface MemberPaymentServerClient {
     // 마이페이지: 예치금 잔액
     long getWalletBalance(Long memberId);
 
+    // 회원 탈퇴 확인: 진행 중인 예치금 출금 금액 (대기·처리 중)
+    long getWithdrawingAmount(Long memberId);
+
     // 회원 탈퇴 확인: 판매자의 지급 전 정산 수
     long countPendingPayouts(Long sellerId);
 

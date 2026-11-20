@@ -46,6 +46,10 @@ public enum WalletErrorCode implements ErrorCode {
     WALLET_WITHDRAW_NOT_COMPLETABLE("WALLET_WITHDRAW_NOT_COMPLETABLE", "현재 상태에서는 출금을 완료할 수 없습니다.", HttpStatus.CONFLICT),
     WALLET_WITHDRAW_NOT_CANCELABLE("WALLET_WITHDRAW_NOT_CANCELABLE", "현재 상태에서는 출금 요청을 취소할 수 없습니다.", HttpStatus.CONFLICT),
     WALLET_WITHDRAW_NOT_FAILABLE("WALLET_WITHDRAW_NOT_FAILABLE", "현재 상태에서는 출금 요청을 실패 처리할 수 없습니다.", HttpStatus.CONFLICT),
+    WALLET_WITHDRAW_NOT_STARTABLE("WALLET_WITHDRAW_NOT_STARTABLE", "대기 중인 출금만 송금을 시작할 수 있습니다.", HttpStatus.CONFLICT),
+    WALLET_WITHDRAW_AUTO_TRANSFER("WALLET_WITHDRAW_AUTO_TRANSFER", "자동 이체 모드에서는 관리자가 송금을 시작할 수 없습니다.", HttpStatus.CONFLICT),
+    WALLET_WITHDRAW_ACCOUNT_MISSING("WALLET_WITHDRAW_ACCOUNT_MISSING", "계좌 정보가 없는 출금 요청입니다.", HttpStatus.CONFLICT),
+    WALLET_PAYOUT_ACCOUNT_REQUIRED("WALLET_PAYOUT_ACCOUNT_REQUIRED", "출금 계좌를 먼저 등록해주세요.", HttpStatus.BAD_REQUEST),
 
     // 기존 요청·거래와의 충돌
     WALLET_IDEMPOTENCY_CONFLICT("WALLET_IDEMPOTENCY_CONFLICT", "동일한 멱등성 키에 다른 요청 내용을 사용할 수 없습니다.", HttpStatus.CONFLICT),

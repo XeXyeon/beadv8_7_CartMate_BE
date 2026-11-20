@@ -18,7 +18,8 @@ public interface WithdrawalTradeClient {
             long payingSharedOrders,        // 분담금 결제 중인 공동 주문
             long claimsInProgress,          // 처리 중인 교환·반품
             long activeGroupPurchases,      // 모집 중인 공동구매 (참여·개설)
-            long walletBalance              // 예치금 잔액 (원). 남아 있으면 환급받은 뒤 탈퇴
+            long walletBalance,             // 예치금 잔액 (원). 남아 있으면 환급받은 뒤 탈퇴
+            long withdrawingAmount          // 진행 중인 예치금 출금 (원). 실패하면 잔액으로 돌아오므로 끝난 뒤 탈퇴
     ) {}
 
     record SellerTrades(

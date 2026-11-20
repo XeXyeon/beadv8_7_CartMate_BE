@@ -88,7 +88,14 @@ public enum MemberErrorCode implements ErrorCode {
     SELLER_ACCOUNT_VERIFY_UNAVAILABLE("SELLER_ACCOUNT_VERIFY_UNAVAILABLE", "일시적으로 계좌를 확인할 수 없습니다. 잠시 후 다시 시도해주세요.", HttpStatus.SERVICE_UNAVAILABLE),
     SELLER_BANK_NOT_SUPPORTED("SELLER_BANK_NOT_SUPPORTED", "지원하지 않는 은행입니다.", HttpStatus.BAD_REQUEST),
     SELLER_ADMIN_NOT_ALLOWED("SELLER_ADMIN_NOT_ALLOWED", "관리자 계정은 판매자로 등록할 수 없습니다.", HttpStatus.BAD_REQUEST),
-    SELLER_UNDERAGE("SELLER_UNDERAGE", "판매자 등록 가능 나이가 아닙니다.", HttpStatus.FORBIDDEN);
+    SELLER_UNDERAGE("SELLER_UNDERAGE", "판매자 등록 가능 나이가 아닙니다.", HttpStatus.FORBIDDEN),
+
+    // ===== 예치금 출금 계좌 =====
+    PAYOUT_ACCOUNT_EMAIL_NOT_VERIFIED("PAYOUT_ACCOUNT_EMAIL_NOT_VERIFIED", "이메일 인증이 필요합니다. 인증번호를 먼저 확인해주세요.", HttpStatus.BAD_REQUEST),
+    PAYOUT_ACCOUNT_MISMATCH("PAYOUT_ACCOUNT_MISMATCH", "본인 명의 계좌만 등록할 수 있습니다. 예금주와 계좌번호를 확인해주세요.", HttpStatus.BAD_REQUEST),
+    PAYOUT_ACCOUNT_NOT_FOUND("PAYOUT_ACCOUNT_NOT_FOUND", "등록된 출금 계좌가 없습니다.", HttpStatus.NOT_FOUND),
+    PAYOUT_ACCOUNT_SELLER_NOT_FOUND("PAYOUT_ACCOUNT_SELLER_NOT_FOUND", "등록된 정산 계좌가 없습니다.", HttpStatus.NOT_FOUND),
+    PAYOUT_ACCOUNT_ADMIN_NOT_ALLOWED("PAYOUT_ACCOUNT_ADMIN_NOT_ALLOWED", "관리자 계정은 출금 계좌를 등록할 수 없습니다.", HttpStatus.BAD_REQUEST);
 
     private final String code;
     private final String msg;
