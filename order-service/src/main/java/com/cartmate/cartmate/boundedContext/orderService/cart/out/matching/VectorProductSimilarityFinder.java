@@ -26,7 +26,7 @@ class VectorProductSimilarityFinder implements ProductSimilarityFinder {
     private final double threshold;
 
     VectorProductSimilarityFinder(ProductVectorIndex productVectorIndex,
-                                  @Value("${custom.matching.vector.threshold:0.90}") double threshold) {
+                                  @Value("${custom.matching.vector.threshold:0.60}") double threshold) {
         this.productVectorIndex = productVectorIndex;
         this.threshold = threshold;
     }

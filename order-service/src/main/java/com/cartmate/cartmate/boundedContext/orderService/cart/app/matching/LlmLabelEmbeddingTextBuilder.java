@@ -14,7 +14,7 @@ import java.util.List;
 @ConditionalOnProperty(name = "custom.matching.embedding-text", havingValue = "llm", matchIfMissing = true)
 class LlmLabelEmbeddingTextBuilder implements EmbeddingTextBuilder {
 
-    static final String VERSION = "llm-v2";
+    static final String VERSION = "llm-v3";
 
     private final ProductLabelClient productLabelClient;
 

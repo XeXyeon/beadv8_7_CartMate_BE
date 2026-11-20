@@ -14,8 +14,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 @CartMateJpaTest
 class JpaProductVectorIndexTest {
 
-    private static final String PRIMARY = "gemini-embedding-2";
-    private static final String FALLBACK = "gemini-embedding-001";
+    private static final String PRIMARY = "text-embedding-3-small";
+    private static final String FALLBACK = "text-embedding-3-large";
 
     @Autowired
     private ProductVectorIndex index;
