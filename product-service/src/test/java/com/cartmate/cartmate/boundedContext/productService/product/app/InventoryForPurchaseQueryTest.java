@@ -44,6 +44,7 @@ import static org.assertj.core.api.Assertions.tuple;
 class InventoryForPurchaseQueryTest extends ProductServiceTestSupport {
 
     private static final Long SELLER_ID = 7L;
+    private static final Long SELLER_MEMBER_ID = 100L;
     private static final Long CATEGORY_ID = 1L;
     private static final Long BASE_PRICE = 10000L;
 
@@ -94,7 +95,7 @@ class InventoryForPurchaseQueryTest extends ProductServiceTestSupport {
                 new CreateSalesPostRequest(null, SELLER_ID, "유니폼 팝니다", "새 상품", List.of()));
         postId = post.getId();
 
-        CreateProduct product = new CreateProduct(null, SELLER_ID, postId, CATEGORY_ID, "유니폼", "설명", BASE_PRICE,
+        CreateProduct product = new CreateProduct(null, SELLER_ID, SELLER_MEMBER_ID, postId, CATEGORY_ID, "유니폼", "설명", BASE_PRICE,
                 List.of(new CreateProductImage(null, SELLER_ID, null, null, 0, null)),
                 List.of(inventory(0L, 10, SIZE_L, BLACK), inventory(1000L, 5, SIZE_L, WHITE)));
         productFacade.registerProduct(new CreateProductRequest(postId, List.of(product)), List.of(TestImageFiles.jpeg()));
@@ -111,12 +112,12 @@ class InventoryForPurchaseQueryTest extends ProductServiceTestSupport {
 
         assertThat(result)
                 .extracting(InventoryForPurchase::inventoryId, InventoryForPurchase::productId,
-                        InventoryForPurchase::sellerId, InventoryForPurchase::productName,
-                        InventoryForPurchase::optionName, InventoryForPurchase::price,
+                        InventoryForPurchase::sellerId, InventoryForPurchase::sellerMemberId,
+                        InventoryForPurchase::productName, InventoryForPurchase::optionName, InventoryForPurchase::price,
                         InventoryForPurchase::categoryId, InventoryForPurchase::purchasable)
                 .containsExactly(
-                        tuple(whiteId, productId, SELLER_ID, "유니폼", "L / 화이트", 11000L, CATEGORY_ID, true),
-                        tuple(blackId, productId, SELLER_ID, "유니폼", "L / 블랙", 10000L, CATEGORY_ID, true));
+                        tuple(whiteId, productId, SELLER_ID, SELLER_MEMBER_ID, "유니폼", "L / 화이트", 11000L, CATEGORY_ID, true),
+                        tuple(blackId, productId, SELLER_ID, SELLER_MEMBER_ID, "유니폼", "L / 블랙", 10000L, CATEGORY_ID, true));
         assertThat(result).allSatisfy(inventory -> assertThat(inventory.imageUrl()).isNotNull());
     }
 

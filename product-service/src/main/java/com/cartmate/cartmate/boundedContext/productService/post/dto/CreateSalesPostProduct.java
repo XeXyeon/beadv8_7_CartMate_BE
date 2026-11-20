@@ -19,7 +19,7 @@ public class CreateSalesPostProduct {
     private List<CreateSalesPostProductImage> productImageList;
     private List<CreateInventory> inventoryList;
 
-    public CreateProduct toCreateProduct(Long sellerId) {
+    public CreateProduct toCreateProduct(Long sellerId, Long sellerMemberId) {
         List<CreateProductImage> productImages = productImageList.stream()
                 .map(image -> image.toCreateProductImage(sellerId))
                 .toList();
@@ -27,6 +27,7 @@ public class CreateSalesPostProduct {
         return new CreateProduct(
                 id,
                 sellerId,
+                sellerMemberId,
                 salesPostId,
                 categoryId,
                 name,

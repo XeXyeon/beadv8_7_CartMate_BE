@@ -16,9 +16,10 @@ public class CreateSalesPostRequest {
     private String content;
     private List<CreateSalesPostProduct> productList;
 
-    public List<CreateProduct> toCreateProductList() {
+    // sellerMemberId는 요청 본문이 아니라 로그인 토큰에서 받는다. 본문 값은 클라이언트가 바꿀 수 있다
+    public List<CreateProduct> toCreateProductList(Long sellerMemberId) {
         return productList.stream()
-                .map(product -> product.toCreateProduct(sellerId))
+                .map(product -> product.toCreateProduct(sellerId, sellerMemberId))
                 .toList();
     }
 }

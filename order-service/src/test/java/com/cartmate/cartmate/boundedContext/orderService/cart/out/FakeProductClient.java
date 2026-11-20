@@ -20,7 +20,8 @@ public class FakeProductClient implements ProductClient {
 
     private static final Map<Long, CartProductInfo> PRODUCTS = TestCatalog.PRODUCTS.values().stream()
             .collect(Collectors.toUnmodifiableMap(TestCatalog.Product::inventoryId, product -> new CartProductInfo(
-                    product.inventoryId(), product.productId(), product.productName(), product.optionName(),
+                    product.inventoryId(), product.productId(), product.sellerMemberId(), product.productName(),
+                    product.optionName(),
                     product.price(), product.imageUrl(), product.purchasable())));
 
     @Override
@@ -47,6 +48,7 @@ public class FakeProductClient implements ProductClient {
                 .filter(infos -> !infos.isEmpty())
                 .map(infos -> new CartProductOptions(
                         infos.get(0).productId(),
+                        infos.get(0).sellerMemberId(),
                         infos.get(0).productName(),
                         infos.get(0).imageUrl(),
                         infos.stream().anyMatch(CartProductInfo::purchasable),

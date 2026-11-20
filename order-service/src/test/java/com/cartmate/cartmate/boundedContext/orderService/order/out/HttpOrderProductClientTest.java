@@ -32,11 +32,11 @@ class HttpOrderProductClientTest {
     @DisplayName("재고 정보를 주문 상품으로 변환하고(옵션명 = 재고 이름, 가격 = 적용가) 없는 재고는 제외한다")
     void mapsInventoriesAndExcludesMissing() {
         given(productServerApiClient.get(eq(HttpOrderProductClient.PATH), eq(HttpOrderProductClient.INVENTORIES), eq("101,999")))
-                .willReturn(List.of(new InventoryForPurchase(101L, 10L, 7L, "축구공", "5호", 25000L,
+                .willReturn(List.of(new InventoryForPurchase(101L, 10L, 7L, 900L, "축구공", "5호", 25000L,
                         "https://example.com/ball.png", 3L, true, true)));
 
         assertThat(productClient.findAllByInventoryIds(List.of(101L, 999L))).containsExactly(
-                new OrderProductInfo(101L, 10L, 7L, "축구공", "5호", 25000L, "https://example.com/ball.png", true, true));
+                new OrderProductInfo(101L, 10L, 7L, 900L, "축구공", "5호", 25000L, "https://example.com/ball.png", true, true));
     }
 
     @Test

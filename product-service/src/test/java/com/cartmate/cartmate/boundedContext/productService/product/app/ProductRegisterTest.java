@@ -145,7 +145,7 @@ class ProductRegisterTest extends ProductServiceTestSupport {
         productRepository.deleteAll();
         productImageRepository.deleteAll();
         storage.reset();
-        CreateProduct unknownCategory = new CreateProduct(null, SELLER_ID, POST_ID, 999L, "충전기", "설명", 10000L,
+        CreateProduct unknownCategory = new CreateProduct(null, SELLER_ID, 100L, POST_ID, 999L, "충전기", "설명", 10000L,
                 List.of(new CreateProductImage(null, SELLER_ID, null, null, 0, null)),
                 List.of(new CreateInventory(List.of(), TestInventories.ADDITIONAL_PRICE, TestInventories.STOCK_QUANTITY)));
 
@@ -274,7 +274,7 @@ class ProductRegisterTest extends ProductServiceTestSupport {
         }
         List<CreateInventory> inventoryList = inventories != null ? inventories
                 : List.of(new CreateInventory(List.of(), TestInventories.ADDITIONAL_PRICE, TestInventories.STOCK_QUANTITY));
-        return new CreateProduct(null, SELLER_ID, postId, 1L, name, "설명", 10000L, images, inventoryList);
+        return new CreateProduct(null, SELLER_ID, 100L, postId, 1L, name, "설명", 10000L, images, inventoryList);
     }
 
     private List<MultipartFile> getDummyImages(MultipartFile... files) {

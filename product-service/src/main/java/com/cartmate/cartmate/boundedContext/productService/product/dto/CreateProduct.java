@@ -12,6 +12,7 @@ import java.util.List;
 public class CreateProduct {
     private Long id;
     private Long sellerId;
+    private Long sellerMemberId;
     private Long salesPostId;
     private Long categoryId;
     private String name;

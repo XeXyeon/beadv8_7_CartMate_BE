@@ -41,9 +41,9 @@ class CartItemUseCaseTest {
             LocalDateTime.of(2026, 10, 19, 12, 0).atZone(ZoneId.systemDefault()).toInstant(), ZoneId.systemDefault());
 
     private static final CartProductInfo UNIFORM_M = new CartProductInfo(
-            1L, 100L, "축구 유니폼", "M / 레드", 39000, "uniform.png", true);
+            1L, 100L, 900L, "축구 유니폼", "M / 레드", 39000, "uniform.png", true);
     private static final CartProductInfo SHIN_GUARD = new CartProductInfo(
-            5L, 300L, "정강이 보호대", "FREE", 15000, "guard.png", false);
+            5L, 300L, 900L, "정강이 보호대", "FREE", 15000, "guard.png", false);
 
     @Mock
     private CartRepository cartRepository;

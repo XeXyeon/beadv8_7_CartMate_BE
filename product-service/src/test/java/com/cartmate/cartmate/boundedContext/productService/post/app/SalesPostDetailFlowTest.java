@@ -89,7 +89,7 @@ class SalesPostDetailFlowTest extends ProductServiceTestSupport {
                                 new CreateProductOption(SHOE_SIZE, SHOE_255), new CreateProductOption(COLOR, WHITE)), 5000L, 0)));
         salesPostFacade.registerSalesPost(
                 new CreateSalesPostRequest(null, SELLER_ID, "축구화 팝니다", "새 상품", List.of(shoes)),
-                List.of(TestImageFiles.jpeg()));
+                List.of(TestImageFiles.jpeg()), 100L);
 
         postId = salesPostRepository.findAll().getFirst().getId();
         productId = productRepository.findAll().getFirst().getId();

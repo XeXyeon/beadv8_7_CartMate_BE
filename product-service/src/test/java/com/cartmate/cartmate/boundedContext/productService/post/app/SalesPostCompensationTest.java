@@ -61,7 +61,7 @@ class SalesPostCompensationTest extends ProductServiceTestSupport {
 
         List<MultipartFile> images = getDummyImages(TestImageFiles.jpeg(), TestImageFiles.png(), TestImageFiles.png());
 
-        assertThatThrownBy(() -> salesPostFacade.registerSalesPost(request(), images))
+        assertThatThrownBy(() -> salesPostFacade.registerSalesPost(request(), images, 100L))
                 .isInstanceOf(ServiceException.class);
 
         assertThat(salesPostRepository.count()).isZero();
@@ -80,7 +80,7 @@ class SalesPostCompensationTest extends ProductServiceTestSupport {
         }).when(salesPostApiClient).registerProducts(any(), any());
 
         List<MultipartFile> images = getDummyImages(TestImageFiles.jpeg(), TestImageFiles.png(), TestImageFiles.png());
-        salesPostFacade.registerSalesPost(request(), images);
+        salesPostFacade.registerSalesPost(request(), images, 100L);
 
         assertThat(salesPostRepository.count()).isEqualTo(1);
     }
@@ -93,7 +93,7 @@ class SalesPostCompensationTest extends ProductServiceTestSupport {
         doThrow(new ServiceException(ProductErrorCode.PRODUCT_CREATE_FAILED))
                 .when(salesPostApiClient).registerProducts(any(), any());
 
-        assertThatThrownBy(() -> salesPostFacade.registerSalesPost(request(), getDummyImages(TestImageFiles.jpeg())))
+        assertThatThrownBy(() -> salesPostFacade.registerSalesPost(request(), getDummyImages(TestImageFiles.jpeg()), 100L))
                 .isInstanceOf(ServiceException.class);
 
         List<String> aggregateIds = queryFactory.select(outboxEvent.aggregateId)

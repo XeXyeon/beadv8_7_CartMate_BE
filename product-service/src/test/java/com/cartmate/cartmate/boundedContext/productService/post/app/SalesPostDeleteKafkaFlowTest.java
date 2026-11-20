@@ -144,7 +144,7 @@ class SalesPostDeleteKafkaFlowTest {
         });
         storage.reset();
 
-        salesPostFacade.registerSalesPost(request(), List.of(TestImageFiles.jpeg(), TestImageFiles.png()));
+        salesPostFacade.registerSalesPost(request(), List.of(TestImageFiles.jpeg(), TestImageFiles.png()), 100L);
         postId = salesPostRepository.findAll().getFirst().getId();
     }
 

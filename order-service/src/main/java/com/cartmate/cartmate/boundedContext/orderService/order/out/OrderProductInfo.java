@@ -4,6 +4,7 @@ public record OrderProductInfo(
         Long inventoryId,
         Long productId,
         Long sellerId,
+        Long sellerMemberId,   // 판매자 본인의 회원 ID. 자기 상품 구매를 막는 데 쓴다
         String productName,
         String optionName,
         long price,

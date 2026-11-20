@@ -44,6 +44,7 @@ class HttpOrderProductClient implements OrderProductClient {
                 inventory.inventoryId(),
                 inventory.productId(),
                 inventory.sellerId(),
+                inventory.sellerMemberId(),
                 inventory.productName(),
                 inventory.optionName(),
                 inventory.price(),

@@ -125,7 +125,7 @@ class SalesPostUpdateFlowTest extends ProductServiceTestSupport {
                 List.of(inventory(new CreateProductOption(CLOTHING_SIZE, SIZE_L))));
         salesPostFacade.registerSalesPost(
                 new CreateSalesPostRequest(null, SELLER_ID, "아이폰 팝니다", "상태 좋아요", List.of(product)),
-                List.of(TestImageFiles.jpeg(), TestImageFiles.png()));
+                List.of(TestImageFiles.jpeg(), TestImageFiles.png()), 100L);
 
         postId = salesPostRepository.findAll().getFirst().getId();
         productId = productRepository.findAll().getFirst().getId();

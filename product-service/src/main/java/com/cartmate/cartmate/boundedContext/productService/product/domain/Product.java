@@ -23,6 +23,10 @@ public class Product extends BaseIdAndTime {
     @Column(nullable = false, columnDefinition = "BIGINT")
     private Long sellerId;
 
+    // 판매글을 등록한 판매자의 회원 ID. 구매하려는 회원과 비교해 자기 상품 구매를 막는다
+    @Column(nullable = false, columnDefinition = "BIGINT")
+    private Long sellerMemberId;
+
     @Column(nullable = false, columnDefinition = "BIGINT")
     private Long salesPostId;
 
@@ -54,9 +58,10 @@ public class Product extends BaseIdAndTime {
     @OneToMany(mappedBy = "product", cascade = {CascadeType.PERSIST, CascadeType.REMOVE}, orphanRemoval = true)
     private List<Inventory> inventoryList = new ArrayList<>();
 
-    public Product(Long sellerId, Long salesPostId, Category category, String name, String description, Long basePrice,
-                   ProductStatus status) {
+    public Product(Long sellerId, Long sellerMemberId, Long salesPostId, Category category, String name,
+                   String description, Long basePrice, ProductStatus status) {
         this.sellerId = sellerId;
+        this.sellerMemberId = sellerMemberId;
         this.salesPostId = salesPostId;
         this.category = category;
         this.name = name;

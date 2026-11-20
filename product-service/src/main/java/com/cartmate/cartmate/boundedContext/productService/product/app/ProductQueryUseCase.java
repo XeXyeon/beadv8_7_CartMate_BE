@@ -142,6 +142,7 @@ public class ProductQueryUseCase {
                 inventory.getId(),
                 product.getId(),
                 product.getSellerId(),
+                product.getSellerMemberId(),
                 product.getName(),
                 inventory.getSkuName(),
                 inventory.getAppliedPrice(),
