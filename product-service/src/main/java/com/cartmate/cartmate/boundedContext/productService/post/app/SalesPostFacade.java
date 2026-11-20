@@ -84,13 +84,13 @@ public class SalesPostFacade {
         salesPostSyncSellerTrustUseCase.syncSellerTrust(event);
     }
 
-    public void registerSalesPost(CreateSalesPostRequest request, List<MultipartFile> images) {
+    public void registerSalesPost(CreateSalesPostRequest request, List<MultipartFile> images, Long sellerMemberId) {
         SalesPost post = transactionTemplate.execute(status -> {
             return salesPostCreateUseCase.saveSalesPost(request);
         });
 
         try{
-            CreateProductRequest productRequest = new CreateProductRequest(post.getId(), request.toCreateProductList());
+            CreateProductRequest productRequest = new CreateProductRequest(post.getId(), request.toCreateProductList(sellerMemberId));
             List<SyncProduct> savedProducts = salesPostApiClient.registerProducts(productRequest, images);
 
             // 복제본 생성과 판매 시작을 한 트랜잭션으로. 복제본을 못 만들면 등록 실패로 보고 아래에서 보상한다

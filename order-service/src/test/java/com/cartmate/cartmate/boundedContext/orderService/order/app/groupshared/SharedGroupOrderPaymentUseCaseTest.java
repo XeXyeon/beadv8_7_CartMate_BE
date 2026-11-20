@@ -75,7 +75,7 @@ class SharedGroupOrderPaymentUseCaseTest {
         lenient().when(orderProductClient.findAllByInventoryIds(any())).thenAnswer(invocation -> {
             java.util.Collection<Long> ids = invocation.getArgument(0);
             return ids.stream().distinct()
-                    .map(id -> new OrderProductInfo(id, id, 1L, "상품", null, 1000L, null, true, true))
+                    .map(id -> new OrderProductInfo(id, id, 1L, 900L, "상품", null, 1000L, null, true, true))
                     .toList();
         });
     }

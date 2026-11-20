@@ -14,7 +14,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class VectorProductSimilarityFinderTest {
 
-    private static final String MODEL = "gemini-embedding-2";
+    private static final String MODEL = "text-embedding-3-small";
     private static final String TEXT = "rule-v1";
 
     private final InMemoryProductVectorIndex index = new InMemoryProductVectorIndex();
@@ -41,7 +41,7 @@ class VectorProductSimilarityFinderTest {
     void differentModelOrTextVersion() {
         index.saveAll(List.of(
                 vector(1L, 10L, MODEL, 1f, 0f),
-                vector(2L, 10L, "gemini-embedding-001", 1f, 0f),
+                vector(2L, 10L, "text-embedding-3-large", 1f, 0f),
                 new ProductVector(3L, 10L, MODEL, "llm-v1", new float[]{1f, 0f})));
 
         assertThat(finder.findSimilar(List.of(1L), Set.of(2L, 3L))).isEmpty();

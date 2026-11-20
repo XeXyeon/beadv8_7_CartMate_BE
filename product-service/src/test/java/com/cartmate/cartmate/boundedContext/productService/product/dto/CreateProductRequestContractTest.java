@@ -38,6 +38,7 @@ class CreateProductRequestContractTest {
         CreateProduct product = received.getProductList().get(0);
         assertThat(product.getId()).isNull();
         assertThat(product.getSellerId()).isEqualTo(20L);
+        assertThat(product.getSellerMemberId()).isEqualTo(21L);
         assertThat(product.getSalesPostId()).isEqualTo(10L);
         assertThat(product.getCategoryId()).isEqualTo(30L);
         assertThat(product.getName()).isEqualTo("사과");
@@ -98,7 +99,7 @@ class CreateProductRequestContractTest {
                         1000L, 5)
         ));
         var product = new com.cartmate.cartmate.boundedContext.productService.post.dto.CreateProduct(
-                null, 20L, 10L, 30L, "사과", "부사 5kg", 25000L, images, inventories);
+                null, 20L, 21L, 10L, 30L, "사과", "부사 5kg", 25000L, images, inventories);
 
         return new com.cartmate.cartmate.boundedContext.productService.post.dto.CreateProductRequest(
                 10L, new ArrayList<>(List.of(product)));

@@ -119,7 +119,7 @@ class ProductInternalServerDeadlockTest {
                             new CreateProductOption(SHOE_SIZE, SHOE_265), new CreateProductOption(COLOR, BLACK)), 0L, 3)));
             salesPostFacade.registerSalesPost(
                     new CreateSalesPostRequest(null, 7L, "축구화 팝니다 " + i, "새 상품", List.of(shoes)),
-                    List.of(TestImageFiles.jpeg()));
+                    List.of(TestImageFiles.jpeg()), 100L);
         });
         postIds = salesPostRepository.findAll().stream().map(post -> post.getId()).toList();
         Objects.requireNonNull(cacheManager.getCache(SalesPostDetailInventoryLoader.CACHE_NAME)).clear();

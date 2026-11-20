@@ -211,7 +211,7 @@ class InventoryReservationEventTest extends ProductServiceTestSupport {
     private void register(Long sellerId, String name, CreateInventory inventory) {
         SalesPost post = salesPostCreateUseCase.saveSalesPost(
                 new CreateSalesPostRequest(null, sellerId, name + " 팝니다", "새 상품", List.of()));
-        CreateProduct product = new CreateProduct(null, sellerId, post.getId(), 1L, name, "설명", 25000L,
+        CreateProduct product = new CreateProduct(null, sellerId, 100L, post.getId(), 1L, name, "설명", 25000L,
                 List.of(new CreateProductImage(null, sellerId, null, null, 0, null)), List.of(inventory));
         productFacade.registerProduct(new CreateProductRequest(post.getId(), List.of(product)), List.of(TestImageFiles.jpeg()));
     }

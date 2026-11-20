@@ -110,7 +110,7 @@ class InventoryReservationTest extends ProductServiceTestSupport {
 
         SalesPost post = salesPostCreateUseCase.saveSalesPost(
                 new CreateSalesPostRequest(null, SELLER_ID, "유니폼 팝니다", "새 상품", List.of()));
-        CreateProduct product = new CreateProduct(null, SELLER_ID, post.getId(), 1L, "유니폼", "설명", 10000L,
+        CreateProduct product = new CreateProduct(null, SELLER_ID, 100L, post.getId(), 1L, "유니폼", "설명", 10000L,
                 List.of(new CreateProductImage(null, SELLER_ID, null, null, 0, null)),
                 List.of(inventory(10, SIZE_L, BLACK), inventory(5, SIZE_L, WHITE)));
         productFacade.registerProduct(new CreateProductRequest(post.getId(), List.of(product)), List.of(TestImageFiles.jpeg()));

@@ -23,7 +23,7 @@ class IndividualGroupPurchaseCreateUseCase {
     private final Clock clock;
 
     IndividualGroupPurchaseCreateResponse create(Long memberId, IndividualGroupPurchaseCreateRequest request) {
-        individualGroupPurchaseSupport.validatePurchasableProducts(request.productIds());
+        individualGroupPurchaseSupport.validatePurchasableProductsFor(memberId, request.productIds());
         String inviteCode = inviteCodeGenerator.generateUnique(individualGroupPurchaseRepository::existsByInviteCode);
         LocalDateTime now = LocalDateTime.now(clock);
         IndividualGroupPurchase purchase = IndividualGroupPurchase.create(

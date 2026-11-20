@@ -182,7 +182,7 @@ class ProductImageOrphanCleanTest extends ProductServiceTestSupport {
     private List<String> registerProductWithTwoImages() {
         SalesPost post = salesPostCreateUseCase.saveSalesPost(
                 new CreateSalesPostRequest(null, SELLER_ID, "아이폰 팝니다", "상태 좋아요", List.of()));
-        CreateProduct product = new CreateProduct(null, SELLER_ID, post.getId(), 1L, "아이폰", "설명", 10000L,
+        CreateProduct product = new CreateProduct(null, SELLER_ID, 100L, post.getId(), 1L, "아이폰", "설명", 10000L,
                 List.of(new CreateProductImage(null, SELLER_ID, null, null, 0, null),
                         new CreateProductImage(null, SELLER_ID, null, null, 1, null)),
                 List.of(inventory(new CreateProductOption(CLOTHING_SIZE, SIZE_L))));

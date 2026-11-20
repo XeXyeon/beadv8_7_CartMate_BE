@@ -29,7 +29,7 @@ import static org.mockito.Mockito.mock;
 
 class ProductVectorIndexingUseCaseTest {
 
-    private static final String PRIMARY = "gemini-embedding-2";
+    private static final String PRIMARY = "text-embedding-3-small";
     private static final LocalDateTime SINCE = LocalDateTime.of(2026, 10, 7, 0, 0);
 
     private final List<String> embeddedTexts = new ArrayList<>();

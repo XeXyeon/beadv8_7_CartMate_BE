@@ -25,6 +25,9 @@ class CartItemUseCase {
 
     void addItem(Long memberId, Long inventoryId, int quantity) {
         CartProductInfo product = getPurchasableProduct(inventoryId);
+        if (memberId.equals(product.sellerMemberId())) {
+            throw new ServiceException(CartErrorCode.CART_OWN_PRODUCT);
+        }
 
         Cart cart = lockCart(memberId);
         cart.addItem(product.productId(), inventoryId, quantity);

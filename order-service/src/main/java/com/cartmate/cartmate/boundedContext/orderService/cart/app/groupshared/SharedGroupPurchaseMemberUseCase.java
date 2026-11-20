@@ -28,6 +28,9 @@ class SharedGroupPurchaseMemberUseCase {
             return purchase.getId();
         }
         sharedGroupPurchaseSupport.validateNotRestricted(memberId);
+        if (!sharedGroupPurchaseSupport.findOwnInventoryIds(purchase, memberId).isEmpty()) {
+            throw new ServiceException(CartErrorCode.CART_SHARED_OWN_PRODUCT_INCLUDED);
+        }
         LocalDateTime now = LocalDateTime.now(clock);
         purchase.join(memberId, now);
         long activeParticipationCount = sharedGroupPurchaseRepository.countActiveOfMember(memberId);

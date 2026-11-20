@@ -243,7 +243,7 @@ class SalesPostRecoverSchedulerTest extends ProductServiceTestSupport {
                 List.of(inventory(new CreateProductOption(CLOTHING_SIZE, SIZE_L))));
         salesPostFacade.registerSalesPost(
                 new CreateSalesPostRequest(null, SELLER_ID, productName + " 팝니다", "상태 좋아요", List.of(product)),
-                List.of(TestImageFiles.jpeg(), TestImageFiles.png()));
+                List.of(TestImageFiles.jpeg(), TestImageFiles.png()), 100L);
 
         return salesPostRepository.findAll().stream()
                 .filter(p -> p.getTitle().equals(productName + " 팝니다"))
