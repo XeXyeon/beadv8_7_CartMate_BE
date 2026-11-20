@@ -6,7 +6,7 @@ import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPost
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostRecoveryRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostUpdateStatus;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.SyncProduct;
-import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostApiClient;
+import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductClient;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostRepository;
 import com.cartmate.cartmate.global.exception.ServiceException;
 import lombok.RequiredArgsConstructor;
@@ -34,7 +34,7 @@ public class SalesPostRecoverUseCase {
     private final SalesPostRecoveryRepository salesPostRecoveryRepository;
     private final SalesPostRepository salesPostRepository;
     private final TransactionTemplate transactionTemplate;
-    private final SalesPostApiClient salesPostApiClient;
+    private final SalesPostProductClient salesPostApiClient;
     private final SalesPostSyncProductUseCase salesPostSyncProductUseCase;
 
     // 수정 복구 대사: 복구 중에 멈춘 판매글 (afterId 다음 ID부터)

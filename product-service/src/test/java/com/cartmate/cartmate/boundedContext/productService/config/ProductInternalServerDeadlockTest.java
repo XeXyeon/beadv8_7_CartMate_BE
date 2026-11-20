@@ -46,7 +46,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * 판매글 상세 교착상태 재현.
  *
- * 판매글 상세는 같은 서버의 상품 API를 HTTP로 부르고 응답을 기다린다(SalesPostApiClient). 내부 요청이 바깥 요청과 같은
+ * product.client=http일 때 판매글 상세는 같은 서버의 상품 API를 HTTP로 부르고 응답을 기다린다(SalesPostApiClient). 내부 요청이 바깥 요청과 같은
  * Tomcat 스레드 풀을 쓰면, 판매글 상세 요청이 스레드를 모두 쓰고 각자 내부 요청을 기다리다 교착상태가 된다.
  * 바깥 포트 스레드를 2개로 줄이고 서로 다른 판매글 4개의 상세를 동시에 요청해, 내부 요청이 전용 포트에서 처리되어
  * 모두 성공하는지 본다. (판매글이 다르면 재고 2초 캐시에 걸리지 않아 4개 모두 내부 요청을 보낸다)
@@ -54,6 +54,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT,
         properties = {
                 "cartmate.scheduling.enabled=false",
+                // 판매글이 상품을 HTTP로 부르는 방식(서버 분리용)에서만 생기는 교착상태라 http로 돌린다. 기본(local)은 직접 호출이라 내부 요청이 없다
+                "product.client=http",
                 "server.tomcat.threads.max=2",
                 "server.tomcat.threads.min-spare=1"
         })

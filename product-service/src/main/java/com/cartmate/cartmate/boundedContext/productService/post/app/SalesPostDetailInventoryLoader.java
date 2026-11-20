@@ -8,7 +8,7 @@ import com.cartmate.cartmate.boundedContext.productService.post.dto.SelectProduc
 import com.cartmate.cartmate.boundedContext.productService.post.dto.SelectSalesPostInventory;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.SelectSalesPostOptionGroup;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.SelectSalesPostOptionValue;
-import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostApiClient;
+import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductClient;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Component;
@@ -20,7 +20,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 판매글 상세에 붙일 상품별 선택 목록 · 재고를 상품 서버(GET /api/products/{postId})에서 가져온다.
+ * 판매글 상세에 붙일 상품별 선택 목록 · 재고를 상품에서 가져온다(SalesPostProductClient.getProduct.
+ * 기본은 같은 서버 직접 호출, 서버 분리 시 GET /api/products/{postId}).
  * 판매글 복제본에는 재고가 없다(목록 트래픽을 가볍게 두려고). 상세 조회가 몰릴 때를 대비해 Redis에 2초 캐시한다
  * (수정 · 삭제 뒤 최대 2초 예전 값이 보일 수 있다).
  */
@@ -30,7 +31,7 @@ public class SalesPostDetailInventoryLoader {
 
     public static final String CACHE_NAME = "salesPostDetailInventory";
 
-    private final SalesPostApiClient salesPostApiClient;
+    private final SalesPostProductClient salesPostApiClient;
 
     @Cacheable(cacheNames = CACHE_NAME, key = "#postId")
     public SalesPostDetailInventories load(Long postId) {

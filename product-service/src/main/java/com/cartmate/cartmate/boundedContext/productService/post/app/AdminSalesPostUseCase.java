@@ -6,7 +6,7 @@ import com.cartmate.cartmate.boundedContext.productService.post.dto.admin.AdminS
 import com.cartmate.cartmate.boundedContext.productService.post.dto.admin.AdminSalesPostDetailResponse.AdminSalesPostProduct;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.admin.AdminSalesPostDetailResponse.AdminSalesPostSanction;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.admin.AdminSalesPostSummaryResponse;
-import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostApiClient;
+import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductClient;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostSanctionRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostSellerRepository;
@@ -38,7 +38,7 @@ public class AdminSalesPostUseCase {
     private final DomainEventPublisher domainEventPublisher;
     private final SalesPostSellerRepository salesPostSellerRepository;
     private final SalesPostSanctionRepository salesPostSanctionRepository;
-    private final SalesPostApiClient salesPostApiClient;
+    private final SalesPostProductClient salesPostApiClient;
     private final SalesPostHideUseCase salesPostHideUseCase;
     private final ImageStorage imageStorage;
 
@@ -91,7 +91,8 @@ public class AdminSalesPostUseCase {
                 products, sanctions);
     }
 
-    // 관리자 숨김: 상품 API 먼저(새 구매 차단) → 판매글 숨김 + 이력 + 진행 중 거래 정리 이벤트
+    // 관리자 숨김: 상품 상태 먼저(새 구매 차단) → 판매글 숨김 + 이력 + 진행 중 거래 정리 이벤트.
+    // 상품 상태 변경까지 한 트랜잭션이다(product.client=local). 서버 분리 시 트랜잭션 밖으로 빼야 한다 — SalesPostHideUseCase 클래스 설명 참고(해제도 같다)
     @Transactional
     public void suspend(Long postId, Long adminId, String reason) {
         SalesPost post = findVisiblePost(postId);

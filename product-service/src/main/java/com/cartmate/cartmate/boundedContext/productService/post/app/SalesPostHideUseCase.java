@@ -3,7 +3,7 @@ package com.cartmate.cartmate.boundedContext.productService.post.app;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPost;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostProduct;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostSaleStatus;
-import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostApiClient;
+import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductClient;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostProductStatus;
@@ -23,17 +23,25 @@ import java.util.List;
 /**
  * 판매자 내림·재개, 그리고 판매글이 내려갔을 때의 이벤트 발행을 한곳에서 처리한다.
  * (관리자 숨김은 AdminSalesPostUseCase, 삭제는 SalesPostDeleteUseCase가 publishHidden을 호출)
+ *
+ * <p>내림 · 재개는 상품 상태 변경과 판매글 변경을 한 트랜잭션으로 처리한다(product.client=local, 직접 호출).
+ * 둘 중 하나가 실패하면 둘 다 되돌아가 상품 · 판매글 상태가 어긋나지 않는다.
+ *
+ * <p>서버 분리 시(product.client=http): 상품 상태 변경이 HTTP가 되어 상품 서버에서 따로 커밋되므로 이 트랜잭션에 묶이지 않는다.
+ * 트랜잭션 안에서 HTTP 응답을 기다리면 DB 커넥션을 쥔 채 기다리게 되고, 판매글 커밋이 실패하거나 응답 시간 초과(상품은 처리함)면
+ * 상품만 바뀐 채 남는다. 분리 전에 상품 호출을 트랜잭션 밖으로 빼고, 상태가 어긋났을 때 맞추는 처리(재시도 · 대사)를 만든다.
+ * AdminSalesPostUseCase의 숨김 · 해제도 같다.
  */
 @Service
 @RequiredArgsConstructor
 public class SalesPostHideUseCase {
     private final SalesPostRepository salesPostRepository;
     private final SalesPostProductRepository salesPostProductRepository;
-    private final SalesPostApiClient salesPostApiClient;
+    private final SalesPostProductClient salesPostApiClient;
     private final SalesPostHidePolicy hidePolicy;
     private final DomainEventPublisher eventPublisher;
 
-    // 판매자 내림. 상품 API 먼저 → 성공하면 판매글 변경  이벤트 (판매글 수정과 같은 순서 원칙)
+    // 판매자 내림. 상품 상태 먼저 → 판매글 변경 · 이벤트 (한 트랜잭션. 서버 분리 시 주의는 클래스 설명)
     @Transactional
     public void pauseBySeller(Long postId, Long sellerId, Long actorMemberId) {
         SalesPost post = findOwnedPost(postId, sellerId);

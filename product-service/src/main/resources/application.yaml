@@ -121,10 +121,18 @@ cartmate:
   internal:
     api-key: ${INTERNAL_API_KEY:local-internal-key}   # /internal/** 서버 간 호출 키. 운영은 반드시 환경 변수로
 product:
+  # 판매글이 상품을 부르는 방식 (SalesPostProductClient)
+  #   local : 같은 서버 안에서 ProductFacade를 직접 부른다 (기본, LocalSalesPostProductClient)
+  #   http  : 상품 API를 HTTP로 부른다 (SalesPostApiClient). 아래 internalUrl · internal-server를 쓴다
+  # 서버 분리 시: http로 바꾼다. 환경 변수 PRODUCT_CLIENT=http를 k8s/product-service.yaml의 env에 넣고,
+  #             PRODUCT_URL을 상품 서버 주소로 바꾼다. 지금은 어디에도 넣지 않아 local이다
+  client: ${PRODUCT_CLIENT:local}
   global:
-    # 판매글이 상품 API를 부르는 주소. 같은 서버의 내부 전용 포트(internal-server.port)로 보낸다. 운영은 application-prod.yaml의 PRODUCT_URL
+    # [product.client=http일 때만] 판매글이 상품 API를 부르는 주소. 같은 서버면 내부 전용 포트(internal-server.port)로 보낸다.
+    # 운영은 application-prod.yaml의 PRODUCT_URL. 서버 분리 시 상품 서버 주소
     internalUrl: ${PRODUCT_URL:http://localhost:9982}
-  # 판매글 → 상품 내부 요청 전용 포트(ProductInternalServerConfig). 바깥 요청(server.port)과 스레드 풀을 나눠 교착상태를 막는다
+  # [product.client=http일 때만] 판매글 → 상품 내부 요청 전용 포트(ProductInternalServerConfig).
+  # 바깥 요청(server.port)과 스레드 풀을 나눠 같은 서버 자기 호출의 교착상태를 막는다. 서버 분리 후에는 지운다
   internal-server:
     port: ${PRODUCT_INTERNAL_PORT:9982}
     max-threads: 20
