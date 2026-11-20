@@ -174,7 +174,9 @@ class OrderPaymentUseCase {
         Order order = orderRepository.findWithItemsById(orderId)
                 .orElseThrow(() -> new ServiceException(OrderErrorCode.ORDER_NOT_FOUND));
         orderSupport.validateBuyer(order, memberId);
-        if (!order.canAcceptPayment(now) || !groupPurchaseAcceptsPayment(order, now, false)) {
+        // 공동구매 사본의 상품 목록은 지연 로딩이라 세션 안에서 확인한다 (pay()는 트랜잭션 밖에서 불린다)
+        if (!order.canAcceptPayment(now)
+                || !Boolean.TRUE.equals(transaction.execute(status -> groupPurchaseAcceptsPayment(order, now, false)))) {
             throw new ServiceException(OrderErrorCode.ORDER_NOT_PAYABLE);
         }
         validatePurchasable(order.getItems().stream().map(OrderItem::getInventoryId).toList());
