@@ -27,7 +27,8 @@ public class FacadeWithdrawalTradeClient implements WithdrawalTradeClient {
                 orderServerClient.countPayingSharedOrders(memberId),
                 deliveryServerClient.countClaimsInProgressOfBuyer(memberId),
                 orderServerClient.countActiveGroupPurchases(memberId),
-                paymentServerClient.getWalletBalance(memberId));
+                paymentServerClient.getWalletBalance(memberId),
+                paymentServerClient.getWithdrawingAmount(memberId));
     }
 
     @Override

@@ -27,10 +27,10 @@ import java.util.Set;
 public class WithdrawalPendingFilter extends OncePerRequestFilter {
 
     private static final Set<String> READ_METHODS = Set.of("GET", "HEAD", "OPTIONS");
-    // 탈퇴 대기 중에도 허용: 탈퇴 취소, 로그인·로그아웃·토큰 재발급, 예치금 환급 신청
+    // 탈퇴 대기 중에도 허용: 탈퇴 취소, 로그인·로그아웃·토큰 재발급, 예치금 환급 신청·출금 계좌 등록
     // (환급: 유예 기간에 환불로 잔액이 생기면 탈퇴 확정이 막히므로, 취소하지 않고 돌려받을 수 있게)
     private static final List<String> ALLOWED_PATHS = List.of(
-            "/api/members/me/withdrawal", "/api/auth/", "/api/wallets/me/withdraws");
+            "/api/members/me/withdrawal", "/api/auth/", "/api/wallets/me/withdraws", "/api/members/me/payout-account");
 
     private final SuspendedMemberChecker memberChecker;
 

@@ -130,6 +130,10 @@ class MemberWithdrawalUseCase {
         // count에는 잔액(원)을 담는다
         addIf(blockers, "WALLET_BALANCE_REMAINING",
                 "예치금 %,d원이 남아 있습니다. 환급받은 뒤 탈퇴할 수 있습니다.".formatted(buyer.walletBalance()), buyer.walletBalance());
+        // 출금은 신청할 때 잔액에서 빠지지만, 실패·취소되면 잔액으로 돌아온다 → 끝날 때까지 기다린다 (count에는 금액)
+        addIf(blockers, "WALLET_WITHDRAW_IN_PROGRESS",
+                "예치금 출금 %,d원이 처리 중입니다. 출금이 끝난 뒤 탈퇴할 수 있습니다.".formatted(buyer.withdrawingAmount()),
+                buyer.withdrawingAmount());
 
         Long sellerId = sellerIdOf(member);
         if (sellerId != null) {
