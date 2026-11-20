@@ -16,5 +16,5 @@ public interface OrderCouponClient {
 
     CouponQuote use(Long memberId, Long memberCouponId, Long orderId, CouponOrderTarget target);
 
-    void restore(Long memberId, Long memberCouponId, Long orderId);
+    // 복구는 HTTP가 아니라 OrderCouponRestoreRequestedEvent로 요청한다(주문과 함께 커밋, 실패하면 다시 받는다)
 }

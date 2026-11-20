@@ -20,6 +20,7 @@ import com.cartmate.cartmate.boundedContext.orderService.order.out.personal.Orde
 import com.cartmate.cartmate.global.exception.ServiceException;
 import com.cartmate.cartmate.shared.order.dto.DeliveryAddressInfo;
 import com.cartmate.cartmate.shared.order.event.OrderPaidEvent;
+import com.cartmate.cartmate.shared.order.event.OrderCouponRestoreRequestedEvent;
 import com.cartmate.cartmate.global.event.DomainEvent;
 import com.cartmate.cartmate.global.event.DomainEventPublisher;
 import org.junit.jupiter.api.BeforeEach;
@@ -238,6 +239,7 @@ class OrderPaymentUseCaseTest {
                 org.mockito.Mockito.mock(com.cartmate.cartmate.boundedContext.orderService.order.out.OrderCouponClient.class), inventoryClient, TX);
         Order order = personalOrder(BUYER, ballLine(9L, 2), CREATED_AT);
         order.cancelByBuyer(BUYER, CREATED_AT.plusMinutes(1));
+        givenOrder(order);
         given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(order));
         PaymentResult charged = new PaymentResult(PAYMENT_ID, ORDER_ID, 50000L, 0L, 50000L, "INDIVIDUAL_GROUP", "PAID",
                 CREATED_AT.plusMinutes(2), null);
@@ -362,28 +364,30 @@ class OrderPaymentUseCaseTest {
     @Test
     @DisplayName("선점 해제: 결제 서버가 차감을 거절하면(결제 실패 확실) 선점을 해제한다")
     void chargeRejectedReleasesStock() {
-        assertChargeFailureLeavesOrderPending(new ServiceException("400-INSUFFICIENT_BALANCE", "예치금이 부족합니다."));
+        Order order = assertChargeFailureLeavesOrderPending(
+                new ServiceException("400-INSUFFICIENT_BALANCE", "예치금이 부족합니다."));
 
         then(inventoryClient).should().release(OrderType.PERSONAL, ORDER_ID);
-        then(orderRepository).should().unlockPayment(org.mockito.ArgumentMatchers.eq(ORDER_ID), any());
+        assertThat(order.getPaymentLockedUntil()).isNull();
     }
 
     @Test
     @DisplayName("선점 해제 안 함: 차감에 응답이 없으면(결제됐는지 모름) 선점도 결제 진행 표시도 그대로 둔다")
     void chargeUnavailableKeepsReservation() {
-        assertChargeFailureLeavesOrderPending(new InternalServerUnavailableException("PAYMENT", "결제", null));
+        Order order = assertChargeFailureLeavesOrderPending(
+                new InternalServerUnavailableException("PAYMENT", "결제", null));
 
         then(inventoryClient).should(never()).release(any(), any());
-        then(orderRepository).should(never()).unlockPayment(any(), any());
+        assertThat(order.getPaymentLockedUntil()).isNotNull();
     }
 
     @Test
     @DisplayName("선점 해제 안 함: 같은 주문의 차감이 아직 진행 중이면(결과 모름) 선점도 결제 진행 표시도 그대로 둔다 — 남의 선점을 풀던 버그")
     void chargeInProgressKeepsReservation() {
-        assertChargeFailureLeavesOrderPending(new ServiceException(OrderErrorCode.ORDER_PAYMENT_IN_PROGRESS));
+        Order order = assertChargeFailureLeavesOrderPending(new ServiceException(OrderErrorCode.ORDER_PAYMENT_IN_PROGRESS));
 
         then(inventoryClient).should(never()).release(any(), any());
-        then(orderRepository).should(never()).unlockPayment(any(), any());
+        assertThat(order.getPaymentLockedUntil()).isNotNull();
     }
 
     @Test
@@ -432,7 +436,7 @@ class OrderPaymentUseCaseTest {
                 inventoryClient, TX);
     }
 
-    private void assertChargeFailureLeavesOrderPending(ServiceException failure) {
+    private Order assertChargeFailureLeavesOrderPending(ServiceException failure) {
         OrderPaymentClient paymentClient = org.mockito.Mockito.mock(OrderPaymentClient.class);
         OrderProductClient allOnSale = inventoryIds -> inventoryIds.stream().distinct()
                 .map(id -> new OrderProductInfo(id, id, 1L, 900L, "상품", null, 1000L, null, true, true))
@@ -450,13 +454,13 @@ class OrderPaymentUseCaseTest {
         then(paymentClient).should(never()).compensateCharge(any(), any(), any());
         then(eventPublisher).should(never()).publish(any());
         assertThat(order.getStatus()).isEqualTo(OrderStatus.PAYMENT_PENDING);
+        return order;
     }
 
     @Test
-    @DisplayName("쿠폰 결제는 상품 서버가 계산한 할인만큼 덜 차감하고, 사용 결과 할인으로 주문을 결제 완료해 결제액이 차감액과 같다")
+    @DisplayName("쿠폰 결제: 쿠폰을 먼저 사용 처리하고 그 할인만큼 덜 차감하며, 반영 때 할인을 상품 줄에 고정해 결제 완료 이벤트에 싣는다")
     void payWithCouponChargesDiscountedAmount() {
         CouponFixture f = couponFixture();
-        given(f.couponClient.quote(any(), any(), any(), any())).willReturn(QUOTE);
         given(f.couponClient.use(any(), any(), any(), any())).willReturn(QUOTE);
         given(f.paymentClient.charge(any(), any(), any(), org.mockito.ArgumentMatchers.eq(45_000L))).willReturn(charged(45_000L));
 
@@ -465,66 +469,126 @@ class OrderPaymentUseCaseTest {
         assertThat(f.order.getStatus()).isEqualTo(OrderStatus.PAID);
         assertThat(f.order.getMemberCouponId()).isEqualTo(5L);
         assertThat(f.order.payAmount()).isEqualTo(45_000L);
-        then(f.couponClient).should().use(org.mockito.ArgumentMatchers.eq(BUYER), org.mockito.ArgumentMatchers.eq(5L),
+        org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(f.couponClient, f.paymentClient);
+        inOrder.verify(f.couponClient).use(org.mockito.ArgumentMatchers.eq(BUYER), org.mockito.ArgumentMatchers.eq(5L),
                 org.mockito.ArgumentMatchers.eq(ORDER_ID), any());
-        then(f.couponClient).should(never()).restore(any(), any(), any());
+        inOrder.verify(f.paymentClient).charge(any(), any(), any(), org.mockito.ArgumentMatchers.eq(45_000L));
+        ArgumentCaptor<OrderPaidEvent> paid = ArgumentCaptor.forClass(OrderPaidEvent.class);
+        then(eventPublisher).should().publish(paid.capture());
+        assertThat(paid.getValue().items())
+                .extracting(OrderPaidEvent.Item::sellerDiscountAmount, OrderPaidEvent.Item::platformDiscountAmount)
+                .containsExactly(tuple(0L, 5_000L));
+        then(eventPublisher).should(never()).publish(any(OrderCouponRestoreRequestedEvent.class));
     }
 
     @Test
-    @DisplayName("결제 반영 중 쿠폰 사용이 거절되면 차감을 되돌리고 그 주문 기준으로 쿠폰 복구도 요청한 뒤 쿠폰 오류를 그대로 던진다")
-    void couponRejectedCompensatesChargeAndRestoresCoupon() {
+    @DisplayName("쿠폰 사용이 거절되면 차감하지 않는다 — 선점을 풀고 쿠폰 복구를 요청한 뒤 쿠폰 오류를 그대로 던진다")
+    void couponRejectedDoesNotCharge() {
         CouponFixture f = couponFixture();
         ServiceException expired = new ServiceException("409-COUPON_EXPIRED", "사용 기간이 지난 쿠폰입니다.");
-        given(f.couponClient.quote(any(), any(), any(), any())).willReturn(QUOTE);
         given(f.couponClient.use(any(), any(), any(), any())).willThrow(expired);
-        given(f.paymentClient.charge(any(), any(), any(), org.mockito.ArgumentMatchers.anyLong())).willReturn(charged(45_000L));
 
         assertThatThrownBy(() -> f.useCase.pay(ORDER_ID, BUYER, 5L, CREATED_AT.plusMinutes(1))).isSameAs(expired);
-        then(f.paymentClient).should().compensateCharge(any(), any(), any());
-        then(f.couponClient).should().restore(BUYER, 5L, ORDER_ID);
+        then(f.paymentClient).should(never()).charge(any(), any(), any(), org.mockito.ArgumentMatchers.anyLong());
+        then(inventoryClient).should().release(OrderType.PERSONAL, ORDER_ID);
+        then(eventPublisher).should().publish(RESTORE);
+        assertThat(f.order.getMemberCouponId()).isNull();
+        assertThat(f.order.getPaymentLockedUntil()).isNull();
+    }
+
+    @Test
+    @DisplayName("쿠폰 사용에 상품 서버가 응답하지 않으면(썼는지 모름) 차감하지 않고 복구를 요청한다 — 쓰지 않았으면 복구는 아무 일도 하지 않는다")
+    void couponUnavailableDoesNotCharge() {
+        CouponFixture f = couponFixture();
+        InternalServerUnavailableException timeout = new InternalServerUnavailableException("PRODUCT", "상품", null);
+        given(f.couponClient.use(any(), any(), any(), any())).willThrow(timeout);
+
+        assertThatThrownBy(() -> f.useCase.pay(ORDER_ID, BUYER, 5L, CREATED_AT.plusMinutes(1))).isSameAs(timeout);
+        then(f.paymentClient).should(never()).charge(any(), any(), any(), org.mockito.ArgumentMatchers.anyLong());
+        then(eventPublisher).should().publish(RESTORE);
+        assertThat(f.order.getStatus()).isEqualTo(OrderStatus.PAYMENT_PENDING);
+    }
+
+    @Test
+    @DisplayName("쿠폰을 쓴 뒤 차감이 거절되면(결제 실패 확실) 선점을 풀고 쿠폰 복구를 요청한다")
+    void chargeRejectedAfterCouponRestoresCoupon() {
+        CouponFixture f = couponFixture();
+        ServiceException insufficient = new ServiceException("400-INSUFFICIENT_BALANCE", "예치금이 부족합니다.");
+        given(f.couponClient.use(any(), any(), any(), any())).willReturn(QUOTE);
+        given(f.paymentClient.charge(any(), any(), any(), org.mockito.ArgumentMatchers.anyLong())).willThrow(insufficient);
+
+        assertThatThrownBy(() -> f.useCase.pay(ORDER_ID, BUYER, 5L, CREATED_AT.plusMinutes(1))).isSameAs(insufficient);
+        then(inventoryClient).should().release(OrderType.PERSONAL, ORDER_ID);
+        then(eventPublisher).should().publish(RESTORE);
+    }
+
+    @Test
+    @DisplayName("쿠폰을 쓴 뒤 차감에 응답이 없으면(결제됐는지 모름) 쿠폰 기록을 그대로 둔다 — 재시도가 같은 쿠폰으로 반영하거나 결제 기한 취소가 돌려준다")
+    void chargeUnavailableAfterCouponKeepsCouponRecord() {
+        CouponFixture f = couponFixture();
+        InternalServerUnavailableException timeout = new InternalServerUnavailableException("PAYMENT", "결제", null);
+        given(f.couponClient.use(any(), any(), any(), any())).willReturn(QUOTE);
+        given(f.paymentClient.charge(any(), any(), any(), org.mockito.ArgumentMatchers.anyLong())).willThrow(timeout);
+
+        assertThatThrownBy(() -> f.useCase.pay(ORDER_ID, BUYER, 5L, CREATED_AT.plusMinutes(1))).isSameAs(timeout);
+        then(eventPublisher).should(never()).publish(any(OrderCouponRestoreRequestedEvent.class));
+        assertThat(f.order.getMemberCouponId()).isEqualTo(5L);
     }
 
     @Test
     @DisplayName("쿠폰을 쓴 뒤 결제액이 맞지 않아 반영이 실패하면 차감을 되돌리고 쿠폰도 복구 요청한다")
     void amountMismatchAfterCouponUseRestoresCoupon() {
         CouponFixture f = couponFixture();
-        given(f.couponClient.quote(any(), any(), any(), any())).willReturn(QUOTE);
         given(f.couponClient.use(any(), any(), any(), any())).willReturn(QUOTE);
         given(f.paymentClient.charge(any(), any(), any(), org.mockito.ArgumentMatchers.anyLong())).willReturn(charged(50_000L));
 
         assertThatThrownBy(() -> f.useCase.pay(ORDER_ID, BUYER, 5L, CREATED_AT.plusMinutes(1)))
                 .hasMessageContaining(OrderErrorCode.ORDER_PAYMENT_AMOUNT_MISMATCH.getMsg());
         then(f.paymentClient).should().compensateCharge(any(), any(), any());
-        then(f.couponClient).should().restore(BUYER, 5L, ORDER_ID);
+        then(eventPublisher).should().publish(RESTORE);
     }
 
     @Test
-    @DisplayName("쿠폰 사용에 상품 서버가 응답하지 않으면 차감은 다시 결제할 때 반영하도록 두고, 쿠폰은 복구 요청해 주문과 맞춘 뒤 503을 던진다")
-    void couponUnavailableKeepsChargeAndRestoresCoupon() {
-        CouponFixture f = couponFixture();
-        InternalServerUnavailableException timeout = new InternalServerUnavailableException("PRODUCT", "상품", null);
-        given(f.couponClient.quote(any(), any(), any(), any())).willReturn(QUOTE);
-        given(f.couponClient.use(any(), any(), any(), any())).willThrow(timeout);
-        given(f.paymentClient.charge(any(), any(), any(), org.mockito.ArgumentMatchers.anyLong())).willReturn(charged(45_000L));
-
-        assertThatThrownBy(() -> f.useCase.pay(ORDER_ID, BUYER, 5L, CREATED_AT.plusMinutes(1))).isSameAs(timeout);
-        then(f.paymentClient).should(never()).compensateCharge(any(), any(), any());
-        then(f.couponClient).should().restore(BUYER, 5L, ORDER_ID);
-        assertThat(f.order.getStatus()).isEqualTo(OrderStatus.PAYMENT_PENDING);
-    }
-
-    @Test
-    @DisplayName("보상 중 쿠폰 복구까지 실패해도 원래 결제 반영 오류를 그대로 던진다")
+    @DisplayName("쿠폰 복구 요청·진행 표시 해제까지 실패해도 원래 오류를 그대로 던진다")
     void restoreFailureKeepsOriginalError() {
         CouponFixture f = couponFixture();
         ServiceException expired = new ServiceException("409-COUPON_EXPIRED", "사용 기간이 지난 쿠폰입니다.");
-        given(f.couponClient.quote(any(), any(), any(), any())).willReturn(QUOTE);
         given(f.couponClient.use(any(), any(), any(), any())).willThrow(expired);
-        org.mockito.BDDMockito.willThrow(new InternalServerUnavailableException("PRODUCT", "상품", null))
-                .given(f.couponClient).restore(any(), any(), any());
-        given(f.paymentClient.charge(any(), any(), any(), org.mockito.ArgumentMatchers.anyLong())).willReturn(charged(45_000L));
+        org.mockito.BDDMockito.willThrow(new IllegalStateException("outbox 저장 실패"))
+                .given(eventPublisher).publish(any(OrderCouponRestoreRequestedEvent.class));
 
         assertThatThrownBy(() -> f.useCase.pay(ORDER_ID, BUYER, 5L, CREATED_AT.plusMinutes(1))).isSameAs(expired);
+    }
+
+    @Test
+    @DisplayName("이미 차감된 결제를 다시 반영할 때는 그 차감 때 기록한 쿠폰을 쓴다 (요청에 쿠폰이 없어도)")
+    void retryAfterChargeUsesRecordedCoupon() {
+        CouponFixture f = couponFixture();
+        f.order.recordPaymentCoupon(5L);
+        given(f.paymentClient.findPayment(any(), any(), any())).willReturn(Optional.of(charged(45_000L)));
+        given(f.couponClient.use(any(), any(), any(), any())).willReturn(QUOTE);
+
+        f.useCase.pay(ORDER_ID, BUYER, null, CREATED_AT.plusMinutes(2));
+
+        then(f.couponClient).should().use(org.mockito.ArgumentMatchers.eq(BUYER), org.mockito.ArgumentMatchers.eq(5L),
+                org.mockito.ArgumentMatchers.eq(ORDER_ID), any());
+        assertThat(f.order.getStatus()).isEqualTo(OrderStatus.PAID);
+        assertThat(f.order.payAmount()).isEqualTo(45_000L);
+    }
+
+    @Test
+    @DisplayName("앞선 결제 시도가 다른 쿠폰을 기록해 뒀으면 새 쿠폰으로 바꾸면서 앞 쿠폰의 복구를 요청한다")
+    void switchingCouponRestoresPreviousOne() {
+        CouponFixture f = couponFixture();
+        f.order.recordPaymentCoupon(4L);
+        given(f.couponClient.use(any(), any(), any(), any())).willReturn(QUOTE);
+        given(f.paymentClient.charge(any(), any(), any(), org.mockito.ArgumentMatchers.eq(45_000L))).willReturn(charged(45_000L));
+
+        f.useCase.pay(ORDER_ID, BUYER, 5L, CREATED_AT.plusMinutes(1));
+
+        then(eventPublisher).should().publish(new OrderCouponRestoreRequestedEvent(ORDER_ID, BUYER, 4L, "ORDER"));
+        then(eventPublisher).should(never()).publish(RESTORE);
+        assertThat(f.order.getMemberCouponId()).isEqualTo(5L);
     }
 
     @Test
@@ -538,17 +602,18 @@ class OrderPaymentUseCaseTest {
         assertThatThrownBy(() -> f.useCase.pay(ORDER_ID, BUYER, 5L, CREATED_AT.plusMinutes(2)))
                 .isInstanceOf(ServiceException.class);
         then(f.couponClient).should(never()).use(any(), any(), any(), any());
-        then(f.couponClient).should(never()).restore(any(), any(), any());
+        then(eventPublisher).should(never()).publish(any(OrderCouponRestoreRequestedEvent.class));
     }
 
     private static final CouponQuote QUOTE = new CouponQuote(5L, 10L, "전체 10%", 5_000L, true, null, "RATE", 10L, null, 0L);
+    private static final OrderCouponRestoreRequestedEvent RESTORE =
+            new OrderCouponRestoreRequestedEvent(ORDER_ID, BUYER, 5L, "ORDER");
 
     @Test
-    @DisplayName("쿠폰 결제 때 할인 방식·값·최대 할인·최소 금액을 주문에 함께 저장한다 (일부 취소 때 다시 계산하려고)")
+    @DisplayName("쿠폰 결제 때 할인 방식·값·최대 할인·최소 금액을 주문에 함께 저장한다")
     void payWithCouponStoresCouponRule() {
         CouponFixture f = couponFixture();
         CouponQuote quote = new CouponQuote(5L, 10L, "전체 10%", 5_000L, true, null, "RATE", 10L, 7_000L, 30_000L);
-        given(f.couponClient.quote(any(), any(), any(), any())).willReturn(quote);
         given(f.couponClient.use(any(), any(), any(), any())).willReturn(quote);
         given(f.paymentClient.charge(any(), any(), any(), org.mockito.ArgumentMatchers.eq(45_000L))).willReturn(charged(45_000L));
 

@@ -6,7 +6,6 @@ import com.cartmate.cartmate.boundedContext.orderService.order.domain.personal.O
 import com.cartmate.cartmate.boundedContext.orderService.order.domain.personal.OrderCouponRule;
 import com.cartmate.cartmate.boundedContext.orderService.order.domain.personal.OrderReturnPreview;
 import com.cartmate.cartmate.boundedContext.orderService.order.exception.OrderErrorCode;
-import com.cartmate.cartmate.boundedContext.orderService.order.out.OrderCouponClient;
 import com.cartmate.cartmate.boundedContext.orderService.order.out.claimreturn.OrderItemReturnRepository;
 import com.cartmate.cartmate.boundedContext.orderService.order.out.personal.OrderRepository;
 import com.cartmate.cartmate.global.event.DomainEvent;
@@ -17,6 +16,7 @@ import com.cartmate.cartmate.shared.delivery.event.DeliveryClaimReturnRequestedE
 import com.cartmate.cartmate.shared.delivery.event.PendingReturn;
 import com.cartmate.cartmate.shared.order.event.OrderClaimRefundRequestedEvent;
 import com.cartmate.cartmate.shared.order.event.OrderClaimReturnVerifiedEvent;
+import com.cartmate.cartmate.shared.order.event.OrderCouponRestoreRequestedEvent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -58,8 +58,6 @@ class OrderReturnUseCaseTest {
     @Mock
     private DomainEventPublisher eventPublisher;
     @Mock
-    private OrderCouponClient couponClient;
-    @Mock
     private OrderItemReturnRepository returnRepository;
 
     private OrderReturnUseCase useCase;
@@ -67,7 +65,7 @@ class OrderReturnUseCaseTest {
     @BeforeEach
     void setUp() {
         useCase = new OrderReturnUseCase(orderRepository, new OrderSupport(orderRepository), eventPublisher,
-                couponClient, returnRepository, CLOCK);
+                returnRepository, CLOCK);
     }
 
     // A 10,000원·B 1,000원·C 500원(판매자 7·8·9), "11,000원 이상 3,000원 할인" 플랫폼 쿠폰, 결제 8,500원
@@ -119,30 +117,27 @@ class OrderReturnUseCaseTest {
     }
 
     @Test
-    @DisplayName("쿠폰 최소 금액이 깨져 환불이 음수가 되는 반품은 접수 검사에서 거절한다")
-    void verify_underpaid_publishesRejected() {
+    @DisplayName("쿠폰 최소 금액이 깨지는 반품도 접수 검사를 통과한다 — 할인은 상품별로 고정이라 구매자가 더 내는 일이 없다")
+    void verify_belowMinimum_publishesAccepted() {
         given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(paidCouponOrder()));
 
         useCase.verifyReturn(requested(ITEM_B));
 
         OrderClaimReturnVerifiedEvent event = publishedOnly(OrderClaimReturnVerifiedEvent.class);
         assertThat(event.claimId()).isEqualTo(CLAIM_ID);
-        assertThat(event.accepted()).isFalse();
-        assertThat(event.rejectCode()).isEqualTo(OrderErrorCode.ORDER_RETURN_COUPON_MINIMUM.resultCode());
+        assertThat(event.accepted()).isTrue();
     }
 
     @Test
-    @DisplayName("같은 주문에서 처리 중인 다른 반품이 먼저 환불된 것으로 보고 접수 검사를 한다 (A 처리 중 → B는 거절)")
-    void verify_pendingReturn_publishesRejected() {
+    @DisplayName("같은 주문에서 처리 중인 다른 반품이 있어도 접수 검사를 통과한다 (A 처리 중 → B)")
+    void verify_pendingReturn_publishesAccepted() {
         given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(minimumOrder()));
         DeliveryClaimReturnRequestedEvent event = new DeliveryClaimReturnRequestedEvent(CLAIM_ID, ORDER_ID,
                 PurchaseType.INDIVIDUAL_GROUP, BUYER, List.of(ITEM_B), List.of(new PendingReturn(false, List.of(ITEM_A))));
 
         useCase.verifyReturn(event);
 
-        OrderClaimReturnVerifiedEvent verified = publishedOnly(OrderClaimReturnVerifiedEvent.class);
-        assertThat(verified.accepted()).isFalse();
-        assertThat(verified.rejectCode()).isEqualTo(OrderErrorCode.ORDER_RETURN_COUPON_MINIMUM.resultCode());
+        assertThat(publishedOnly(OrderClaimReturnVerifiedEvent.class).accepted()).isTrue();
     }
 
     @Test
@@ -205,8 +200,8 @@ class OrderReturnUseCaseTest {
     }
 
     @Test
-    @DisplayName("구매자 사정 반품은 쿠폰을 다시 계산해 환불 금액을 정하고 결제 서버에 요청한다 (A·B 반품 → 8,000원)")
-    void apply_buyerReason_recalculates() {
+    @DisplayName("반품 환불은 반품 상품의 (금액 - 결제 때 고정한 할인)이고 결제 서버에 요청한다 (A·B 반품 → 7,392 + 740 = 8,132원)")
+    void apply_refundsAmountMinusFixedDiscount() {
         given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(paidCouponOrder()));
 
         useCase.applyReturn(approved(false, ITEM_A, ITEM_B));
@@ -215,16 +210,16 @@ class OrderReturnUseCaseTest {
         assertThat(event.claimId()).isEqualTo(CLAIM_ID);
         assertThat(event.orderId()).isEqualTo(ORDER_ID);
         assertThat(event.buyerMemberId()).isEqualTo(BUYER);
-        assertThat(event.amount()).isEqualTo(8_000L);
+        assertThat(event.amount()).isEqualTo(8_132L);
         ArgumentCaptor<OrderItemReturn> saved = ArgumentCaptor.forClass(OrderItemReturn.class);
         then(returnRepository).should().save(saved.capture());
         assertThat(saved.getValue().getClaimId()).isEqualTo(CLAIM_ID);
-        assertThat(saved.getValue().getAmount()).isEqualTo(8_000L);
+        assertThat(saved.getValue().getAmount()).isEqualTo(8_132L);
     }
 
     @Test
-    @DisplayName("판매자 탓 반품은 할인을 비율로 나눈다 (B 반품 → 740원)")
-    void apply_sellerFault_proportional() {
+    @DisplayName("판매자 탓이든 구매자 사정이든 반품 환불은 같다 (B 반품 → 740원)")
+    void apply_sellerFaultOrNot_sameRefund() {
         given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(paidCouponOrder()));
 
         useCase.applyReturn(approved(true, ITEM_B));
@@ -233,9 +228,18 @@ class OrderReturnUseCaseTest {
     }
 
     @Test
-    @DisplayName("환불이 0원이어도 결과 이벤트를 받을 수 있게 환불 요청을 낸다")
+    @DisplayName("환불이 0원이어도 결과 이벤트를 받을 수 있게 환불 요청을 낸다 (할인이 상품 금액 전부인 상품)")
     void apply_zeroAmount_stillPublishesRequest() {
-        given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(paidCouponOrder()));
+        Order order = Order.createPersonal("ORD-RU5", BUYER, List.of(
+                new OrderLine(10L, 11L, 7L, "A", null, 1_000L, 1),
+                new OrderLine(20L, 21L, 8L, "B", null, 1_000L, 1)
+        ), addressWithoutDetail(), NOW.minusDays(5));
+        ReflectionTestUtils.setField(order, "id", ORDER_ID);
+        ReflectionTestUtils.setField(order.getItems().get(0), "id", ITEM_A);
+        ReflectionTestUtils.setField(order.getItems().get(1), "id", ITEM_B);
+        order.applyCoupon(5L, 2_000L, true, null, OrderCouponRule.of("FIXED", 2_000L, null, 0L));
+        order.markPaid(99L, NOW.minusDays(5).plusMinutes(1));
+        given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(order));
 
         useCase.applyReturn(approved(false, ITEM_B));
 
@@ -268,17 +272,17 @@ class OrderReturnUseCaseTest {
 
         useCase.applyReturn(approved(false, ITEM_A));
 
-        then(couponClient).should().restore(BUYER, 5L, ORDER_ID);
+        then(eventPublisher).should().publish(new OrderCouponRestoreRequestedEvent(ORDER_ID, BUYER, 5L, "ORDER"));
     }
 
     @Test
-    @DisplayName("쿠폰을 돌려줄 일이 없으면 쿠폰 반환을 호출하지 않는다")
+    @DisplayName("쿠폰을 돌려줄 일이 없으면 쿠폰 복구를 요청하지 않는다")
     void apply_couponStays_noRestore() {
         given(orderRepository.findByIdForUpdate(ORDER_ID)).willReturn(Optional.of(paidCouponOrder()));
 
         useCase.applyReturn(approved(false, ITEM_B));
 
-        then(couponClient).should(never()).restore(any(), any(), any());
+        then(eventPublisher).should(never()).publish(any(OrderCouponRestoreRequestedEvent.class));
     }
 
     @Test
@@ -286,25 +290,16 @@ class OrderReturnUseCaseTest {
     void previewBuyerReturn_notBuyer_throws() {
         given(orderRepository.findById(ORDER_ID)).willReturn(Optional.of(paidCouponOrder()));
 
-        assertThatThrownBy(() -> useCase.previewBuyerReturn(99L, ORDER_ID, List.of(ITEM_A), false))
+        assertThatThrownBy(() -> useCase.previewBuyerReturn(99L, ORDER_ID, List.of(ITEM_A)))
                 .hasMessageContaining("ORDER_BUYER_ONLY");
     }
 
     @Test
-    @DisplayName("구매자 사정 반품이 쿠폰 최소 금액을 깨면 예상 환불 조회가 거절한다")
-    void previewBuyerReturn_underpaid_throws() {
+    @DisplayName("쿠폰 최소 금액이 깨지는 반품도 예상 환불을 보여 준다 (B → 740원)")
+    void previewBuyerReturn_belowMinimum() {
         given(orderRepository.findById(ORDER_ID)).willReturn(Optional.of(paidCouponOrder()));
 
-        assertThatThrownBy(() -> useCase.previewBuyerReturn(BUYER, ORDER_ID, List.of(ITEM_B), false))
-                .hasMessageContaining("ORDER_RETURN_COUPON_MINIMUM");
-    }
-
-    @Test
-    @DisplayName("판매자 탓 반품의 예상 환불은 할인을 비율로 나눠 계산한다")
-    void previewBuyerReturn_sellerFault_proportional() {
-        given(orderRepository.findById(ORDER_ID)).willReturn(Optional.of(paidCouponOrder()));
-
-        OrderReturnPreview preview = useCase.previewBuyerReturn(BUYER, ORDER_ID, List.of(ITEM_B), true);
+        OrderReturnPreview preview = useCase.previewBuyerReturn(BUYER, ORDER_ID, List.of(ITEM_B));
 
         assertThat(preview.refundAmount()).isEqualTo(740L);
     }

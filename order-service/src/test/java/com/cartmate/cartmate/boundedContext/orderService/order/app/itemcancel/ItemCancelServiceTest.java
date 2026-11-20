@@ -2,7 +2,6 @@ package com.cartmate.cartmate.boundedContext.orderService.order.app.itemcancel;
 
 import com.cartmate.cartmate.boundedContext.orderService.order.app.groupshared.SharedGroupOrderFacade;
 import com.cartmate.cartmate.boundedContext.orderService.order.app.personal.OrderFacade;
-import com.cartmate.cartmate.boundedContext.orderService.order.domain.itemcancel.CouponMode;
 import com.cartmate.cartmate.shared.delivery.DeliveryCancelReason;
 import com.cartmate.cartmate.shared.delivery.PurchaseType;
 import org.junit.jupiter.api.DisplayName;
@@ -26,13 +25,13 @@ class ItemCancelServiceTest {
     private final ItemCancelService service = new ItemCancelService(orderFacade, sharedGroupOrderFacade);
 
     @Test
-    @DisplayName("개인 주문이면 개인 주문의 항목 취소를 쿠폰 계산 방식과 함께 부르고 취소 건 ID를 돌려준다")
+    @DisplayName("개인 주문이면 개인 주문의 항목 취소를 부르고 취소 건 ID를 돌려준다")
     void cancelsPersonalOrderItems() {
-        when(orderFacade.cancelItems(ORDER_ID, SELLER_ID, List.of(1L), DeliveryCancelReason.BUYER_CANCELED,
-                CouponMode.RECALCULATE)).thenReturn(Optional.of(9L));
+        when(orderFacade.cancelItems(ORDER_ID, SELLER_ID, List.of(1L), DeliveryCancelReason.BUYER_CANCELED))
+                .thenReturn(Optional.of(9L));
 
         Optional<Long> cancelId = service.cancel(PurchaseType.INDIVIDUAL_GROUP, ORDER_ID, SELLER_ID, List.of(1L),
-                DeliveryCancelReason.BUYER_CANCELED, CouponMode.RECALCULATE);
+                DeliveryCancelReason.BUYER_CANCELED);
 
         assertThat(cancelId).contains(9L);
         verifyNoInteractions(sharedGroupOrderFacade);
@@ -55,7 +54,7 @@ class ItemCancelServiceTest {
                 .thenReturn(Optional.of(3L));
 
         Optional<Long> cancelId = service.cancel(PurchaseType.SHARED_GROUP, ORDER_ID, SELLER_ID, null,
-                DeliveryCancelReason.SALES_STOPPED, CouponMode.PROPORTIONAL);
+                DeliveryCancelReason.SALES_STOPPED);
 
         assertThat(cancelId).contains(3L);
         verifyNoInteractions(orderFacade);

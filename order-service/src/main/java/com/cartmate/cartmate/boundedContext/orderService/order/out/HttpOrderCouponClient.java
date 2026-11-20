@@ -19,7 +19,6 @@ class HttpOrderCouponClient implements OrderCouponClient {
     static final String PATH = "/internal/coupons/orders";
     static final ParameterizedTypeReference<InternalResponse<List<CouponOption>>> OPTIONS = new ParameterizedTypeReference<>() {};
     static final ParameterizedTypeReference<InternalResponse<CouponQuote>> QUOTE = new ParameterizedTypeReference<>() {};
-    static final ParameterizedTypeReference<InternalResponse<Void>> NONE = new ParameterizedTypeReference<>() {};
 
     private final InternalApiClient productServerApiClient;
 
@@ -40,11 +39,5 @@ class HttpOrderCouponClient implements OrderCouponClient {
     public CouponQuote use(Long memberId, Long memberCouponId, Long orderId, CouponOrderTarget target) {
         return productServerApiClient.post(PATH + "/use",
                 new CouponOrderRequest(memberId, memberCouponId, ORDER_TYPE, orderId, target), QUOTE);
-    }
-
-    @Override
-    public void restore(Long memberId, Long memberCouponId, Long orderId) {
-        productServerApiClient.post(PATH + "/restore",
-                new CouponOrderRequest(memberId, memberCouponId, ORDER_TYPE, orderId, null), NONE);
     }
 }

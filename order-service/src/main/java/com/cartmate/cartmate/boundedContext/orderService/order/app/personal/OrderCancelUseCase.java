@@ -16,7 +16,6 @@ import com.cartmate.cartmate.boundedContext.orderService.order.out.OrderPaymentC
 import com.cartmate.cartmate.boundedContext.orderService.order.domain.personal.Order;
 import com.cartmate.cartmate.boundedContext.orderService.order.domain.personal.ItemCancelOutcome;
 import com.cartmate.cartmate.boundedContext.orderService.order.domain.personal.OrderCancelPreview;
-import com.cartmate.cartmate.boundedContext.orderService.order.domain.itemcancel.CouponMode;
 import com.cartmate.cartmate.boundedContext.orderService.order.domain.itemcancel.OrderItemCancel;
 import com.cartmate.cartmate.boundedContext.orderService.order.out.itemcancel.OrderItemCancelRepository;
 import com.cartmate.cartmate.shared.delivery.PurchaseType;
@@ -24,6 +23,7 @@ import com.cartmate.cartmate.boundedContext.orderService.order.domain.buyercance
 import com.cartmate.cartmate.shared.order.OrderStatus;
 import com.cartmate.cartmate.boundedContext.orderService.order.out.personal.OrderRepository;
 import com.cartmate.cartmate.shared.order.event.OrderCanceledEvent;
+import com.cartmate.cartmate.shared.order.event.OrderCouponRestoreRequestedEvent;
 import com.cartmate.cartmate.shared.order.event.OrderSellerItemsCanceledEvent;
 import com.cartmate.cartmate.shared.delivery.DeliveryCancelReason;
 import com.cartmate.cartmate.global.event.DomainEventPublisher;
@@ -46,7 +46,6 @@ class OrderCancelUseCase {
     private final OrderRepository orderRepository;
     private final OrderSupport orderSupport;
     private final DomainEventPublisher eventPublisher;
-    private final OrderCouponClient orderCouponClient;
     private final OrderPaymentClient orderPaymentClient;
     private final OrderItemCancelRepository orderItemCancelRepository;
     private final Clock clock;
@@ -55,7 +54,6 @@ class OrderCancelUseCase {
         Order order = orderSupport.getOrderForUpdate(orderId);
         order.cancelByBuyer(memberId, LocalDateTime.now(clock));
         publishCanceledEventIf(true, order, false);
-        restoreCouponIf(true, order);
     }
 
     BuyerCancelStart startBuyerCancel(Long memberId, Long orderId, Collection<Long> orderItemIds) {
@@ -109,10 +107,10 @@ class OrderCancelUseCase {
 
     // 환불이 있거나 주문을 끝낸 취소만 취소 건으로 남긴다. 돌려줄 돈이 없는 일부 취소는 환불 이벤트도 내지 않는다.
     Optional<Long> cancelItems(Long orderId, Long sellerId, Collection<Long> orderItemIds,
-                               DeliveryCancelReason reason, CouponMode couponMode) {
+                               DeliveryCancelReason reason) {
         Order order = orderSupport.getOrderForUpdate(orderId);
         LocalDateTime now = LocalDateTime.now(clock);
-        ItemCancelOutcome outcome = order.cancelItems(sellerId, orderItemIds, reason, couponMode, now);
+        ItemCancelOutcome outcome = order.cancelItems(sellerId, orderItemIds, reason, now);
         return recordCancels(order, outcome, reason, now).stream().findFirst();
     }
 
@@ -126,8 +124,7 @@ class OrderCancelUseCase {
     List<Long> cancelItemsByBuyer(Long orderId, Map<Long, List<Long>> itemIdsBySeller) {
         Order order = orderSupport.getOrderForUpdate(orderId);
         LocalDateTime now = LocalDateTime.now(clock);
-        ItemCancelOutcome outcome = order.cancelItems(itemIdsBySeller, DeliveryCancelReason.BUYER_CANCELED,
-                CouponMode.RECALCULATE, now);
+        ItemCancelOutcome outcome = order.cancelItems(itemIdsBySeller, DeliveryCancelReason.BUYER_CANCELED, now);
         return recordCancels(order, outcome, DeliveryCancelReason.BUYER_CANCELED, now);
     }
 
@@ -148,7 +145,7 @@ class OrderCancelUseCase {
             }
         }
         if (outcome.couponReturnable()) {
-            orderCouponClient.restore(order.getBuyerMemberId(), order.getMemberCouponId(), order.getId());
+            requestCouponRestore(order);
         }
         return cancelIds;
     }
@@ -161,17 +158,17 @@ class OrderCancelUseCase {
         return orderRepository.findIdsToCancelByDeadline(now);
     }
 
-    private void restoreCouponIf(boolean canceled, Order order) {
-        if (canceled && order.couponRestorable()) {
-            orderCouponClient.restore(order.getBuyerMemberId(), order.getMemberCouponId(), order.getId());
-            order.markCouponReturned();
-        }
+    // 쿠폰 복구는 주문과 함께 커밋되는 이벤트로 요청한다(상품 서버가 받아 처리, 실패하면 다시 받는다)
+    private void requestCouponRestore(Order order) {
+        eventPublisher.publish(new OrderCouponRestoreRequestedEvent(order.getId(), order.getBuyerMemberId(),
+                order.getMemberCouponId(), OrderCouponClient.ORDER_TYPE));
     }
 
     private boolean isPaid(Order order) {
         return order.isPaid();
     }
 
+    // 결제 대기 주문이 어떤 사유로 취소되든, 결제 진행 때 쓴 쿠폰이 있으면 돌려준다(결제가 끝나지 못한 시도의 쿠폰 포함)
     private void publishCanceledEventIf(boolean canceled, Order order, boolean paid) {
         if (!canceled) {
             return;
@@ -180,6 +177,10 @@ class OrderCancelUseCase {
             releaseUnappliedCharge(order);
         }
         eventPublisher.publish(toCanceledEvent(order, paid));
+        if (order.couponRestorable()) {
+            requestCouponRestore(order);
+            order.markCouponReturned();
+        }
     }
 
     private void releaseUnappliedCharge(Order order) {

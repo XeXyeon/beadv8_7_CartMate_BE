@@ -91,15 +91,16 @@ public class OrderController {
     }
 
     @GetMapping("/{id}/return-preview")
-    @Operation(operationId = "returnPreview", summary = "고른 상품을 반품하면 돌려받을 예상 환불 금액 (판매자 탓 사유면 sellerFault=true)")
+    @Operation(operationId = "returnPreview", summary = "고른 상품을 반품하면 돌려받을 예상 환불 금액 (sellerFault는 더 이상 금액에 영향이 없다 — 쿠폰 할인은 결제 때 상품별로 고정)")
     public RsData<OrderReturnPreviewResponse> returnPreview(
             @AuthenticationPrincipal SecurityUser user,
             @PathVariable Long id,
             @RequestParam List<Long> orderItemIds,
+            // 프론트 호환용으로 받기만 한다
             @RequestParam(defaultValue = "false") boolean sellerFault
     ) {
         return new RsData<>("200-1", "예상 환불 금액 조회 성공했습니다.",
-                OrderReturnPreviewResponse.from(orderFacade.previewBuyerReturn(user.memberId(), id, orderItemIds, sellerFault)));
+                OrderReturnPreviewResponse.from(orderFacade.previewBuyerReturn(user.memberId(), id, orderItemIds)));
     }
 
     @PostMapping("/{orderId}/payment")
