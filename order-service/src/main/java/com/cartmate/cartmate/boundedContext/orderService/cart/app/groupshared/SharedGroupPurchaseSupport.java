@@ -4,6 +4,7 @@ import com.cartmate.cartmate.boundedContext.orderService.cart.domain.groupshared
 import com.cartmate.cartmate.boundedContext.orderService.cart.domain.groupshared.SharedGroupPurchaseItem;
 import com.cartmate.cartmate.boundedContext.orderService.cart.exception.CartErrorCode;
 import com.cartmate.cartmate.boundedContext.orderService.cart.out.AbuseRestrictionClient;
+import com.cartmate.cartmate.boundedContext.orderService.cart.out.CartProductInfo;
 import com.cartmate.cartmate.boundedContext.orderService.cart.out.ProductClient;
 import com.cartmate.cartmate.boundedContext.orderService.cart.out.groupshared.SharedGroupPurchaseRepository;
 import com.cartmate.cartmate.global.exception.ServiceException;
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Service;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -42,6 +44,14 @@ class SharedGroupPurchaseSupport {
 
     Set<Long> findUnavailableInventoryIds(SharedGroupPurchase purchase) {
         return productClient.findUnavailableInventoryIds(inventoryIdsOf(purchase));
+    }
+
+    // 방에 담긴 품목 중 이 회원이 판매하는 상품의 재고 ID
+    Set<Long> findOwnInventoryIds(SharedGroupPurchase purchase, Long memberId) {
+        return productClient.findAllByInventoryIds(inventoryIdsOf(purchase)).stream()
+                .filter(product -> memberId.equals(product.sellerMemberId()))
+                .map(CartProductInfo::inventoryId)
+                .collect(Collectors.toSet());
     }
 
     List<Long> inventoryIdsOf(SharedGroupPurchase purchase) {
