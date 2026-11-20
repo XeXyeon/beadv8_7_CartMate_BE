@@ -129,6 +129,14 @@ public class SharedGroupOrder {
     }
 
     public boolean pay(Long memberId, Long paymentId, LocalDateTime paidAt, DeliveryAddress teamDeliveryAddress) {
+        return pay(memberId, paymentId, paidAt, teamDeliveryAddress, null, 0, null);
+    }
+
+    // 분담금 결제를 반영한다. memberCouponId·discount는 상품 서버에서 사용 처리된 쿠폰(없으면 null·0),
+    // paidAmount는 실제 차감액(없으면 확인하지 않음)으로 "분담금 - 할인"과 같아야 한다.
+    // 모두 결제하면 확정하고, 참여자들의 쿠폰 할인 합을 상품 줄에 나눠 고정한다
+    public boolean pay(Long memberId, Long paymentId, LocalDateTime paidAt, DeliveryAddress teamDeliveryAddress,
+                       Long memberCouponId, long discount, Long paidAmount) {
         if (paymentId == null) {
             throw new ServiceException(OrderErrorCode.ORDER_PAYMENT_ID_REQUIRED);
         }
@@ -148,14 +156,66 @@ public class SharedGroupOrder {
             }
             this.teamDeliveryAddress = teamDeliveryAddress;
         }
+        if (memberCouponId != null) {
+            participant.applyCoupon(memberCouponId, discount);
+        }
+        if (paidAmount != null && paidAmount != participant.payAmount()) {
+            throw new ServiceException(OrderErrorCode.ORDER_PAYMENT_AMOUNT_MISMATCH);
+        }
         participant.markPaid(paymentId, paidAt);
 
         if (participants.stream().allMatch(SharedGroupOrderParticipant::isPaid)) {
             this.status = SharedGroupOrderStatus.CONFIRMED;
             this.confirmedAt = paidAt;
+            allocateDiscount();
             return true;
         }
         return false;
+    }
+
+    // 결제 진행 때 이 참여자가 쓸 쿠폰을 기록한다. 앞선 시도가 다른 쿠폰을 기록해 뒀으면 그 쿠폰을 반환한다(복구 대상)
+    public Long recordParticipantCoupon(Long memberId, Long memberCouponId) {
+        validatePaying();
+        return getParticipant(memberId).recordCoupon(memberCouponId);
+    }
+
+    // 결제가 실패해 이 참여자가 기록한 쿠폰을 돌려줄 때 기록을 지우고 그 쿠폰 ID를 반환한다. 이미 결제했거나 기록이 없으면 null
+    public Long releaseParticipantCoupon(Long memberId) {
+        return getParticipant(memberId).releaseCoupon();
+    }
+
+    // 공동 주문이 취소돼 돌려줄 참여자 쿠폰들. 한 번만 돌려주도록 표시한다(결제 안 한 참여자가 결제 도중 쓴 쿠폰 포함)
+    public List<ParticipantCoupon> takeRestorableCoupons() {
+        if (status != SharedGroupOrderStatus.CANCELED) {
+            return List.of();
+        }
+        List<ParticipantCoupon> coupons = new ArrayList<>();
+        participants.stream()
+                .filter(SharedGroupOrderParticipant::couponRestorable)
+                .forEach(participant -> {
+                    coupons.add(new ParticipantCoupon(participant.getMemberId(), participant.getMemberCouponId()));
+                    participant.markCouponReturned();
+                });
+        return coupons;
+    }
+
+    // 참여자들의 쿠폰 할인 합(모두 플랫폼 부담)을 상품 줄에 금액 비율로 나눈다. 끝전은 마지막(ID가 가장 큰) 줄에 붙인다
+    private void allocateDiscount() {
+        long totalDiscount = participants.stream().mapToLong(SharedGroupOrderParticipant::discountOrZero).sum();
+        if (totalDiscount == 0 || totalAmount == 0) {
+            return;
+        }
+        long given = 0;
+        for (SharedGroupOrderItem item : items) {
+            long share = Math.multiplyExact(totalDiscount, item.amount()) / totalAmount;
+            item.assignPlatformDiscount(share);
+            given += share;
+        }
+        SharedGroupOrderItem last = items.get(items.size() - 1);
+        last.assignPlatformDiscount(last.platformDiscountOrZero() + totalDiscount - given);
+    }
+
+    public record ParticipantCoupon(Long memberId, Long memberCouponId) {
     }
 
     public boolean cancelByDeadline(LocalDateTime now) {
@@ -187,7 +247,7 @@ public class SharedGroupOrder {
         return true;
     }
 
-    // 확정된 공동 주문에서 한 판매자의 항목 중 고른 것(null이면 남은 전부)을 취소하고 그 금액을 돌려준다.
+    // 확정된 공동 주문에서 한 판매자의 항목 중 고른 것(null이면 남은 전부)을 취소하고 그 금액(항목 금액 - 쿠폰 할인 몫)을 돌려준다.
     // 항목이 모두 취소되면 주문도 취소로 바꾼다. 이때 환불은 전체 취소 환불로 한다(마지막 판매자 몫을 따로 나누지 않음).
     public SharedItemCancelOutcome cancelItems(Long sellerId, Collection<Long> orderItemIds,
                                                DeliveryCancelReason reason, LocalDateTime now) {
@@ -202,7 +262,7 @@ public class SharedGroupOrder {
             return SharedItemCancelOutcome.none();
         }
         targets.forEach(item -> item.cancel(reason, now));
-        long amount = targets.stream().mapToLong(SharedGroupOrderItem::amount).sum();
+        long amount = targets.stream().mapToLong(SharedGroupOrderItem::netAmount).sum();
         boolean orderCanceled = items.stream().allMatch(SharedGroupOrderItem::isCanceled);
         if (orderCanceled) {
             cancel(cancelReasonOfItems(), now);
@@ -229,7 +289,7 @@ public class SharedGroupOrder {
         items.stream()
                 .filter(item -> item.isCanceled() && item.getCancelId() != null)
                 .forEach(item -> byCancel.merge(item.getCancelId(),
-                        new SellerAmount(item.getSellerId(), item.amount(), item.getCancelId()),
+                        new SellerAmount(item.getSellerId(), item.netAmount(), item.getCancelId()),
                         (a, b) -> new SellerAmount(a.sellerId(), a.amount() + b.amount(), a.cancelId())));
         return List.copyOf(byCancel.values());
     }

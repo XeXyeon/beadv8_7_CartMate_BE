@@ -10,6 +10,8 @@ import com.cartmate.cartmate.boundedContext.orderService.order.out.groupshared.S
 import com.cartmate.cartmate.shared.delivery.DeliveryCancelReason;
 import com.cartmate.cartmate.shared.order.event.SharedGroupOrderCanceledEvent.SellerAmount;
 import com.cartmate.cartmate.shared.order.event.SharedGroupOrderSellerItemsCanceledEvent;
+import com.cartmate.cartmate.shared.order.event.OrderCouponRestoreRequestedEvent;
+import com.cartmate.cartmate.boundedContext.orderService.order.out.OrderCouponClient;
 import com.cartmate.cartmate.global.event.DomainEventPublisher;
 import com.cartmate.cartmate.global.exception.ServiceException;
 import com.cartmate.cartmate.boundedContext.orderService.order.exception.OrderErrorCode;
@@ -68,6 +70,7 @@ class SharedGroupOrderCancelUseCase {
         // 판매자 몫마다 따로 나누면 1원 끝전이 한 사람에게 쌓여, 낸 돈보다 많이 돌려주려다 실패할 수 있다.
         if (outcome.orderCanceled()) {
             eventPublisher.publish(order.toCanceledEvent(batchesBefore));
+            requestCouponRestores(order);
         } else if (outcome.amount() > 0) {
             eventPublisher.publish(new SharedGroupOrderSellerItemsCanceledEvent(
                     sharedGroupOrderId, sellerId, outcome.amount(), now, reason, cancelId));
@@ -92,6 +95,13 @@ class SharedGroupOrderCancelUseCase {
     private void publishCanceledEventIf(boolean canceled, SharedGroupOrder order) {
         if (canceled) {
             eventPublisher.publish(order.toCanceledEvent(order.canceledBatches()));
+            requestCouponRestores(order);
         }
+    }
+
+    // 공동 주문이 취소되면 참여자들이 분담금에 쓴 쿠폰을 돌려준다(결제 도중 쓴 쿠폰 포함). 주문과 함께 커밋되는 이벤트로 요청한다
+    private void requestCouponRestores(SharedGroupOrder order) {
+        order.takeRestorableCoupons().forEach(coupon -> eventPublisher.publish(new OrderCouponRestoreRequestedEvent(
+                order.getId(), coupon.memberId(), coupon.memberCouponId(), OrderCouponClient.SHARED_GROUP_ORDER_TYPE)));
     }
 }

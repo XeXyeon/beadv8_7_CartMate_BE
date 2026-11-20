@@ -7,6 +7,7 @@ import com.cartmate.cartmate.boundedContext.orderService.order.dto.groupshared.S
 import com.cartmate.cartmate.boundedContext.orderService.order.dto.groupshared.SharedGroupPaymentRequest;
 import com.cartmate.cartmate.global.rsData.RsData;
 import com.cartmate.cartmate.global.security.SecurityUser;
+import com.cartmate.cartmate.shared.coupon.dto.CouponOption;
 import com.cartmate.cartmate.shared.order.dto.TeamDeliveryAddress;
 import com.cartmate.cartmate.shared.payment.dto.PaymentResult;
 import io.swagger.v3.oas.annotations.Operation;
@@ -57,11 +58,19 @@ public class SharedGroupOrderController {
     }
 
     @PostMapping("/{id}/payment")
-    @Operation(operationId = "paySharedGroupOrder", summary = "공동 주문 분담금 예치금 결제")
+    @Operation(operationId = "paySharedGroupOrder", summary = "공동 주문 분담금 예치금 결제 (플랫폼 쿠폰 선택)")
     public RsData<PaymentResult> pay(@AuthenticationPrincipal SecurityUser user, @PathVariable Long id,
                                      @Valid @RequestBody(required = false) SharedGroupPaymentRequest request) {
         TeamDeliveryAddress address = request == null ? null : request.teamDeliveryAddress();
+        Long memberCouponId = request == null ? null : request.memberCouponId();
         return new RsData<>("200-1", "분담금 결제가 완료되었습니다.",
-                orderPaymentRetryService.paySharedGroupOrder(user.memberId(), id, address));
+                orderPaymentRetryService.paySharedGroupOrder(user.memberId(), id, address, memberCouponId));
+    }
+
+    @GetMapping("/{id}/coupons")
+    @Operation(operationId = "sharedGroupOrderCouponOptions",
+            summary = "분담금 결제에 쓸 수 있는 내 쿠폰 목록 (대상 금액은 내 분담금, 판매자 쿠폰은 쓸 수 없음)")
+    public RsData<List<CouponOption>> couponOptions(@AuthenticationPrincipal SecurityUser user, @PathVariable Long id) {
+        return new RsData<>("200-1", "쿠폰 목록 조회 성공했습니다.", sharedGroupOrderFacade.couponOptions(user.memberId(), id));
     }
 }

@@ -74,7 +74,7 @@ public class DeliveryOrderEventListener {
                 "SHARED-GROUP-ORDER-" + event.sharedGroupOrderId() + "-" + sellerId,
                 items.stream()
                         .map(item -> toItem(item.orderItemId(), item.productName(),
-                                item.optionName(), item.unitPrice(), item.quantity(), null, null))
+                                item.optionName(), item.unitPrice(), item.quantity(), null, item.platformDiscountAmount()))
                         .toList()
         )));
     }
