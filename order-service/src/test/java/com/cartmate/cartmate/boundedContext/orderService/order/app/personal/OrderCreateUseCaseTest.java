@@ -120,6 +120,33 @@ class OrderCreateUseCaseTest {
     }
 
     @Test
+    @DisplayName("판매자가 자기 상품을 주문하면 주문을 만들지 않는다")
+    void rejectOwnProduct() {
+        given(orderCartClient.getCartItemsForOrder(MEMBER_ID, List.of(11L)))
+                .willReturn(List.of(new CartOrderItem(11L, 1L, 1L, 1)));
+        given(orderProductClient.findAllByInventoryIds(anyCollection())).willReturn(List.of(
+                new OrderProductInfo(1L, 1L, 7L, MEMBER_ID, "축구 유니폼", "M / 레드", 39000, null, true, true)));
+
+        assertThatThrownBy(() -> createUseCase.createPersonal(MEMBER_ID, List.of(11L), ADDRESS, NOW))
+                .isInstanceOf(ServiceException.class)
+                .hasMessageContaining(OrderErrorCode.ORDER_OWN_PRODUCT.getMsg());
+        then(orderRepository).should(never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("판매자가 공동구매에서 자기 상품을 주문하면 주문을 만들지 않는다")
+    void rejectOwnProductInIndividualGroup() {
+        given(orderProductClient.findAllByInventoryIds(anyCollection())).willReturn(List.of(
+                new OrderProductInfo(4L, 2L, 8L, MEMBER_ID, "축구공", "5호", 25000, null, true, true)));
+
+        assertThatThrownBy(() -> createUseCase.createIndividualGroup(MEMBER_ID, PURCHASE_ID,
+                List.of(new IndividualGroupOrderCreateRequest.Item(4L, 1)), ADDRESS, NOW))
+                .isInstanceOf(ServiceException.class)
+                .hasMessageContaining(OrderErrorCode.ORDER_OWN_PRODUCT.getMsg());
+        then(orderRepository).should(never()).saveAndFlush(any());
+    }
+
+    @Test
     @DisplayName("공동구매 상품 주문의 결제 기한은 판매 마감이 더 이르면 판매 마감 시각이다")
     void createIndividualGroup() {
         LocalDateTime saleDeadlineAt = NOW.plusMinutes(10);

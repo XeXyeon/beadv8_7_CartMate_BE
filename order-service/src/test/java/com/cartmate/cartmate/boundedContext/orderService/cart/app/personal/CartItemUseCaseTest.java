@@ -131,6 +131,17 @@ class CartItemUseCaseTest {
                     .hasMessageContaining("구매할 수 없는 상품입니다.");
             verifyNoInteractions(cartRepository);
         }
+
+        @Test
+        @DisplayName("판매자가 자기 상품을 담으면 예외가 발생하고 장바구니는 건드리지 않는다")
+        void ownProduct() {
+            given(productClient.findByInventoryId(1L)).willReturn(Optional.of(UNIFORM_M));
+
+            assertThatThrownBy(() -> cartItemUseCase.addItem(UNIFORM_M.sellerMemberId(), 1L, 1))
+                    .isInstanceOf(ServiceException.class)
+                    .hasMessageContaining("본인이 판매하는 상품은 구매할 수 없습니다.");
+            verifyNoInteractions(cartRepository);
+        }
     }
 
     @Nested
