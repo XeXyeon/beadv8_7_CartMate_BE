@@ -86,23 +86,4 @@ class HttpOrderCouponClientTest {
 
         assertThatThrownBy(() -> couponClient.use(MEMBER_ID, MEMBER_COUPON_ID, ORDER_ID, TARGET)).isSameAs(expired);
     }
-
-    @Test
-    @DisplayName("복구는 회원 · 쿠폰 · 주문을 보내 그 주문에 쓴 쿠폰만 돌려 달라고 한다")
-    void restore() {
-        couponClient.restore(MEMBER_ID, MEMBER_COUPON_ID, ORDER_ID);
-
-        then(productServerApiClient).should().post(eq(PATH + "/restore"),
-                eq(new CouponOrderRequest(MEMBER_ID, MEMBER_COUPON_ID, "ORDER", ORDER_ID, null)), any());
-    }
-
-    @Test
-    @DisplayName("복구에 응답이 없으면 삼키지 않고 응답 없음 예외를 던져 취소 쪽이 판단하게 한다")
-    void restoreUnavailablePropagates() {
-        InternalServerUnavailableException timeout = new InternalServerUnavailableException("PRODUCT", "상품",
-                new SocketTimeoutException("Read timed out"));
-        given(productServerApiClient.post(eq(PATH + "/restore"), any(), any())).willThrow(timeout);
-
-        assertThatThrownBy(() -> couponClient.restore(MEMBER_ID, MEMBER_COUPON_ID, ORDER_ID)).isSameAs(timeout);
-    }
 }

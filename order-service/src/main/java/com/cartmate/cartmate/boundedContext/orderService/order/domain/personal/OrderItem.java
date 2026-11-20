@@ -86,6 +86,28 @@ public class OrderItem {
         return unitPrice * quantity;
     }
 
+    // 결제 때 이 줄에 고정 배분된 쿠폰 할인(줄 전체 수량 기준). 결제 뒤에는 바뀌지 않는다.
+    // 쿠폰이 없거나 이 컬럼이 생기기 전에 결제된 주문은 null이다(그런 주문은 Order가 같은 규칙으로 그때 계산한다).
+    @Column(name = "seller_discount_amount")
+    private Long sellerDiscountAmount;      // 판매자 부담 할인
+
+    @Column(name = "platform_discount_amount")
+    private Long platformDiscountAmount;    // 플랫폼 부담 할인
+
+    void assignDiscount(long sellerDiscount, long platformDiscount) {
+        this.sellerDiscountAmount = sellerDiscount;
+        this.platformDiscountAmount = platformDiscount;
+    }
+
+    boolean hasAssignedDiscount() {
+        return sellerDiscountAmount != null || platformDiscountAmount != null;
+    }
+
+    long assignedDiscount() {
+        return (sellerDiscountAmount == null ? 0 : sellerDiscountAmount)
+                + (platformDiscountAmount == null ? 0 : platformDiscountAmount);
+    }
+
     private LocalDateTime canceledAt;
 
     @Enumerated(EnumType.STRING)

@@ -1,7 +1,6 @@
 package com.cartmate.cartmate.boundedContext.orderService.order.app.sellercancel;
 
 import com.cartmate.cartmate.boundedContext.orderService.order.app.itemcancel.ItemCancelService;
-import com.cartmate.cartmate.boundedContext.orderService.order.domain.itemcancel.CouponMode;
 import com.cartmate.cartmate.shared.delivery.DeliveryCancelReason;
 import com.cartmate.cartmate.shared.delivery.PurchaseType;
 import com.cartmate.cartmate.shared.delivery.event.DeliverySellerCanceledEvent;
@@ -30,7 +29,7 @@ class SellerCancelFacadeTest {
                 DeliveryCancelReason.SELLER_OUT_OF_STOCK, NOW, List.of(11L, 12L)));
 
         verify(itemCancelService).cancel(PurchaseType.INDIVIDUAL_GROUP, ORDER_ID, SELLER_ID, List.of(11L, 12L),
-                DeliveryCancelReason.SELLER_OUT_OF_STOCK, CouponMode.PROPORTIONAL);
+                DeliveryCancelReason.SELLER_OUT_OF_STOCK);
     }
 
     @Test
@@ -40,6 +39,6 @@ class SellerCancelFacadeTest {
                 DeliveryCancelReason.SELLER_PRODUCT_ISSUE, NOW, List.of(21L)));
 
         verify(itemCancelService).cancel(PurchaseType.SHARED_GROUP, ORDER_ID, SELLER_ID, List.of(21L),
-                DeliveryCancelReason.SELLER_PRODUCT_ISSUE, CouponMode.PROPORTIONAL);
+                DeliveryCancelReason.SELLER_PRODUCT_ISSUE);
     }
 }
