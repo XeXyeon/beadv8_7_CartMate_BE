@@ -132,6 +132,18 @@ class IndividualGroupPurchaseReplicaFlowIntegrationTest {
     }
 
     @Test
+    @DisplayName("주문이 지휘하는 결제(payOrder)는 사본이 열려 있으면 상품 목록까지 확인하고 결제 완료로 끝난다")
+    void payOrderSucceedsWhenReplicaOpen() {
+        Long purchaseId = openPurchase(List.of(1L, 2L));
+        relayUntil(jdbcTemplate, outboxRelay, () -> replicaRevision(purchaseId) == 0);
+        Long orderId = createOrder(buyer, purchaseId);
+
+        orderFacade.payOrder(buyer, orderId);
+
+        assertThat(orderStatus(orderId)).isEqualTo("PAID");
+    }
+
+    @Test
     @DisplayName("주문이 지휘하는 결제(payOrder)는 닫힌 공동구매 주문을 지갑 차감 전에 결제 불가로 거절한다")
     void payOrderRejectsBeforeChargeWhenClosed() {
         Long purchaseId = openPurchase(List.of(1L, 2L));
