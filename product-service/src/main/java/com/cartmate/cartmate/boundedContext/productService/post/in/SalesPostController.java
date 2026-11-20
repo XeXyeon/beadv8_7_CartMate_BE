@@ -48,7 +48,7 @@ public class SalesPostController {
             @RequestPart("images") List<MultipartFile> images,
             @AuthenticationPrincipal SecurityUser user) {
         requireSameSeller(request.getSellerId(), user);
-        salesPostFacade.registerSalesPost(request, images);
+        salesPostFacade.registerSalesPost(request, images, user.memberId());
         return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 

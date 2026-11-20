@@ -76,7 +76,7 @@ class OrderPaymentUseCaseTest {
     @BeforeEach
     void setUp() {
                 OrderProductClient allOnSale = inventoryIds -> inventoryIds.stream().distinct()
-                        .map(id -> new OrderProductInfo(id, id, 1L, "상품", null, 1000L, null, true, true))
+                        .map(id -> new OrderProductInfo(id, id, 1L, 900L, "상품", null, 1000L, null, true, true))
                         .toList();
                 paymentUseCase = new OrderPaymentUseCase(orderRepository, new OrderSupport(orderRepository), eventPublisher, allOnSale,
                         replicaUseCase, org.mockito.Mockito.mock(com.cartmate.cartmate.boundedContext.orderService.order.out.OrderPaymentClient.class),
@@ -208,7 +208,7 @@ class OrderPaymentUseCaseTest {
             if (calls.incrementAndGet() > 1) {
                 throw new InternalServerUnavailableException("PRODUCT", "상품", null);
             }
-            return inventoryIds.stream().map(id -> new OrderProductInfo(id, id, 1L, "상품", null, 1000L, null, true, true)).toList();
+            return inventoryIds.stream().map(id -> new OrderProductInfo(id, id, 1L, 900L, "상품", null, 1000L, null, true, true)).toList();
         };
         OrderPaymentUseCase useCase = new OrderPaymentUseCase(orderRepository, new OrderSupport(orderRepository),
                 eventPublisher, flaky, replicaUseCase, paymentClient,
@@ -319,7 +319,7 @@ class OrderPaymentUseCaseTest {
         return inventoryIds -> {
             boolean first = ++calls[0] == 1;
             return inventoryIds.stream().distinct()
-                    .map(id -> new OrderProductInfo(id, id, 1L, "상품", null, 1000L, null,
+                    .map(id -> new OrderProductInfo(id, id, 1L, 900L, "상품", null, 1000L, null,
                             first || purchasable, first || onSale))
                     .toList();
         };
@@ -424,7 +424,7 @@ class OrderPaymentUseCaseTest {
 
     private OrderPaymentUseCase payingUseCase(OrderPaymentClient paymentClient) {
         OrderProductClient allOnSale = inventoryIds -> inventoryIds.stream().distinct()
-                .map(id -> new OrderProductInfo(id, id, 1L, "상품", null, 1000L, null, true, true))
+                .map(id -> new OrderProductInfo(id, id, 1L, 900L, "상품", null, 1000L, null, true, true))
                 .toList();
         return new OrderPaymentUseCase(orderRepository, new OrderSupport(orderRepository), eventPublisher, allOnSale,
                 replicaUseCase, paymentClient,
@@ -435,7 +435,7 @@ class OrderPaymentUseCaseTest {
     private void assertChargeFailureLeavesOrderPending(ServiceException failure) {
         OrderPaymentClient paymentClient = org.mockito.Mockito.mock(OrderPaymentClient.class);
         OrderProductClient allOnSale = inventoryIds -> inventoryIds.stream().distinct()
-                .map(id -> new OrderProductInfo(id, id, 1L, "상품", null, 1000L, null, true, true))
+                .map(id -> new OrderProductInfo(id, id, 1L, 900L, "상품", null, 1000L, null, true, true))
                 .toList();
         OrderPaymentUseCase useCase = new OrderPaymentUseCase(orderRepository, new OrderSupport(orderRepository),
                 eventPublisher, allOnSale, replicaUseCase, paymentClient,
@@ -570,7 +570,7 @@ class OrderPaymentUseCaseTest {
         OrderPaymentClient paymentClient = org.mockito.Mockito.mock(OrderPaymentClient.class);
         var couponClient = org.mockito.Mockito.mock(com.cartmate.cartmate.boundedContext.orderService.order.out.OrderCouponClient.class);
         OrderProductClient allOnSale = inventoryIds -> inventoryIds.stream().distinct()
-                .map(id -> new OrderProductInfo(id, id, 1L, "상품", null, 1000L, null, true, true))
+                .map(id -> new OrderProductInfo(id, id, 1L, 900L, "상품", null, 1000L, null, true, true))
                 .toList();
         OrderPaymentUseCase useCase = new OrderPaymentUseCase(orderRepository, new OrderSupport(orderRepository),
                 eventPublisher, allOnSale, replicaUseCase, paymentClient, couponClient, inventoryClient, TX);

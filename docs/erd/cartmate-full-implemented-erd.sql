@@ -205,6 +205,7 @@ CREATE TABLE `delivery_seller_cancel` (
 CREATE TABLE `PRODUCT_PRODUCT` (
 	`id`	BIGINT	NOT NULL,
 	`seller_id`	BIGINT	NOT NULL,
+	`seller_member_id`	BIGINT	NOT NULL,
 	`sales_post_id`	BIGINT	NOT NULL,
 	`category_id`	BIGINT	NOT NULL,
 	`name`	VARCHAR(255)	NOT NULL,

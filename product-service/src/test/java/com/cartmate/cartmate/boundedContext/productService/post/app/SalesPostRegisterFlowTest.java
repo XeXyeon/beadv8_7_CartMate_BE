@@ -116,7 +116,7 @@ class SalesPostRegisterFlowTest extends ProductServiceTestSupport {
     @Test
     @DisplayName("성공: 상품 등록까지 끝나면 판매글이 판매중(ON_SALE)으로 완료 처리된다")
     void postBecomesOnSaleAfterRegister() {
-        salesPostFacade.registerSalesPost(request(), images());
+        salesPostFacade.registerSalesPost(request(), images(), 100L);
 
         List<SalesPost> posts = salesPostRepository.findAll();
         assertThat(posts).hasSize(1);
@@ -124,9 +124,19 @@ class SalesPostRegisterFlowTest extends ProductServiceTestSupport {
     }
 
     @Test
+    @DisplayName("성공: 등록한 판매자의 회원 ID가 상품에 저장된다")
+    void sellerMemberIdIsSavedOnProduct() {
+        salesPostFacade.registerSalesPost(request(), images(), 100L);
+
+        assertThat(productRepository.findAll())
+                .extracting(Product::getSellerMemberId)
+                .containsExactly(100L);
+    }
+
+    @Test
     @DisplayName("성공: product에 상품이 저장되고, post에 같은 값의 복제본이 생기고, product의 동기화 상태가 켜진다")
     void productIsSyncedToPostAfterRegister() {
-        salesPostFacade.registerSalesPost(request(), images());
+        salesPostFacade.registerSalesPost(request(), images(), 100L);
 
         Long postId = salesPostRepository.findAll().getFirst().getId();
 
@@ -173,7 +183,7 @@ class SalesPostRegisterFlowTest extends ProductServiceTestSupport {
         doThrow(new RuntimeException("테스트용 완료 처리 실패"))
                 .when(salesPostCreateUseCase).completeSave(anyLong());
 
-        assertThatThrownBy(() -> salesPostFacade.registerSalesPost(request(), images()))
+        assertThatThrownBy(() -> salesPostFacade.registerSalesPost(request(), images(), 100L))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessage("테스트용 완료 처리 실패");
 
@@ -187,7 +197,7 @@ class SalesPostRegisterFlowTest extends ProductServiceTestSupport {
         doThrow(new RuntimeException("테스트용 복제본 생성 실패"))
                 .when(salesPostSyncProductUseCase).syncProduct(anyList());
 
-        assertThatThrownBy(() -> salesPostFacade.registerSalesPost(request(), images()))
+        assertThatThrownBy(() -> salesPostFacade.registerSalesPost(request(), images(), 100L))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessage("테스트용 복제본 생성 실패");
 
@@ -198,7 +208,7 @@ class SalesPostRegisterFlowTest extends ProductServiceTestSupport {
     @Test
     @DisplayName("보상: 상품 API가 실패하면 판매글이 지워지고 product · post 어디에도 데이터가 남지 않는다")
     void compensateWhenProductApiFails() {
-        assertThatThrownBy(() -> salesPostFacade.registerSalesPost(request(), List.of(TestImageFiles.jpeg(), TestImageFiles.fake())))
+        assertThatThrownBy(() -> salesPostFacade.registerSalesPost(request(), List.of(TestImageFiles.jpeg(), TestImageFiles.fake()), 100L))
                 .isInstanceOf(ServiceException.class);
 
         assertNothingLeft();

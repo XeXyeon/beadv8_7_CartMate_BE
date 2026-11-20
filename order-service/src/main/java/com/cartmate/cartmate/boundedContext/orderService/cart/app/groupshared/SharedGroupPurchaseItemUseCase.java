@@ -24,6 +24,7 @@ class SharedGroupPurchaseItemUseCase {
     void addItem(Long memberId, Long sharedGroupPurchaseId, Long inventoryId, int quantity) {
         CartProductInfo product = getPurchasableProduct(inventoryId);
         SharedGroupPurchase purchase = sharedGroupPurchaseSupport.getPurchaseForUpdate(sharedGroupPurchaseId);
+        validateSellerNotParticipant(purchase, product);
         purchase.addItem(memberId, product.productId(), inventoryId, quantity, LocalDateTime.now(clock));
     }
 
@@ -41,12 +42,20 @@ class SharedGroupPurchaseItemUseCase {
     void changeItemOption(Long memberId, Long sharedGroupPurchaseId, Long itemId, Long inventoryId) {
         CartProductInfo product = getPurchasableProduct(inventoryId);
         SharedGroupPurchase purchase = sharedGroupPurchaseSupport.getPurchaseForUpdate(sharedGroupPurchaseId);
+        validateSellerNotParticipant(purchase, product);
         purchase.changeItemOption(memberId, itemId, product.productId(), inventoryId, LocalDateTime.now(clock));
     }
 
     void removeItem(Long memberId, Long sharedGroupPurchaseId, Long itemId) {
         sharedGroupPurchaseSupport.getPurchaseForUpdate(sharedGroupPurchaseId)
                 .removeItem(memberId, itemId, LocalDateTime.now(clock));
+    }
+
+    // 참가자가 판매하는 상품은 누가 담든 막는다. 담기면 그 판매자가 분담금으로 자기 상품을 사게 된다
+    private void validateSellerNotParticipant(SharedGroupPurchase purchase, CartProductInfo product) {
+        if (purchase.isMember(product.sellerMemberId())) {
+            throw new ServiceException(CartErrorCode.CART_SHARED_SELLER_PARTICIPANT);
+        }
     }
 
     private CartProductInfo getPurchasableProduct(Long inventoryId) {
