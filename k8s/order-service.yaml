@@ -45,6 +45,11 @@ spec:
                 name: cartmate-app-secret
             - secretRef:
                 name: order-service-secret
+          env:
+            # 장바구니 유사 매칭 벡터 적재 스케줄러(1분마다, 한 번에 최대 100개). 기본 꺼짐이라 켜야 유사 매칭 결과가 나온다
+            # OPENAI_API_KEY(order-service-secret)가 없으면 켜도 적재하지 않고 경고 로그만 남긴다
+            - name: CUSTOM_MATCHING_INDEXING_ENABLED
+              value: "true"
           # 메모리 768Mi → 1Gi: 부하가 이어지면 힙(제한의 60%)이 최대치까지 커지고 힙 밖(스레드 · 연결 · JIT 코드)도 약 300Mi까지 늘어
           # 합계가 768Mi를 넘어 OOMKilled됐다(156 TPS, 죽을 때 약 785Mi, 2026-11-19). 1Gi면 힙 약 614Mi + 힙 밖 300Mi ≈ 914Mi
           resources:
