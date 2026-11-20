@@ -31,7 +31,14 @@ public record DeliveryConfirmedEvent(
             Long orderItemId,
             String productName, // 주문 시점의 상품명 스냅샷
             Long unitPrice, // 옵션 가격이 반영된 최종 단가
-            Long quantity
+            Long quantity,
+            // 정산 대상 수량(quantity)에 해당하는 쿠폰 할인. 환불로 수량이 줄면 그 비율만큼(원 미만 버림) 줄인 값이다.
+            // 쿠폰이 없거나 이 칸이 생기기 전 이벤트면 null이고 0으로 본다.
+            Long sellerDiscountAmount,
+            Long platformDiscountAmount
     ) {
+        public Item(Long orderItemId, String productName, Long unitPrice, Long quantity) {
+            this(orderItemId, productName, unitPrice, quantity, null, null);
+        }
     }
 }

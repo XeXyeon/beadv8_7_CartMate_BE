@@ -36,6 +36,14 @@ public class DeliveryItem {
     @Column(name = "quantity", nullable = false)
     private Long quantity;
 
+    // 결제 때 이 상품 줄(전체 수량)에 고정 배분된 쿠폰 할인 스냅샷. 정산 금액 계산에 쓴다.
+    // 쿠폰이 없거나 이 컬럼이 생기기 전에 만든 배송은 null이고 0으로 본다.
+    @Column(name = "seller_discount_amount")
+    private Long sellerDiscountAmount;      // 판매자 부담 할인
+
+    @Column(name = "platform_discount_amount")
+    private Long platformDiscountAmount;    // 플랫폼 부담 할인
+
     @Column(name = "canceled_at")
     private LocalDateTime canceledAt;
 
@@ -47,13 +55,42 @@ public class DeliveryItem {
     public static DeliveryItem create(
             Delivery delivery, Long orderItemId, String productName, Long unitPrice, Long quantity
     ) {
+        return create(delivery, orderItemId, productName, unitPrice, quantity, null, null);
+    }
+
+    public static DeliveryItem create(
+            Delivery delivery, Long orderItemId, String productName, Long unitPrice, Long quantity,
+            Long sellerDiscountAmount, Long platformDiscountAmount
+    ) {
         DeliveryItem item = new DeliveryItem(delivery, orderItemId, productName, unitPrice, quantity);
+        item.sellerDiscountAmount = sellerDiscountAmount;
+        item.platformDiscountAmount = platformDiscountAmount;
         delivery.addItem(item);
         return item;
     }
 
     public boolean isCanceled() {
         return canceledAt != null;
+    }
+
+    // 남은 수량에 해당하는 판매자 부담 할인. 줄 할인 x 남은 수량 / 줄 수량 (원 미만 버림)
+    public long sellerDiscountFor(long remainingQuantity) {
+        return discountFor(sellerDiscountAmount, remainingQuantity);
+    }
+
+    // 남은 수량에 해당하는 플랫폼 부담 할인. 줄 할인 x 남은 수량 / 줄 수량 (원 미만 버림)
+    public long platformDiscountFor(long remainingQuantity) {
+        return discountFor(platformDiscountAmount, remainingQuantity);
+    }
+
+    private long discountFor(Long lineDiscount, long remainingQuantity) {
+        if (lineDiscount == null || lineDiscount == 0 || remainingQuantity <= 0) {
+            return 0L;
+        }
+        if (remainingQuantity >= quantity) {
+            return lineDiscount;
+        }
+        return Math.multiplyExact(lineDiscount, remainingQuantity) / quantity;
     }
 
     // 이미 취소된 상품은 처음 시각과 사유를 그대로 둔다. 같은 취소가 다시 와도 결과가 같게 하려는 것이다.
