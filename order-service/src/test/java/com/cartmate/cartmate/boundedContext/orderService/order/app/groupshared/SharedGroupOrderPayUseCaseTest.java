@@ -3,7 +3,9 @@ package com.cartmate.cartmate.boundedContext.orderService.order.app.groupshared;
 import com.cartmate.cartmate.boundedContext.orderService.order.domain.groupshared.SharedGroupOrder;
 import com.cartmate.cartmate.boundedContext.orderService.order.domain.groupshared.SharedGroupOrder.OrderItemLine;
 import com.cartmate.cartmate.boundedContext.orderService.order.exception.OrderErrorCode;
+import com.cartmate.cartmate.boundedContext.orderService.order.out.OrderCouponClient;
 import com.cartmate.cartmate.boundedContext.orderService.order.out.OrderPaymentClient;
+import com.cartmate.cartmate.shared.coupon.dto.CouponQuote;
 import com.cartmate.cartmate.boundedContext.orderService.order.out.OrderProductClient;
 import com.cartmate.cartmate.boundedContext.orderService.order.out.OrderProductInfo;
 import com.cartmate.cartmate.boundedContext.orderService.order.out.groupshared.SharedGroupOrderRepository;
@@ -321,7 +323,81 @@ class SharedGroupOrderPayUseCaseTest {
         // 재고 선점 단계(상품 서버 호출 · 별도 트랜잭션)는 SharedGroupOrderStockReservationTest에서 확인한다
         return new SharedGroupOrderPaymentUseCase(sharedGroupOrderRepository,
                 new SharedGroupOrderSupport(sharedGroupOrderRepository), eventPublisher, productClient, paymentClient,
-                mock(SharedGroupOrderStockReserver.class));
+                mock(SharedGroupOrderStockReserver.class), couponClient);
+    }
+
+    @Mock
+    private OrderCouponClient couponClient;
+
+    // 분담금 15,000원에 5,000원 쿠폰(플랫폼 부담)
+    private static final CouponQuote MEMBER_COUPON =
+            new CouponQuote(9L, 90L, "전체 5천원", 5_000L, true, null, "FIXED", 5_000L, null, 0L);
+
+    @Test
+    @DisplayName("분담금 쿠폰: 할인만큼 덜 차감하고, 모두 결제해 확정되면 할인 합을 상품 줄에 나눠 확정 이벤트에 싣는다 (10,001원·20,000원에 5,000원 → 1,666원 + 3,333원 + 끝전 1원)")
+    void couponDiscountIsChargedLessAndAllocatedOnConfirm() {
+        SharedGroupOrder order = order(NOW);
+        givenOrder(order);
+        given(paymentClient.findPayment(any(), any(), any())).willReturn(Optional.empty());
+        given(paymentClient.charge(PaymentOrderType.SHARED_GROUP, ORDER_ID, CREATOR, 15001L))
+                .willReturn(paid(501L, 15001L, NOW.plusMinutes(1)));
+        given(paymentClient.charge(PaymentOrderType.SHARED_GROUP, ORDER_ID, MEMBER, 10_000L))
+                .willReturn(paid(502L, 10_000L, NOW.plusMinutes(2)));
+
+        useCase.pay(ORDER_ID, CREATOR, ADDRESS, NOW.plusMinutes(1));
+        useCase.pay(ORDER_ID, MEMBER, null, MEMBER_COUPON, NOW.plusMinutes(2));
+
+        assertThat(order.getParticipant(MEMBER).payAmount()).isEqualTo(10_000L);
+        assertThat(order.getParticipant(MEMBER).getMemberCouponId()).isEqualTo(9L);
+        ArgumentCaptor<SharedGroupOrderConfirmedEvent> captor = ArgumentCaptor.forClass(SharedGroupOrderConfirmedEvent.class);
+        then(eventPublisher).should().publish(captor.capture());
+        assertThat(captor.getValue().items()).extracting(SharedGroupOrderConfirmedEvent.Item::platformDiscountAmount)
+                .containsExactly(1_666L, 3_334L);
+    }
+
+    @Test
+    @DisplayName("쿠폰 할인을 뺀 금액과 실제 차감액이 다르면 반영하지 않고 차감을 되돌린다")
+    void couponAmountMismatchCompensates() {
+        SharedGroupOrder order = order(NOW);
+        order.markStockReserved();
+        givenOrderForUpdate(order);
+        given(paymentClient.findPayment(PaymentOrderType.SHARED_GROUP, ORDER_ID, MEMBER))
+                .willReturn(Optional.of(paid(502L, 15_000L, NOW.plusMinutes(1))));
+
+        assertThatThrownBy(() -> useCase.pay(ORDER_ID, MEMBER, null, MEMBER_COUPON, NOW.plusMinutes(2)))
+                .hasMessageContaining(OrderErrorCode.ORDER_PAYMENT_AMOUNT_MISMATCH.getMsg());
+        then(paymentClient).should().compensateCharge(PaymentOrderType.SHARED_GROUP, ORDER_ID, MEMBER);
+        assertThat(order.getParticipant(MEMBER).isPaid()).isFalse();
+    }
+
+    @Test
+    @DisplayName("확정 뒤 판매자 항목을 취소하면 항목 금액에서 그 항목의 쿠폰 할인 몫을 뺀 금액(참여자들이 실제로 낸 몫)을 환불한다")
+    void sellerItemCancelRefundsNetAmount() {
+        SharedGroupOrder order = order(NOW);
+        givenOrder(order);
+        given(paymentClient.findPayment(any(), any(), any())).willReturn(Optional.empty());
+        given(paymentClient.charge(any(), any(), any(), anyLong()))
+                .willReturn(paid(501L, 15001L, NOW.plusMinutes(1)), paid(502L, 10_000L, NOW.plusMinutes(2)));
+        useCase.pay(ORDER_ID, CREATOR, ADDRESS, NOW.plusMinutes(1));
+        useCase.pay(ORDER_ID, MEMBER, null, MEMBER_COUPON, NOW.plusMinutes(2));
+
+        long refund = order.cancelSellerItems(8L, com.cartmate.cartmate.shared.delivery.DeliveryCancelReason.SALES_STOPPED,
+                NOW.plusDays(1));
+
+        assertThat(refund).isEqualTo(20_000L - 3_334L);
+    }
+
+    @Test
+    @DisplayName("공동 주문이 취소되면 결제한 참여자와 결제 도중 쿠폰을 기록한 참여자의 쿠폰을 한 번만 돌려준다")
+    void canceledOrderReturnsParticipantCouponsOnce() {
+        SharedGroupOrder order = order(NOW);
+        order.recordParticipantCoupon(MEMBER, 9L);
+        order.recordParticipantCoupon(CREATOR, 8L);
+        order.cancelByCreator(CREATOR, NOW.plusMinutes(1));
+
+        assertThat(order.takeRestorableCoupons()).containsExactly(
+                new SharedGroupOrder.ParticipantCoupon(CREATOR, 8L), new SharedGroupOrder.ParticipantCoupon(MEMBER, 9L));
+        assertThat(order.takeRestorableCoupons()).isEmpty();
     }
 
     private static List<OrderProductInfo> allOnSale(Collection<Long> inventoryIds) {

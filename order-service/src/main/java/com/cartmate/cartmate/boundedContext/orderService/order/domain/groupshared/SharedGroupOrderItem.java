@@ -68,6 +68,24 @@ public class SharedGroupOrderItem {
         return unitPrice * quantity;
     }
 
+    // 참여자들이 쓴 플랫폼 쿠폰 할인 중 이 줄의 몫. 공동 주문이 확정될 때 한 번 정한다(정산·취소 환불이 쓴다).
+    // 쿠폰을 아무도 안 썼거나 이 컬럼이 생기기 전에 확정된 주문은 null이고 0으로 본다
+    @Column(name = "platform_discount_amount")
+    private Long platformDiscountAmount;
+
+    void assignPlatformDiscount(long discount) {
+        this.platformDiscountAmount = discount;
+    }
+
+    public long platformDiscountOrZero() {
+        return platformDiscountAmount == null ? 0 : platformDiscountAmount;
+    }
+
+    // 이 줄을 취소할 때 돌려줄 금액(참여자들이 실제로 낸 몫)
+    public long netAmount() {
+        return amount() - platformDiscountOrZero();
+    }
+
     private LocalDateTime canceledAt;
 
     @Enumerated(EnumType.STRING)
