@@ -55,9 +55,11 @@ public class DeliveryConfirmedEventPublisher {
                         DeliveryClaimItemRepository.ClaimedQuantity::getQuantity));
     }
 
-    // 배송 수량에서 환불된 수량을 뺀 값으로 이벤트 상품을 만든다.
+    // 배송 수량에서 환불된 수량을 뺀 값으로 이벤트 상품을 만든다. 쿠폰 할인도 남은 수량만큼으로 줄여 보낸다.
     private DeliveryConfirmedEvent.Item toItem(DeliveryItem item, long refundedQuantity) {
+        long quantity = item.getQuantity() - refundedQuantity;
         return new DeliveryConfirmedEvent.Item(
-                item.getOrderItemId(), item.getProductName(), item.getUnitPrice(), item.getQuantity() - refundedQuantity);
+                item.getOrderItemId(), item.getProductName(), item.getUnitPrice(), quantity,
+                item.sellerDiscountFor(quantity), item.platformDiscountFor(quantity));
     }
 }

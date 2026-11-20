@@ -23,8 +23,14 @@ public record DeliveryCreateCommand(
             String productName,
             Long unitPrice,     // 옵션 가격이 반영된 최종 단가
             Long quantity,
-            List<Option> options
-    ) {}
+            List<Option> options,
+            Long sellerDiscountAmount,   // 이 상품 줄의 판매자 부담 쿠폰 할인(줄 전체 수량 기준). 없으면 null
+            Long platformDiscountAmount  // 이 상품 줄의 플랫폼 부담 쿠폰 할인(줄 전체 수량 기준). 없으면 null
+    ) {
+        public Item(Long orderItemId, String productName, Long unitPrice, Long quantity, List<Option> options) {
+            this(orderItemId, productName, unitPrice, quantity, options, null, null);
+        }
+    }
 
     public record Option(
             String optionName,

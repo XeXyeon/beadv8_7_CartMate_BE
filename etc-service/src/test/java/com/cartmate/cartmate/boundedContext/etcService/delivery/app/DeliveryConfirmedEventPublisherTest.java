@@ -80,4 +80,32 @@ class DeliveryConfirmedEventPublisherTest {
                 .extracting(DeliveryConfirmedEvent.Item::orderItemId, DeliveryConfirmedEvent.Item::quantity)
                 .containsExactly(tuple(11L, 1L), tuple(12L, 1L));
     }
+
+    @Test
+    @DisplayName("쿠폰 할인은 남은 수량 비율만큼(원 미만 버림) 보낸다 (사과 3개 할인 1000원 중 2개 반품 → 333원)")
+    void publish_prorationsCouponDiscountByRemainingQuantity() {
+        Delivery delivery = Delivery.create(7L, 1007L, 100L, "O-100", PurchaseType.INDIVIDUAL_GROUP,
+                "수령인", "010", "00000", "서울", "101호", "key-1", "hash");
+        ReflectionTestUtils.setField(delivery, "id", 1L);
+        DeliveryItem apple = DeliveryItem.create(delivery, 11L, "사과", 1000L, 3L, 1000L, null);
+        ReflectionTestUtils.setField(apple, "id", 501L);
+        DeliveryItem pear = DeliveryItem.create(delivery, 12L, "배", 2000L, 1L, null, 700L);
+        ReflectionTestUtils.setField(pear, "id", 502L);
+        DeliveryClaimItemRepository.ClaimedQuantity returnedApples = mock(DeliveryClaimItemRepository.ClaimedQuantity.class);
+        when(returnedApples.getDeliveryItemId()).thenReturn(501L);
+        when(returnedApples.getQuantity()).thenReturn(2L);
+        when(deliveryItemRepository.findByDeliveryId(1L)).thenReturn(List.of(apple, pear));
+        when(claimItemRepository.sumQuantityByDeliveryItem(1L, ClaimType.REFUND, ClaimStatus.COMPLETED, ClaimItemResult.APPROVED))
+                .thenReturn(List.of(returnedApples));
+
+        publisher.publish(delivery);
+
+        ArgumentCaptor<DeliveryConfirmedEvent> event = ArgumentCaptor.forClass(DeliveryConfirmedEvent.class);
+        verify(eventPublisher).publish(event.capture());
+        assertThat(event.getValue().items())
+                .extracting(DeliveryConfirmedEvent.Item::orderItemId,
+                        DeliveryConfirmedEvent.Item::sellerDiscountAmount,
+                        DeliveryConfirmedEvent.Item::platformDiscountAmount)
+                .containsExactly(tuple(11L, 333L, 0L), tuple(12L, 0L, 700L));
+    }
 }

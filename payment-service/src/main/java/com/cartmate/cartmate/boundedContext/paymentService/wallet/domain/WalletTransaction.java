@@ -89,7 +89,7 @@ public class WalletTransaction {
             throw new ServiceException(WalletErrorCode.WALLET_INVALID_AMOUNT);
         }
 
-        if (balanceAfter == null || balanceAfter < 0) {
+        if (balanceAfter == null || (balanceAfter < 0 && !type.allowsNegativeBalance())) {
             throw new ServiceException(WalletErrorCode.WALLET_INVALID_BALANCE_AFTER);
         }
 
