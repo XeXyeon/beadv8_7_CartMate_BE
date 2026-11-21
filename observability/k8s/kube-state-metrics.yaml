@@ -1,0 +1,99 @@
+# kube-state-metrics 1개 (서버1): 쿠버네티스 상태(Pod 재시작 횟수 · 마지막 종료 이유 · Pod 상태 · Deployment 개수)를
+# 메트릭으로 내준다. Alloy가 kube-state-metrics.monitoring.svc:8080을 60초마다 가져간다(config.alloy의 kube_state_metrics)
+#
+# - 보는 대상은 Pod · Deployment · StatefulSet · Node만 (--resources). 나머지는 만들지 않아 메모리 · 시계열을 아낀다
+# - Grafana Cloud로 보내는 지표는 config.alloy의 METRICS_KEEP_REGEX에서 한 번 더 고른다
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kube-state-metrics
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cartmate-kube-state-metrics
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "nodes"]
+    verbs: ["list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets"]
+    verbs: ["list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cartmate-kube-state-metrics
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cartmate-kube-state-metrics
+subjects:
+  - kind: ServiceAccount
+    name: kube-state-metrics
+    namespace: monitoring
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kube-state-metrics
+  labels:
+    app: kube-state-metrics
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kube-state-metrics
+  template:
+    metadata:
+      labels:
+        app: kube-state-metrics
+    spec:
+      serviceAccountName: kube-state-metrics
+      # 서버1에 둔다 (agent 노드는 메모리 보장량 여유가 없다)
+      nodeSelector:
+        cartmate/node: server
+      containers:
+        - name: kube-state-metrics
+          image: registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.15.0
+          args:
+            - --port=8080
+            - --telemetry-port=8081
+            - --resources=pods,deployments,statefulsets,nodes
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8081
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: 8081
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kube-state-metrics
+spec:
+  type: ClusterIP
+  selector:
+    app: kube-state-metrics
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
