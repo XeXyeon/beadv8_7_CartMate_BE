@@ -6,6 +6,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.apache.catalina.connector.Connector;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.tomcat.servlet.TomcatServletWebServerFactory;
 import org.springframework.boot.web.server.WebServerFactoryCustomizer;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
@@ -18,9 +19,10 @@ import java.io.IOException;
 import java.util.function.IntSupplier;
 
 /**
- * 판매글 → 상품 내부 요청 전용 포트.
+ * 판매글 → 상품 내부 요청 전용 포트. product.client=http일 때만 켠다.
  *
- * 판매글과 상품은 한 서버(product-service)에 있지만, 나중에 서버를 나눌 수 있게 HTTP로 통신한다(SalesPostApiClient).
+ * 기본(product.client=local)은 판매글이 상품을 같은 서버 안에서 직접 부르므로(LocalSalesPostProductClient) 이 포트가 필요 없다.
+ * http로 바꾸면 판매글이 같은 서버의 상품 API를 HTTP로 부른다(SalesPostApiClient).
  * 내부 요청이 바깥 요청과 같은 포트로 들어오면 같은 Tomcat 스레드 풀을 쓴다. 그러면 판매글 상세 요청이 스레드를
  * 모두 쓰고 각자 내부 요청의 응답을 기다릴 때, 내부 요청을 처리할 스레드가 없어 교착상태가 된다.
  * 그래서 같은 Tomcat에 커넥터를 하나 더 붙여, 내부 요청은 그 커넥터의 스레드 풀로 처리한다.
@@ -28,9 +30,10 @@ import java.util.function.IntSupplier;
  * - 추가 커넥터도 기존 커넥터와 같은 애플리케이션(DispatcherServlet)으로 요청을 넘긴다. 컨트롤러는 그대로다.
  * - 이 포트로는 판매글이 부르는 상품 API(/api/products, /api/products/**)만 받는다. 바깥 API를 우회해 부르지 못하게.
  * - 이 포트는 Pod 안(localhost)에서만 쓴다. 쿠버네티스 Service에 열지 않는다.
- * - 서버를 나누면 product.global.internalUrl을 상품 서버 주소로 바꾸고, 이 설정은 지운다.
+ * - 서버 분리 시: 판매글이 다른 서버의 상품 API를 부르게 되면(PRODUCT_URL = 상품 서버 주소) 자기 호출이 없어져 이 설정은 지운다.
  */
 @Configuration
+@ConditionalOnProperty(name = "product.client", havingValue = "http")
 public class ProductInternalServerConfig {
 
     static final String ALLOWED_PATH = "/api/products";

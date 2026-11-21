@@ -1,7 +1,7 @@
 package com.cartmate.cartmate.boundedContext.productService.post.app;
 
 import com.cartmate.cartmate.boundedContext.productService.post.dto.SalesPostDetailInventories;
-import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostApiClient;
+import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductClient;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,7 +42,7 @@ class SalesPostDetailCacheDownTest {
     @Autowired
     SalesPostDetailInventoryLoader loader;
     @MockitoSpyBean
-    SalesPostApiClient salesPostApiClient;
+    SalesPostProductClient salesPostApiClient;
 
     @Test
     @DisplayName("Redis 장애: 오류 없이 매번 상품 서버에서 가져오고, 0.5초 제한으로 오래 붙잡히지 않는다")

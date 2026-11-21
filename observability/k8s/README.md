@@ -4,12 +4,23 @@
 [k3s 클러스터 · monitoring 네임스페이스]
   앱 Pod 로그(stdout JSON) ──(쿠버네티스 API)──▶ Alloy ──▶ Grafana Cloud Loki      로그
   앱 trace(OTLP :4318) ─────────────────────────▶ Alloy ──▶ Grafana Cloud Tempo     trace (오류 · 느린 trace 100%)
-  kubelet · kube-state-metrics · kafka-exporter · MySQL 6 · Redis 2 · ES ─▶ Alloy ──▶ Grafana Cloud Prometheus
-  Kafka UI (로그인 + 읽기 전용, port-forward로만)
+  kubelet · kube-state-metrics · MySQL 5 · Redis 2 · ES ─▶ Alloy ──▶ Grafana Cloud Prometheus
 [외부] Grafana Cloud(화면 · 알림) · Sentry(예외)
 ```
 
 로컬 개발 · 시연용 스택은 `observability/README.md` (docker compose). 로그 처리 규칙(라벨 · 필터)은 두 곳이 같다.
+
+## 0. 지금 설치하는 것 (2026-11-21)
+
+| 설치 | 메모리 (보장 / 상한) | 노드 |
+|---|---|---|
+| Alloy | 192Mi / 256Mi | server (`cartmate/node=server`) |
+| kube-state-metrics (`kube-state-metrics.yaml`) | 32Mi / 64Mi | server |
+| ~~Kafka UI · kafka-exporter~~ | (384Mi · 32Mi) | 서버 메모리가 빠듯해 빼 둠. 쓰려면 `kustomization.yaml` 주석 해제 + 7절 Secret |
+
+- agent 노드는 메모리 보장량이 약 89%라 두지 않는다. server 노드는 etc 이동 후 약 65%
+- ai-service를 배포하지 않아 MySQL 지표는 5개(product · order · member · payment · etc)만 수집한다
+- 아래 1절은 처음 계획(Kafka UI 포함) 기준이다
 
 ## 1. 서버 계획 대비 메모리 (limit 기준)
 
@@ -45,7 +56,7 @@
 
 팀 프로젝트(Spring Boot)를 만들고 DSN을 받는다 → 앱 환경 변수 `SENTRY_DSN`
 
-### MySQL 6개에 지표용 계정 (각 DB)
+### MySQL 5개에 지표용 계정 (각 DB: product · order · member · payment · etc)
 
 ```sql
 CREATE USER 'exporter'@'%' IDENTIFIED BY '<비밀번호>' WITH MAX_USER_CONNECTIONS 2;
@@ -54,12 +65,12 @@ GRANT PROCESS, REPLICATION CLIENT, SELECT ON *.* TO 'exporter'@'%';
 
 ### kube-state-metrics
 
-서버 계획대로 따로 설치해 둔다 (기본 주소 `kube-state-metrics.monitoring.svc:8080`, 다르면 `KSM_ADDR`)
+`kube-state-metrics.yaml`로 Alloy와 같이 설치된다(`kubectl apply -k`). 주소는 `kube-state-metrics.monitoring.svc:8080`(다르면 `KSM_ADDR`)
 
 ## 3. 배포
 
 ```bash
-# Secret 3개 (값은 파일 · 저장소에 남기지 않는다)
+# Secret 2개 (값은 파일 · 저장소에 남기지 않는다)
 kubectl create namespace monitoring
 kubectl -n monitoring create secret generic alloy-grafana-cloud \
   --from-literal=GC_TOKEN=... \
@@ -69,26 +80,27 @@ kubectl -n monitoring create secret generic alloy-grafana-cloud \
 kubectl -n monitoring create secret generic alloy-targets \
   --from-literal=MYSQL_PRODUCT_DSN='exporter:<비번>@(mysql-product.cartmate.svc:3306)/' \
   --from-literal=MYSQL_ORDER_DSN=... --from-literal=MYSQL_MEMBER_DSN=... --from-literal=MYSQL_PAYMENT_DSN=... \
-  --from-literal=MYSQL_ETC_DSN=... --from-literal=MYSQL_AI_DSN=... \
+  --from-literal=MYSQL_ETC_DSN=... \
   --from-literal=REDIS_CACHE_ADDR=redis-cache.cartmate.svc:6379 --from-literal=REDIS_CORE_ADDR=redis-core.cartmate.svc:6379 \
   --from-literal=REDIS_PASSWORD=... --from-literal=ES_URL='http://elastic:<비번>@elasticsearch.cartmate.svc:9200'
-kubectl -n monitoring create secret generic kafka-ui-auth \
-  --from-literal=KAFKA_BOOTSTRAP=cartmate-kafka-bootstrap.cartmate.svc:9092 \
-  --from-literal=USERNAME=admin --from-literal=PASSWORD=...
+#   REDIS_PASSWORD: 앱과 같은 cartmate-app-secret의 REDIS_PASSWORD (redis-cache · redis-core 같은 값)
 
-# (서버1에 고정하려면) alloy.yaml · kafka-ui.yaml의 nodeSelector 주석 해제
-#   서버1(k3s server 노드)에는 앱 배포 때 cartmate/node=server 라벨을 붙인다 (k8s/infra/kustomization.yaml 참고)
-#   붙어 있는지 확인: kubectl get nodes -L cartmate/node
+# Alloy · kube-state-metrics는 server 노드에 고정된다(nodeSelector). 라벨이 붙어 있는지 확인
+kubectl get nodes -L cartmate/node
 
 kubectl apply -k observability/k8s
-kubectl -n monitoring get pods          # alloy · kafka-ui · kafka-exporter Running
+kubectl -n monitoring get pods -o wide  # alloy · kube-state-metrics Running, NODE가 server 노드
+
+# 앱이 trace를 Alloy로 보내게 다시 띄운다 (k8s/config.yaml의 OTEL_EXPORTER_OTLP_TRACES_ENDPOINT 반영)
+kubectl apply -f k8s/config.yaml
+kubectl -n cartmate rollout restart deploy
 ```
 
 - 주소(서비스 이름 · 네임스페이스)는 실제 배포에 맞게 바꾼다. 앱 네임스페이스가 `cartmate`가 아니면 `alloy.yaml`의 `APP_NAMESPACES`
 - Elasticsearch는 비밀번호 인증이 켜져 있어서(`k8s/infra/elasticsearch.yaml`) `ES_URL`에 계정을 넣는다. 지표 조회만 하므로 `elastic` 대신 `monitor` 권한만 있는 계정을 만들어 쓰는 게 안전하다
-- ai-service는 아직 배포하지 않아 `MYSQL_AI_DSN`은 접속에 실패한다(ai MySQL 지표만 비고 나머지 수집에는 영향 없음)
 - Alloy 설정만 바꿀 땐 `observability/k8s/alloy/config.alloy` 수정 후 `kubectl apply -k observability/k8s` (ConfigMap 이름이 바뀌어 자동 재시작)
-- Kafka가 죽어 있어도 Alloy는 뜬다 (Kafka 지표만 kafka-exporter가 따로 실패). MySQL · Redis · ES는 조회할 때만 접속
+- MySQL · Redis · ES는 조회할 때만 접속한다. 접속에 실패해도 그 지표만 비고 Alloy는 뜬다
+- Alloy를 내리면 `k8s/config.yaml`의 `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`를 다시 주석 처리하고 앱을 다시 띄운다(받는 곳 없이 보내면 CPU · 메모리 낭비)
 
 ## 4. 앱 배포 설정 (kim san님 매니페스트)
 
@@ -139,7 +151,16 @@ kubectl -n monitoring set env deploy/alloy OBS_TRACE_SAMPLE_PERCENT=10 OBS_SLOW_
 
 무료 한도(로그 · trace 각 50GB/월, 메트릭 1만 시계열)와 실측치는 `observability/README.md` 5절. 사용량은 Grafana Cloud → Usage에서 확인. 넘어도 과금은 없고 수집만 막힌다.
 
-## 7. Kafka UI
+## 7. Kafka UI (지금은 설치하지 않음)
+
+쓰려면 `kustomization.yaml`의 `kafka-exporter.yaml` · `kafka-ui.yaml` 주석과 `alloy/config.alloy`의 `prometheus.scrape "kafka"` 주석을 풀고,
+Secret을 하나 더 만든다(메모리 약 416Mi 추가).
+
+```bash
+kubectl -n monitoring create secret generic kafka-ui-auth \
+  --from-literal=KAFKA_BOOTSTRAP=cartmate-kafka-bootstrap.cartmate.svc:9092 \
+  --from-literal=USERNAME=admin --from-literal=PASSWORD=...
+```
 
 ```bash
 kubectl -n monitoring port-forward svc/kafka-ui 8080:8080   # → http://localhost:8080 (kafka-ui-auth 계정)

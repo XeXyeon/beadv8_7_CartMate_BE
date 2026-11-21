@@ -5,7 +5,7 @@ import com.cartmate.cartmate.boundedContext.productService.post.app.SalesPostDel
 import com.cartmate.cartmate.boundedContext.productService.post.app.SalesPostPurchaseRecordUseCase;
 import com.cartmate.cartmate.boundedContext.productService.post.app.SalesPostSyncProductUseCase;
 import com.cartmate.cartmate.boundedContext.productService.post.app.SalesPostUpdateUseCase;
-import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostApiClient;
+import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductClient;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostMemberClient;
 import com.cartmate.cartmate.boundedContext.productService.product.app.ProductCreateUseCase;
 import com.cartmate.cartmate.boundedContext.productService.product.app.ProductFacade;
@@ -55,7 +55,8 @@ public abstract class ProductServiceTestSupport {
         ProductServiceRedisContainer.start();
     }
 
-    // 바깥 요청 포트. 판매글 → 상품 API 호출(product.global.internalUrl)도 이 포트로 보낸다
+    // 바깥 요청 포트. product.client=http로 돌리는 테스트가 있으면 판매글 → 상품 API 호출(product.global.internalUrl)도 이 포트로 보낸다.
+    // 기본(local)은 직접 호출이라 internalUrl을 읽지 않는다
     protected static final int PORT = freePort();
 
     @DynamicPropertySource
@@ -76,7 +77,7 @@ public abstract class ProductServiceTestSupport {
     // 판매글 상세의 재고 로더(SalesPostDetailInventoryLoader)는 @Cacheable 프록시라 스파이로 두지 않는다.
     // 재고 응답을 정하려면 그 아래의 salesPostApiClient.getProduct()를 정한다
     @MockitoSpyBean
-    protected SalesPostApiClient salesPostApiClient;
+    protected SalesPostProductClient salesPostApiClient;
     @MockitoSpyBean
     protected SalesPostCreateUseCase salesPostCreateUseCase;
     @MockitoSpyBean

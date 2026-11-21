@@ -30,7 +30,7 @@ custom:
 
 product:
   global:
-    internalUrl: ${PRODUCT_URL}   # 같은 서버의 내부 전용 포트: http://localhost:9982 (application.yaml의 product.internal-server)
+    internalUrl: ${PRODUCT_URL}   # product.client=http일 때만 쓴다. 같은 서버면 내부 전용 포트 http://localhost:9982, 서버 분리 시 상품 서버 주소
 
 storage:
   s3:

@@ -46,9 +46,12 @@ spec:
             - secretRef:
                 name: product-service-secret
           env:
-            # 판매글이 상품 API를 부르는 주소. 같은 Pod의 내부 전용 포트(product.internal-server.port, 9982)로 바로 부른다
+            # [product.client=http일 때만 쓴다] 판매글이 상품 API를 HTTP로 부르는 주소.
+            # 지금은 PRODUCT_CLIENT를 넣지 않아 기본값 local(판매글이 같은 서버 안에서 상품을 직접 호출)이라 이 값을 읽지 않는다.
+            # http로 바꾸면 같은 Pod의 내부 전용 포트(product.internal-server.port, 9982)로 부른다.
             # 바깥 요청 포트(8982)와 스레드 풀을 나눠 자기 호출 교착상태를 막는다. 9982는 Service · Ingress에 열지 않는다
             # env가 envFrom(cartmate-app-config의 PRODUCT_URL)보다 우선한다
+            # 서버 분리 시: 아래에 PRODUCT_CLIENT: http를 추가하고, 이 값을 상품 서버 주소로 바꾼다
             - name: PRODUCT_URL
               value: http://localhost:9982
             # 판매글 검색 색인. 같은 네임스페이스의 Elasticsearch(k8s/infra/elasticsearch.yaml)에 elastic 계정으로 붙는다

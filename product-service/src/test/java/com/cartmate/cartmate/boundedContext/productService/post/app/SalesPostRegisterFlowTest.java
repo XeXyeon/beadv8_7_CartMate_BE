@@ -51,11 +51,9 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.reset;
 
 /**
- * 판매글 등록부터 끝까지: post 저장 → 상품 API(실제 HTTP) → product 저장 → post 복제본 동기화 → 동기화 완료 → 판매글 완료 처리.
+ * 판매글 등록부터 끝까지: post 저장 → 상품 등록(직접 호출, product.client=local) → product 저장 → post 복제본 동기화 → 동기화 완료 → 판매글 완료 처리.
  *
- * <p>post는 같은 서버의 상품 API를 HTTP로 부르므로 실제 웹 서버를 띄운다.
- * SalesPostApiClient는 만들어질 때 주소를 정하는데 그때는 랜덤 포트가 아직 없어서, 빈 포트를 미리 골라 서버와 주소에 같이 넣는다.
- * product 쪽 등록 이벤트 · 복제본 동기화 · 동기화 완료는 모두 HTTP 응답 전에 서버 스레드에서 끝나므로 등록 직후 바로 검증한다.
+ * <p>product 쪽 등록 이벤트 · 복제본 동기화 · 동기화 완료는 모두 호출이 돌아오기 전에 끝나므로 등록 직후 바로 검증한다.
  *
  * <p>보상은 등록 실패 이벤트(outbox)로 product에 전달되므로, 보상 테스트는 릴레이를 직접 돌린 뒤 확인한다.
  * product는 상품 삭제가 커밋된 뒤 사진 파일도 지운다. 그래서 DB와 저장소(FakeImageStorage) 모두 비었는지 확인한다.

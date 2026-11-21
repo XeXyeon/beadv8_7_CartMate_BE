@@ -252,7 +252,7 @@ prometheus.scrape "kube_state_metrics" {
   forward_to      = [prometheus.relabel.keep.receiver]
 }
 
-// --- MySQL 6개 (내장 exporter, 접속은 조회 때만)
+// --- MySQL 5개 (내장 exporter, 접속은 조회 때만). ai-service는 배포하지 않아 mysql-ai는 뺐다(배포하면 다시 추가)
 prometheus.exporter.mysql "product" {
   data_source_name = coalesce(sys.env("MYSQL_PRODUCT_DSN"), "exporter@(mysql-product:3306)/")
 }
@@ -268,9 +268,6 @@ prometheus.exporter.mysql "payment" {
 prometheus.exporter.mysql "etc" {
   data_source_name = coalesce(sys.env("MYSQL_ETC_DSN"), "exporter@(mysql-etc:3306)/")
 }
-prometheus.exporter.mysql "ai" {
-  data_source_name = coalesce(sys.env("MYSQL_AI_DSN"), "exporter@(mysql-ai:3306)/")
-}
 
 // --- Redis 2개
 prometheus.exporter.redis "cache" {
@@ -283,13 +280,14 @@ prometheus.exporter.redis "core" {
 }
 
 // --- Kafka (컨슈머 lag): 내장 exporter는 시작할 때 Kafka에 접속해, Kafka가 죽어 있으면 Alloy 전체가 뜨지 않는다
-//     → 별도 kafka-exporter Pod(32Mi, kafka-exporter.yaml)를 조회한다
-prometheus.scrape "kafka" {
-  targets         = [{"__address__" = coalesce(sys.env("KAFKA_EXPORTER_ADDR"), "kafka-exporter.monitoring.svc:9308")}]
-  scrape_interval = "60s"
-  job_name        = "kafka"
-  forward_to      = [prometheus.relabel.keep.receiver]
-}
+//     → 별도 kafka-exporter Pod(32Mi, kafka-exporter.yaml)를 조회한다.
+//     지금은 kafka-exporter를 설치하지 않아(kustomization.yaml) 수집도 꺼 둔다. 설치하면 아래 주석을 푼다
+// prometheus.scrape "kafka" {
+//   targets         = [{"__address__" = coalesce(sys.env("KAFKA_EXPORTER_ADDR"), "kafka-exporter.monitoring.svc:9308")}]
+//   scrape_interval = "60s"
+//   job_name        = "kafka"
+//   forward_to      = [prometheus.relabel.keep.receiver]
+// }
 
 // --- Elasticsearch
 prometheus.exporter.elasticsearch "default" {
@@ -303,7 +301,6 @@ prometheus.scrape "exporters" {
     prometheus.exporter.mysql.member.targets,
     prometheus.exporter.mysql.payment.targets,
     prometheus.exporter.mysql.etc.targets,
-    prometheus.exporter.mysql.ai.targets,
     prometheus.exporter.redis.cache.targets,
     prometheus.exporter.redis.core.targets,
     prometheus.exporter.elasticsearch.default.targets,
@@ -318,7 +315,7 @@ prometheus.relabel "keep" {
   rule {
     source_labels = ["__name__"]
     action        = "keep"
-    regex         = coalesce(sys.env("METRICS_KEEP_REGEX"), "(up|container_memory_working_set_bytes|container_cpu_usage_seconds_total|container_oom_events_total|node_memory_working_set_bytes|node_cpu_usage_seconds_total|kube_pod_container_status_restarts_total|kube_pod_status_phase|kube_pod_container_resource_limits|kube_deployment_status_replicas_available|kube_node_status_condition|mysql_up|mysql_global_status_threads_connected|mysql_global_status_slow_queries|mysql_global_status_questions|mysql_global_variables_max_connections|redis_up|redis_memory_used_bytes|redis_memory_max_bytes|redis_connected_clients|redis_evicted_keys_total|kafka_brokers|kafka_consumergroup_lag|kafka_consumergroup_lag_sum|elasticsearch_cluster_health_status|elasticsearch_jvm_memory_used_bytes|elasticsearch_jvm_memory_max_bytes)")
+    regex         = coalesce(sys.env("METRICS_KEEP_REGEX"), "(up|container_memory_working_set_bytes|container_cpu_usage_seconds_total|container_oom_events_total|node_memory_working_set_bytes|node_cpu_usage_seconds_total|kube_pod_container_status_restarts_total|kube_pod_container_status_last_terminated_reason|kube_pod_status_phase|kube_pod_container_resource_limits|kube_deployment_status_replicas_available|kube_node_status_condition|mysql_up|mysql_global_status_threads_connected|mysql_global_status_slow_queries|mysql_global_status_questions|mysql_global_variables_max_connections|redis_up|redis_memory_used_bytes|redis_memory_max_bytes|redis_connected_clients|redis_evicted_keys_total|kafka_brokers|kafka_consumergroup_lag|kafka_consumergroup_lag_sum|elasticsearch_cluster_health_status|elasticsearch_jvm_memory_used_bytes|elasticsearch_jvm_memory_max_bytes)")
   }
   // 이름 없는 컨테이너(Pod 합계) · 빈 컨테이너 줄 제거로 시계열 절약
   rule {
