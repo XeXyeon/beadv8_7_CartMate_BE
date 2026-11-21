@@ -68,10 +68,12 @@ spec:
               path: /readyz
               port: 8081
             periodSeconds: 10
+          # /livez는 메트릭 포트(8080), /readyz는 telemetry 포트(8081)에서 응답한다 (공식 매니페스트와 같음)
           livenessProbe:
             httpGet:
               path: /livez
-              port: 8081
+              port: 8080
+            initialDelaySeconds: 10
             periodSeconds: 30
           resources:
             requests:
