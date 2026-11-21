@@ -39,6 +39,11 @@ custom:
     toss:
       base-url: https://api.tosspayments.com
       secret-key: ${TOSS_SECRET_KEY:} # 결제위젯 연동 키의 시크릿 키. 저장소에는 비워 두고 환경 변수 TOSS_SECRET_KEY로 넣는다
+    withdraw:
+      # 예치금 출금 이체 방식. fake: 바로 끝남(실제 송금 없음, 로컬·시연) / manual: 관리자가 직접 송금하고 완료 처리 (운영)
+      transfer-mode: ${WALLET_TRANSFER_MODE:fake}
+      # 출금 건에 보관하는 계좌번호 암호화 키 (Base64 32바이트). 운영은 환경 변수 WALLET_ACCOUNT_ENCRYPTION_KEY 필수
+      account-encryption-key: ${WALLET_ACCOUNT_ENCRYPTION_KEY:Y2FydG1hdGUtbG9jYWwtd2FsbGV0LWFjY3Qta2V5ISE=}
   openbanking:
     mode: ${OPENBANKING_MODE:fake} # 승인 전에는 fake(실제 계좌 검증 없음). live 구현체는 이용기관 승인 후 추가한다
     client-id: ${OPENBANKING_CLIENT_ID:} # 저장소에는 비워 두고 환경 변수로 넣는다. live일 때만 필요하다

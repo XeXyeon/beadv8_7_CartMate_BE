@@ -22,6 +22,16 @@ import jakarta.validation.Valid;
 
 import java.util.List;
 
+/**
+ * 상품 API.
+ *
+ * <p>등록(POST) · 수정(PATCH) · 복구(/restore) · 수정 끝(/update-complete) · 상태 변경(/status)은 판매글만 부르는 API다.
+ * 기본(product.client=local)에서는 판매글이 ProductFacade를 직접 불러 이 API들을 쓰지 않는다.
+ * product.client=http(서버 분리 시)일 때 SalesPostApiClient가 부른다.
+ *
+ * <p>서버 분리 시: 이 API들은 지금 로그인 없이 열려 있다(/api/products/**). 분리해서 판매글이 HTTP로 부르기 전에
+ * 내부 호출 키(/internal/** 방식) 등으로 외부에서 부르지 못하게 막아야 한다.
+ */
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/products")

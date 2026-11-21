@@ -199,7 +199,7 @@ class InventoryReservationEventTest extends ProductServiceTestSupport {
 
     private OrderPaidEvent paid() {
         return new OrderPaidEvent(ORDER_ID, "ORD-15", 1L, ORDER, null, LocalDateTime.now(),
-                new DeliveryAddressInfo("구매자", "010-0000-0000", "12345", "주소", "상세"), List.of());
+                new DeliveryAddressInfo("구매자", "010-0000-0000", "12345", "주소", "상세"), List.of(), false);
     }
 
     private OrderCanceledEvent canceled(boolean paid) {

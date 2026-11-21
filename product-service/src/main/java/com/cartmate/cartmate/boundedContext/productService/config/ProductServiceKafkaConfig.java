@@ -11,6 +11,7 @@ import com.cartmate.cartmate.shared.member.event.MemberWithdrawalRequestedEvent;
 import com.cartmate.cartmate.shared.member.event.SellerRegisteredEvent;
 import com.cartmate.cartmate.shared.trust.event.SellerTrustScoreChangedEvent;
 import com.cartmate.cartmate.shared.order.event.OrderCanceledEvent;
+import com.cartmate.cartmate.shared.order.event.OrderCouponRestoreRequestedEvent;
 import com.cartmate.cartmate.shared.order.event.OrderCreatedEvent;
 import com.cartmate.cartmate.shared.order.event.OrderPaidEvent;
 import com.cartmate.cartmate.shared.order.event.OrderSellerItemsCanceledEvent;
@@ -60,6 +61,12 @@ public class ProductServiceKafkaConfig {
     @Bean
     public InboundEventBinding orderSellerItemsCanceledBinding() {
         return binding(OrderSellerItemsCanceledEvent.class);
+    }
+
+    // 주문에 쓴 쿠폰 복구 요청 → 쿠폰 보유로 돌림 (CouponOrderEventConsumer, 멱등)
+    @Bean
+    public InboundEventBinding orderCouponRestoreRequestedBinding() {
+        return binding(OrderCouponRestoreRequestedEvent.class);
     }
 
     @Bean

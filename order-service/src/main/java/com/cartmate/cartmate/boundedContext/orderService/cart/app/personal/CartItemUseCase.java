@@ -56,7 +56,11 @@ class CartItemUseCase {
                 .ifPresent(Cart::clear);
     }
 
+    // 바로구매는 장바구니와 무관하므로 정리하지 않는다. 장바구니 주문 · 개인물품 공동구매 주문은 산 만큼 뺀다
     void removeOrderedItems(OrderPaidEvent event) {
+        if (event.directOrder()) {
+            return;
+        }
         Map<Long, Integer> orderedQuantities = event.items().stream()
                 .collect(Collectors.toMap(
                         OrderPaidEvent.Item::inventoryId,

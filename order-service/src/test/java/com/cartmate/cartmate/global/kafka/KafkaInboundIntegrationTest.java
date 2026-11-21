@@ -157,7 +157,7 @@ class KafkaInboundIntegrationTest {
         long orderId = nextId();
         OrderPaidEvent event = new OrderPaidEvent(orderId, "ORD-" + orderId, memberId, OrderType.PERSONAL, null,
                 LocalDateTime.now().truncatedTo(ChronoUnit.SECONDS), null,
-                List.of(new OrderPaidEvent.Item(nextId(), nextId(), inventoryId, nextId(), "상품", "옵션", quantity, 1_000L)));
+                List.of(new OrderPaidEvent.Item(nextId(), nextId(), inventoryId, nextId(), "상품", "옵션", quantity, 1_000L)), false);
         return envelope(eventId, OrderPaidEvent.class.getSimpleName(), ORDER_PAID, event.aggregateType(),
                 event.aggregateId(), objectMapper.writeValueAsString(event));
     }

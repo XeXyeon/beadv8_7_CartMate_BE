@@ -39,7 +39,8 @@ public class DeliveryOrderEventListener {
                 "ORDER-PAID-" + event.orderId() + "-" + sellerId,
                 items.stream()
                         .map(item -> toItem(item.orderItemId(), item.productName(),
-                                item.optionName(), item.unitPrice(), item.quantity()))
+                                item.optionName(), item.unitPrice(), item.quantity(),
+                                item.sellerDiscountAmount(), item.platformDiscountAmount()))
                         .toList()
         )));
     }
@@ -73,7 +74,7 @@ public class DeliveryOrderEventListener {
                 "SHARED-GROUP-ORDER-" + event.sharedGroupOrderId() + "-" + sellerId,
                 items.stream()
                         .map(item -> toItem(item.orderItemId(), item.productName(),
-                                item.optionName(), item.unitPrice(), item.quantity()))
+                                item.optionName(), item.unitPrice(), item.quantity(), null, item.platformDiscountAmount()))
                         .toList()
         )));
     }
@@ -84,11 +85,13 @@ public class DeliveryOrderEventListener {
     }
 
     private DeliveryCreateCommand.Item toItem(Long orderItemId, String productName, String optionName,
-                                              long unitPrice, int quantity) {
+                                              long unitPrice, int quantity,
+                                              Long sellerDiscountAmount, Long platformDiscountAmount) {
         List<DeliveryCreateCommand.Option> options = (optionName == null || optionName.isBlank())
                 ? List.of()
                 : List.of(new DeliveryCreateCommand.Option("옵션", optionName));
-        return new DeliveryCreateCommand.Item(orderItemId, productName, unitPrice, (long) quantity, options);
+        return new DeliveryCreateCommand.Item(orderItemId, productName, unitPrice, (long) quantity, options,
+                sellerDiscountAmount, platformDiscountAmount);
     }
 
     // 상세주소는 주문에서 선택 입력이지만 배송은 null을 허용하지 않아 빈 문자열로 바꾼다.

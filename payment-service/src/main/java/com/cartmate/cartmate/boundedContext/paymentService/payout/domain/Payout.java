@@ -53,8 +53,18 @@ public class Payout {
     @Column(name = "ordered_at")
     private LocalDateTime orderedAt;
 
+    // 판매 금액 = 단가 x 수량 - 판매자 부담 쿠폰 할인. 수수료의 기준이다.
     @Column(name = "sales_amount", nullable = false)
     private Long salesAmount;
+
+    // 판매자 부담 쿠폰 할인(판매 금액에서 이미 뺐다). 이 컬럼이 생기기 전에 만든 정산은 null이고 0으로 본다.
+    @Column(name = "seller_discount_amount")
+    private Long sellerDiscountAmount;
+
+    // 판매 금액 중 플랫폼 부담 쿠폰 할인. 구매자가 내지 않아 홀딩에 없고, 지급 때 플랫폼 지갑이 낸다.
+    // 이 컬럼이 생기기 전에 만든 정산은 null이고 0으로 본다.
+    @Column(name = "platform_discount_amount")
+    private Long platformDiscountAmount;
 
     @Column(name = "fee_amount", nullable = false)
     private Long feeAmount;
@@ -93,17 +103,34 @@ public class Payout {
     public static Payout create(Long sellerId, Long orderId, PayoutPurchaseType purchaseType, Long orderItemId,
                                 String productName, Long quantity, Long salesAmount, LocalDateTime orderedAt,
                                 LocalDateTime confirmedAt) {
+        return create(sellerId, orderId, purchaseType, orderItemId, productName, quantity, salesAmount, 0L, 0L,
+                orderedAt, confirmedAt);
+    }
+
+    // grossAmount는 단가 x 수량(할인 전)이다. 판매자 부담 할인을 빼서 판매 금액을 정하고, 수수료는 그 판매 금액에 매긴다.
+    // 플랫폼 부담 할인은 판매 금액에 그대로 남는다(판매자는 정가로 받고, 할인분은 플랫폼이 낸다).
+    public static Payout create(Long sellerId, Long orderId, PayoutPurchaseType purchaseType, Long orderItemId,
+                                String productName, Long quantity, Long grossAmount, Long sellerDiscountAmount,
+                                Long platformDiscountAmount, LocalDateTime orderedAt, LocalDateTime confirmedAt) {
         if (sellerId == null || orderId == null || purchaseType == null || orderItemId == null
                 || confirmedAt == null) {
             throw new ServiceException(PayoutErrorCode.PAYOUT_REQUIRED_VALUE_MISSING);
         }
 
-        if (salesAmount == null || salesAmount < 0) {
+        long sellerDiscount = sellerDiscountAmount == null ? 0L : sellerDiscountAmount;
+        long platformDiscount = platformDiscountAmount == null ? 0L : platformDiscountAmount;
+
+        if (grossAmount == null || grossAmount < 0 || sellerDiscount < 0 || platformDiscount < 0
+                || sellerDiscount + platformDiscount > grossAmount) {
             throw new ServiceException(PayoutErrorCode.PAYOUT_INVALID_AMOUNT);
         }
 
-        return new Payout(sellerId, orderId, purchaseType, orderItemId, productName, quantity, salesAmount, orderedAt,
-                confirmedAt);
+        return new Payout(sellerId, orderId, purchaseType, orderItemId, productName, quantity,
+                grossAmount - sellerDiscount, sellerDiscount, platformDiscount, orderedAt, confirmedAt);
+    }
+
+    public long platformDiscountOrZero() {
+        return platformDiscountAmount == null ? 0L : platformDiscountAmount;
     }
 
     // 대기 중인 정산을 지급 완료로 바꾸고 지급 시각을 기록한다.
@@ -117,7 +144,8 @@ public class Payout {
     }
 
     private Payout(Long sellerId, Long orderId, PayoutPurchaseType purchaseType, Long orderItemId, String productName,
-                   Long quantity, Long salesAmount, LocalDateTime orderedAt, LocalDateTime confirmedAt) {
+                   Long quantity, Long salesAmount, Long sellerDiscountAmount, Long platformDiscountAmount,
+                   LocalDateTime orderedAt, LocalDateTime confirmedAt) {
         this.sellerId = sellerId;
         this.orderId = orderId;
         this.purchaseType = purchaseType;
@@ -126,6 +154,8 @@ public class Payout {
         this.quantity = quantity;
         this.orderedAt = orderedAt;
         this.salesAmount = salesAmount;
+        this.sellerDiscountAmount = sellerDiscountAmount;
+        this.platformDiscountAmount = platformDiscountAmount;
         this.feeAmount = PayoutPolicy.feeOf(salesAmount);
         this.payoutAmount = salesAmount - this.feeAmount;
         this.confirmedAt = confirmedAt;

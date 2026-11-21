@@ -2,7 +2,7 @@ package com.cartmate.cartmate.boundedContext.productService.post.app;
 
 import com.cartmate.cartmate.boundedContext.productService.post.domain.*;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.*;
-import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostApiClient;
+import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductClient;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostMemberClient;
 import com.cartmate.cartmate.boundedContext.productService.code.SalesPostErrorCode;
 import com.cartmate.cartmate.global.exception.ServiceException;
@@ -53,7 +53,7 @@ public class SalesPostFacade {
     private final SalesPostDeleteUseCase salesPostDeleteUseCase;
     private final TransactionTemplate transactionTemplate;
     private final DomainEventPublisher domainEventPublisher;
-    private final SalesPostApiClient salesPostApiClient;
+    private final SalesPostProductClient salesPostApiClient;
     private final SalesPostSupport salesPostSupport;
     private final AdminSalesPostUseCase adminSalesPostUseCase;
     private final SalesPostHideUseCase salesPostHideUseCase;

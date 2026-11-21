@@ -37,7 +37,9 @@ public class PayoutCreateUseCase {
                 .filter(item -> !existing.contains(item.orderItemId()))
                 .map(item -> Payout.create(
                         event.sellerId(), event.orderId(), purchaseType, item.orderItemId(), item.productName(),
-                        item.quantity(), item.unitPrice() * item.quantity(), event.orderedAt(), event.confirmedAt()))
+                        item.quantity(), item.unitPrice() * item.quantity(),
+                        item.sellerDiscountAmount(), item.platformDiscountAmount(),
+                        event.orderedAt(), event.confirmedAt()))
                 .toList();
 
         payoutRepository.saveAll(payouts);

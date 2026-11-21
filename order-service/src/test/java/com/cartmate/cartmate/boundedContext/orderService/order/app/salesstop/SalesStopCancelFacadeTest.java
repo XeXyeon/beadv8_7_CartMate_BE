@@ -3,7 +3,6 @@ package com.cartmate.cartmate.boundedContext.orderService.order.app.salesstop;
 import com.cartmate.cartmate.shared.delivery.DeliveryCancelReason;
 import com.cartmate.cartmate.boundedContext.orderService.order.app.groupshared.SharedGroupOrderFacade;
 import com.cartmate.cartmate.boundedContext.orderService.order.app.itemcancel.ItemCancelService;
-import com.cartmate.cartmate.boundedContext.orderService.order.domain.itemcancel.CouponMode;
 import com.cartmate.cartmate.boundedContext.orderService.order.domain.salesstop.SalesStopCancelRequest;
 import com.cartmate.cartmate.boundedContext.orderService.order.domain.salesstop.SalesStopCancelRequestStatus;
 import com.cartmate.cartmate.boundedContext.orderService.order.out.salesstop.SalesStopCancelRequestRepository;
@@ -101,7 +100,7 @@ class SalesStopCancelFacadeTest {
         facade.applyResult(result(PurchaseType.INDIVIDUAL_GROUP, SalesStopCancelResult.SELLER_CANCELED, null));
 
         verify(itemCancelService).cancel(PurchaseType.INDIVIDUAL_GROUP, ORDER_ID, SELLER_ID, null,
-                DeliveryCancelReason.SALES_STOPPED, CouponMode.PROPORTIONAL);
+                DeliveryCancelReason.SALES_STOPPED);
         assertThat(request.getStatus()).isEqualTo(SalesStopCancelRequestStatus.CANCELED);
     }
 
@@ -125,7 +124,7 @@ class SalesStopCancelFacadeTest {
         facade.applyResult(result(PurchaseType.SHARED_GROUP, SalesStopCancelResult.SELLER_CANCELED, null));
 
         verify(itemCancelService).cancel(PurchaseType.SHARED_GROUP, ORDER_ID, SELLER_ID, null,
-                DeliveryCancelReason.SALES_STOPPED, CouponMode.PROPORTIONAL);
+                DeliveryCancelReason.SALES_STOPPED);
     }
 
     @Test

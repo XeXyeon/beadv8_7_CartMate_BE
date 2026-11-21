@@ -2,7 +2,6 @@ package com.cartmate.cartmate.boundedContext.orderService.order.app.itemcancel;
 
 import com.cartmate.cartmate.boundedContext.orderService.order.app.groupshared.SharedGroupOrderFacade;
 import com.cartmate.cartmate.boundedContext.orderService.order.app.personal.OrderFacade;
-import com.cartmate.cartmate.boundedContext.orderService.order.domain.itemcancel.CouponMode;
 import com.cartmate.cartmate.shared.delivery.DeliveryCancelReason;
 import com.cartmate.cartmate.shared.delivery.PurchaseType;
 import lombok.RequiredArgsConstructor;
@@ -24,11 +23,11 @@ public class ItemCancelService {
     private final SharedGroupOrderFacade sharedGroupOrderFacade;
 
     public Optional<Long> cancel(PurchaseType purchaseType, Long orderId, Long sellerId, Collection<Long> orderItemIds,
-                                 DeliveryCancelReason reason, CouponMode couponMode) {
+                                 DeliveryCancelReason reason) {
         if (purchaseType == PurchaseType.SHARED_GROUP) {
             return sharedGroupOrderFacade.cancelItems(orderId, sellerId, orderItemIds, reason);
         }
-        return orderFacade.cancelItems(orderId, sellerId, orderItemIds, reason, couponMode);
+        return orderFacade.cancelItems(orderId, sellerId, orderItemIds, reason);
     }
 
     public List<Long> findUncanceledItemIds(PurchaseType purchaseType, Long orderId, Long sellerId) {

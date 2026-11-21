@@ -42,7 +42,7 @@ class AbuseIdentityEventConsumerTest {
     @DisplayName("주문이 결제되면 주문자의 수령인 전화 · 배송지를 식별 정보로 넘긴다")
     void recordsBuyerIdentityOnPaid() {
         consumer.handle(relayed(new OrderPaidEvent(1L, "N-1", 7L, OrderType.PERSONAL, null, AT,
-                new DeliveryAddressInfo("홍길동", "010-1111-2222", "06236", "서울 강남구", "101호"), List.of())));
+                new DeliveryAddressInfo("홍길동", "010-1111-2222", "06236", "서울 강남구", "101호"), List.of(), false)));
 
         then(abuseFacade).should().recordIdentity(
                 new AbuseIdentityCommand(7L, "010-1111-2222", "06236", "서울 강남구", "101호"));
@@ -61,7 +61,7 @@ class AbuseIdentityEventConsumerTest {
     @Test
     @DisplayName("배송지가 없거나 받지 않는 이벤트는 아무 것도 넘기지 않는다")
     void ignoresMissingAddressAndOtherEvents() {
-        consumer.handle(relayed(new OrderPaidEvent(1L, "N-1", 7L, OrderType.PERSONAL, null, AT, null, List.of())));
+        consumer.handle(relayed(new OrderPaidEvent(1L, "N-1", 7L, OrderType.PERSONAL, null, AT, null, List.of(), false)));
         consumer.handle(relayed(mock(DomainEvent.class)));
 
         then(abuseFacade).shouldHaveNoInteractions();

@@ -46,7 +46,7 @@ public class PayoutPayUseCase {
         walletSettlementPort.settleAndDeposit(new SettleAndDepositRequest(
                 payout.getId(), payout.getOrderId(), WalletPurchaseType.valueOf(payout.getPurchaseType().name()),
                 seller.getMemberId(),
-                payout.getSalesAmount(), payout.getPayoutAmount()
+                payout.getSalesAmount(), payout.getPayoutAmount(), payout.platformDiscountOrZero()
         ));
 
         payout.complete(now);

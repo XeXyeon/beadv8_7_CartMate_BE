@@ -136,7 +136,7 @@ class SalesPostPurchaseRecordTest extends ProductServiceTestSupport {
 
     private static OrderPaidEvent orderPaid(Long orderId, OrderPaidEvent.Item... items) {
         return new OrderPaidEvent(orderId, "ORD-" + orderId, BUYER_ID, OrderType.PERSONAL, null, PAID_AT, null,
-                List.of(items));
+                List.of(items), false);
     }
 
     private static OrderPaidEvent.Item item(Long orderItemId, Long productId, String productName, String optionName) {

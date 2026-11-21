@@ -27,6 +27,10 @@ springdoc:
 custom:
   jwt:
     secret: ${JWT_SECRET}
+  wallet:
+    withdraw:
+      transfer-mode: ${WALLET_TRANSFER_MODE:manual} # 이체 계약 전에는 관리자가 직접 송금
+      account-encryption-key: ${WALLET_ACCOUNT_ENCRYPTION_KEY} # 기본값 없음: 빠뜨리면 앱이 시작되지 않는다
 
 product:
   global:

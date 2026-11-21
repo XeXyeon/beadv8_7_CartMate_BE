@@ -1,10 +1,10 @@
 package com.cartmate.cartmate.boundedContext.orderService.order.app.personal;
 
 import com.cartmate.cartmate.shared.delivery.DeliveryCancelReason;
-import com.cartmate.cartmate.boundedContext.orderService.order.domain.itemcancel.CouponMode;
 import com.cartmate.cartmate.shared.coupon.dto.CouponOption;
 import com.cartmate.cartmate.shared.order.OrderStatus;
 import com.cartmate.cartmate.boundedContext.orderService.order.dto.personal.IndividualGroupOrderCreateRequest;
+import com.cartmate.cartmate.boundedContext.orderService.order.dto.personal.DirectOrderCreateRequest;
 import com.cartmate.cartmate.boundedContext.orderService.order.dto.personal.OrderCreateRequest;
 import com.cartmate.cartmate.boundedContext.orderService.order.dto.personal.OrderCreateResponse;
 import com.cartmate.cartmate.boundedContext.orderService.order.dto.personal.OrderDetailResponse;
@@ -49,6 +49,12 @@ public class OrderFacade {
     @Transactional
     public OrderCreateResponse createPersonal(Long memberId, OrderCreateRequest request) {
         return orderCreateUseCase.createPersonal(memberId, request.cartItemIds(),
+                request.deliveryAddress().toDeliveryAddress(), LocalDateTime.now(clock));
+    }
+
+    @Transactional
+    public OrderCreateResponse createDirect(Long memberId, DirectOrderCreateRequest request) {
+        return orderCreateUseCase.createDirect(memberId, request.inventoryId(), request.quantity(),
                 request.deliveryAddress().toDeliveryAddress(), LocalDateTime.now(clock));
     }
 
@@ -125,9 +131,8 @@ public class OrderFacade {
     }
 
     @Transactional(readOnly = true)
-    public OrderReturnPreview previewBuyerReturn(Long memberId, Long orderId, Collection<Long> orderItemIds,
-                                                 boolean sellerFault) {
-        return orderReturnUseCase.previewBuyerReturn(memberId, orderId, orderItemIds, sellerFault);
+    public OrderReturnPreview previewBuyerReturn(Long memberId, Long orderId, Collection<Long> orderItemIds) {
+        return orderReturnUseCase.previewBuyerReturn(memberId, orderId, orderItemIds);
     }
 
     // 반품 접수 검사와 승인된 반품 반영은 Inbox와 함께 커밋되는 트랜잭션에 참여한다.
@@ -174,8 +179,8 @@ public class OrderFacade {
     // 판매글 내림·판매자 사유·구매자 취소 결과를 반영하는 트랜잭션에 참여한다 (Inbox·요청 장부와 함께 커밋).
     @Transactional
     public Optional<Long> cancelItems(Long orderId, Long sellerId, Collection<Long> orderItemIds,
-                                      DeliveryCancelReason reason, CouponMode couponMode) {
-        return orderCancelUseCase.cancelItems(orderId, sellerId, orderItemIds, reason, couponMode);
+                                      DeliveryCancelReason reason) {
+        return orderCancelUseCase.cancelItems(orderId, sellerId, orderItemIds, reason);
     }
 
     @Transactional

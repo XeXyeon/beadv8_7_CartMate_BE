@@ -154,7 +154,7 @@ final class AbuseSimulationScenario {
     private void identity(SimulatedMember member, String phone, String address) {
         DeliveryAddressInfo delivery = new DeliveryAddressInfo("회원" + member.id(), phone, "06236", address, "1호");
         identities.add(new SimulatedAction(new OrderPaidEvent(nextOrderId++, "SIM-" + member.id(), member.id(),
-                OrderType.PERSONAL, null, at(), delivery, List.of()), List.of()));
+                OrderType.PERSONAL, null, at(), delivery, List.of(), false), List.of()));
     }
 
     private SimulatedAction left(long purchaseId, SimulatedMember member) {

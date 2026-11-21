@@ -85,6 +85,16 @@ public class Wallet {
         this.balance += amount;
     }
 
+    // 플랫폼 지갑에서 플랫폼 부담 쿠폰 할인을 낸다. 수수료 수입보다 많을 수 있어 잔액 검사를 하지 않는다(음수 허용).
+    // 플랫폼 지갑에만 쓴다.
+    public void subsidize(Long amount) {
+        if (amount == null || amount <= 0) {
+            throw new ServiceException(WalletErrorCode.WALLET_INVALID_AMOUNT);
+        }
+
+        this.balance -= amount;
+    }
+
     private Wallet(Long memberId) {
         this.memberId = memberId;
         this.balance = 0L;

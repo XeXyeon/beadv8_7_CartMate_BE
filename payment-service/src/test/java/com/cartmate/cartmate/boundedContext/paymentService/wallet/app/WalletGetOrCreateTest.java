@@ -57,6 +57,7 @@ class WalletGetOrCreateTest {
     @MockitoBean WalletChargeUseCase walletChargeUseCase;
     @MockitoBean WalletPaymentUseCase walletPaymentUseCase;
     @MockitoBean WalletWithdrawUseCase walletWithdrawUseCase;
+    @MockitoBean WalletWithdrawQueryUseCase walletWithdrawQueryUseCase;
     @MockitoBean PlatformWalletProvider platformWalletProvider;
 
     @Autowired WalletFacade walletFacade;

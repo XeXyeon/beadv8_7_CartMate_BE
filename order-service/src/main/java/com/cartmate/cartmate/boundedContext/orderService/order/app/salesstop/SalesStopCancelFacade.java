@@ -2,7 +2,6 @@ package com.cartmate.cartmate.boundedContext.orderService.order.app.salesstop;
 
 import com.cartmate.cartmate.boundedContext.orderService.order.app.groupshared.SharedGroupOrderFacade;
 import com.cartmate.cartmate.boundedContext.orderService.order.app.itemcancel.ItemCancelService;
-import com.cartmate.cartmate.boundedContext.orderService.order.domain.itemcancel.CouponMode;
 import com.cartmate.cartmate.boundedContext.orderService.order.domain.salesstop.SalesStopCancelRequest;
 import com.cartmate.cartmate.boundedContext.orderService.order.domain.salesstop.SalesStopCancelRequestStatus;
 import com.cartmate.cartmate.boundedContext.orderService.order.out.salesstop.SalesStopCancelRequestRepository;
@@ -103,9 +102,8 @@ public class SalesStopCancelFacade {
         cancelSeller(event);
     }
 
-    // 판매자 사정이라 구매자 할인을 빼앗지 않도록 할인은 비율대로 나눈다
     private void cancelSeller(DeliverySalesStopCancelResultEvent event) {
         itemCancelService.cancel(event.purchaseType(), event.orderId(), event.sellerId(), null,
-                DeliveryCancelReason.SALES_STOPPED, CouponMode.PROPORTIONAL);
+                DeliveryCancelReason.SALES_STOPPED);
     }
 }

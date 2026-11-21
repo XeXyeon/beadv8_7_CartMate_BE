@@ -44,6 +44,16 @@ public class OrderController {
         return new RsData<>("201-1", "주문을 만들었습니다.", orderFacade.createPersonal(user.memberId(), request));
     }
 
+    // 바로구매: 장바구니를 거치지 않고 상품 하나를 주문한다. 결제해도 장바구니는 바뀌지 않는다
+    @PostMapping("/direct")
+    @ResponseStatus(HttpStatus.CREATED)
+    public RsData<OrderCreateResponse> createDirect(
+            @AuthenticationPrincipal SecurityUser user,
+            @Valid @RequestBody DirectOrderCreateRequest request
+    ) {
+        return new RsData<>("201-1", "주문을 만들었습니다.", orderFacade.createDirect(user.memberId(), request));
+    }
+
     @PostMapping("/individual-group")
     @ResponseStatus(HttpStatus.CREATED)
     public RsData<OrderCreateResponse> createIndividualGroup(
@@ -91,15 +101,16 @@ public class OrderController {
     }
 
     @GetMapping("/{id}/return-preview")
-    @Operation(operationId = "returnPreview", summary = "고른 상품을 반품하면 돌려받을 예상 환불 금액 (판매자 탓 사유면 sellerFault=true)")
+    @Operation(operationId = "returnPreview", summary = "고른 상품을 반품하면 돌려받을 예상 환불 금액 (sellerFault는 더 이상 금액에 영향이 없다 — 쿠폰 할인은 결제 때 상품별로 고정)")
     public RsData<OrderReturnPreviewResponse> returnPreview(
             @AuthenticationPrincipal SecurityUser user,
             @PathVariable Long id,
             @RequestParam List<Long> orderItemIds,
+            // 프론트 호환용으로 받기만 한다
             @RequestParam(defaultValue = "false") boolean sellerFault
     ) {
         return new RsData<>("200-1", "예상 환불 금액 조회 성공했습니다.",
-                OrderReturnPreviewResponse.from(orderFacade.previewBuyerReturn(user.memberId(), id, orderItemIds, sellerFault)));
+                OrderReturnPreviewResponse.from(orderFacade.previewBuyerReturn(user.memberId(), id, orderItemIds)));
     }
 
     @PostMapping("/{orderId}/payment")

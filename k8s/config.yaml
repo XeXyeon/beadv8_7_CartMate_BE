@@ -26,8 +26,8 @@ data:
   KAFKA_ENABLED: "true"
   KAFKA_BOOTSTRAP_SERVERS: cartmate-kafka-bootstrap:9092   # infra/kafka.yaml
 
-  # trace 전송: Alloy(observability/k8s)를 서버에 설치하지 않아서 끈다. 주소가 없으면 앱은 trace를 보내지 않는다(traceId는 로그에 남는다)
-  # 받는 곳 없이 켜 두면 서비스마다 요청 trace를 만들어 보내려다 실패하며 CPU · 메모리를 쓴다(부하 테스트 중 order에서 전송 실패 311번, 2026-11-19)
-  # Alloy를 설치하면 아래 주석을 푼다. 남길 trace는 Alloy가 고르므로 앱은 전부 보낸다 (observability/k8s/README.md 4절)
-  # OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://alloy.monitoring.svc:4318/v1/traces
+  # trace 전송: Alloy(observability/k8s, monitoring 네임스페이스)로 보낸다. 남길 trace는 Alloy가 고르므로 앱은 전부 보낸다 (observability/k8s/README.md 4절)
+  # Alloy를 먼저 띄운 뒤 앱을 다시 띄운다. 받는 곳 없이 켜 두면 보내려다 실패하며 CPU · 메모리를 쓴다(부하 테스트 중 order에서 전송 실패 311번, 2026-11-19)
+  # Alloy를 내리면 이 줄을 다시 주석 처리한다. 주소가 없으면 앱은 trace를 보내지 않는다(traceId는 로그에 남는다)
+  OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://alloy.monitoring.svc:4318/v1/traces
   TRACING_SAMPLING: "1.0"

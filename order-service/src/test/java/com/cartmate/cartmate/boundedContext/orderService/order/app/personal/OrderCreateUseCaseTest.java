@@ -147,6 +147,69 @@ class OrderCreateUseCaseTest {
     }
 
     @Test
+    @DisplayName("바로구매는 장바구니 없이 재고 하나로 주문을 만들고, 바로구매 주문으로 표시한다")
+    void createDirect() {
+        given(orderProductClient.findAllByInventoryIds(anyCollection())).willReturn(List.of(
+                new OrderProductInfo(4L, 2L, 8L, 900L, "축구공", "5호", 25000, null, true, true)));
+        given(orderNumberGenerator.generateUnique(any(), any())).willReturn(ORDER_NUMBER);
+        given(orderRepository.saveAndFlush(any(Order.class))).willAnswer(invocation -> invocation.getArgument(0));
+
+        OrderCreateResponse response = createUseCase.createDirect(MEMBER_ID, 4L, 2, ADDRESS, NOW);
+
+        ArgumentCaptor<Order> captor = ArgumentCaptor.forClass(Order.class);
+        then(orderRepository).should().saveAndFlush(captor.capture());
+        Order order = captor.getValue();
+        assertThat(order.getOrderType()).isEqualTo(OrderType.PERSONAL);
+        assertThat(order.isDirectOrder()).isTrue();
+        assertThat(order.getItems())
+                .extracting(OrderItem::getInventoryId, OrderItem::getQuantity, OrderItem::getUnitPrice)
+                .containsExactly(tuple(4L, 2, 25000L));
+        assertThat(response.totalAmount()).isEqualTo(50000L);
+        then(orderCartClient).shouldHaveNoInteractions();
+        then(eventPublisher).should().publish(any(OrderCreatedEvent.class));
+    }
+
+    @Test
+    @DisplayName("바로구매도 자기 상품이면 주문을 만들지 않는다")
+    void rejectOwnProductInDirect() {
+        given(orderProductClient.findAllByInventoryIds(anyCollection())).willReturn(List.of(
+                new OrderProductInfo(4L, 2L, 8L, MEMBER_ID, "축구공", "5호", 25000, null, true, true)));
+
+        assertThatThrownBy(() -> createUseCase.createDirect(MEMBER_ID, 4L, 1, ADDRESS, NOW))
+                .isInstanceOf(ServiceException.class)
+                .hasMessageContaining(OrderErrorCode.ORDER_OWN_PRODUCT.getMsg());
+        then(orderRepository).should(never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("같은 재고가 든 결제 대기 주문이 있으면 바로구매 주문을 만들지 않는다")
+    void rejectDirectWhenPending() {
+        given(orderRepository.findPendingPersonalOrderIdContaining(MEMBER_ID, List.of(4L))).willReturn(Optional.of(99L));
+
+        assertThatThrownBy(() -> createUseCase.createDirect(MEMBER_ID, 4L, 1, ADDRESS, NOW))
+                .isInstanceOf(ServiceException.class)
+                .hasMessageContaining(OrderErrorCode.ORDER_ALREADY_PENDING.getMsg());
+        then(orderRepository).should(never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("장바구니 주문과 공동구매 주문은 바로구매 주문이 아니다")
+    void cartAndGroupOrdersAreNotDirect() {
+        given(orderCartClient.getCartItemsForOrder(MEMBER_ID, List.of(11L)))
+                .willReturn(List.of(new CartOrderItem(11L, 1L, 1L, 1)));
+        given(orderProductClient.findAllByInventoryIds(anyCollection())).willReturn(List.of(
+                new OrderProductInfo(1L, 1L, 7L, 900L, "축구 유니폼", "M / 레드", 39000, null, true, true)));
+        given(orderNumberGenerator.generateUnique(any(), any())).willReturn(ORDER_NUMBER);
+        given(orderRepository.saveAndFlush(any(Order.class))).willAnswer(invocation -> invocation.getArgument(0));
+
+        createUseCase.createPersonal(MEMBER_ID, List.of(11L), ADDRESS, NOW);
+
+        ArgumentCaptor<Order> captor = ArgumentCaptor.forClass(Order.class);
+        then(orderRepository).should().saveAndFlush(captor.capture());
+        assertThat(captor.getValue().isDirectOrder()).isFalse();
+    }
+
+    @Test
     @DisplayName("공동구매 상품 주문의 결제 기한은 판매 마감이 더 이르면 판매 마감 시각이다")
     void createIndividualGroup() {
         LocalDateTime saleDeadlineAt = NOW.plusMinutes(10);

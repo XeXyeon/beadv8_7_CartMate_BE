@@ -75,7 +75,8 @@ public class DeliveryCreateUseCase {
         for (DeliveryCreateCommand.Item item : items) {
             DeliveryItem deliveryItem = DeliveryItem.create(
                     delivery,
-                    item.orderItemId(), item.productName(), item.unitPrice(), item.quantity()
+                    item.orderItemId(), item.productName(), item.unitPrice(), item.quantity(),
+                    item.sellerDiscountAmount(), item.platformDiscountAmount()
             );
 
             deliveryItemRepository.save(deliveryItem);
