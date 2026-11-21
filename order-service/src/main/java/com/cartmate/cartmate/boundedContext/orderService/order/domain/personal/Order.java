@@ -176,6 +176,13 @@ public class Order {
                 lines, deliveryAddress, now.plus(PAYMENT_PERIOD));
     }
 
+    // 바로구매: 장바구니를 거치지 않는 개인 주문
+    public static Order createDirect(String orderNumber, Long buyerMemberId, OrderLine line,
+                                     DeliveryAddress deliveryAddress, LocalDateTime now) {
+        return new Order(orderNumber, OrderType.PERSONAL, buyerMemberId, null, true,
+                List.of(line), deliveryAddress, now.plus(PAYMENT_PERIOD));
+    }
+
     public static Order createIndividualGroup(String orderNumber, Long buyerMemberId, Long individualGroupPurchaseId,
                                               LocalDateTime saleDeadlineAt, List<OrderLine> lines,
                                               DeliveryAddress deliveryAddress, LocalDateTime now) {

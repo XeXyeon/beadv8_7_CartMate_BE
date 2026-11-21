@@ -4,6 +4,7 @@ import com.cartmate.cartmate.shared.delivery.DeliveryCancelReason;
 import com.cartmate.cartmate.shared.coupon.dto.CouponOption;
 import com.cartmate.cartmate.shared.order.OrderStatus;
 import com.cartmate.cartmate.boundedContext.orderService.order.dto.personal.IndividualGroupOrderCreateRequest;
+import com.cartmate.cartmate.boundedContext.orderService.order.dto.personal.DirectOrderCreateRequest;
 import com.cartmate.cartmate.boundedContext.orderService.order.dto.personal.OrderCreateRequest;
 import com.cartmate.cartmate.boundedContext.orderService.order.dto.personal.OrderCreateResponse;
 import com.cartmate.cartmate.boundedContext.orderService.order.dto.personal.OrderDetailResponse;
@@ -48,6 +49,12 @@ public class OrderFacade {
     @Transactional
     public OrderCreateResponse createPersonal(Long memberId, OrderCreateRequest request) {
         return orderCreateUseCase.createPersonal(memberId, request.cartItemIds(),
+                request.deliveryAddress().toDeliveryAddress(), LocalDateTime.now(clock));
+    }
+
+    @Transactional
+    public OrderCreateResponse createDirect(Long memberId, DirectOrderCreateRequest request) {
+        return orderCreateUseCase.createDirect(memberId, request.inventoryId(), request.quantity(),
                 request.deliveryAddress().toDeliveryAddress(), LocalDateTime.now(clock));
     }
 

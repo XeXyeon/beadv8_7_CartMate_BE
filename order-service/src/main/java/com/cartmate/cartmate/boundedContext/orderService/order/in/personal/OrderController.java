@@ -44,6 +44,16 @@ public class OrderController {
         return new RsData<>("201-1", "주문을 만들었습니다.", orderFacade.createPersonal(user.memberId(), request));
     }
 
+    // 바로구매: 장바구니를 거치지 않고 상품 하나를 주문한다. 결제해도 장바구니는 바뀌지 않는다
+    @PostMapping("/direct")
+    @ResponseStatus(HttpStatus.CREATED)
+    public RsData<OrderCreateResponse> createDirect(
+            @AuthenticationPrincipal SecurityUser user,
+            @Valid @RequestBody DirectOrderCreateRequest request
+    ) {
+        return new RsData<>("201-1", "주문을 만들었습니다.", orderFacade.createDirect(user.memberId(), request));
+    }
+
     @PostMapping("/individual-group")
     @ResponseStatus(HttpStatus.CREATED)
     public RsData<OrderCreateResponse> createIndividualGroup(

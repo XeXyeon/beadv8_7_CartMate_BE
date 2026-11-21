@@ -58,6 +58,19 @@ class OrderCreateUseCase {
         return OrderCreateResponse.from(saved);
     }
 
+    // 바로구매: 장바구니를 거치지 않으므로 결제 뒤 장바구니를 정리하지 않는다. 검증은 장바구니 주문과 같다
+    OrderCreateResponse createDirect(Long memberId, Long inventoryId, int quantity, DeliveryAddress deliveryAddress,
+                                     LocalDateTime now) {
+        if (orderRepository.findPendingPersonalOrderIdContaining(memberId, List.of(inventoryId)).isPresent()) {
+            throw new ServiceException(OrderErrorCode.ORDER_ALREADY_PENDING);
+        }
+        OrderLine line = toLine(memberId, productsOf(List.of(inventoryId)), inventoryId, quantity);
+        Order order = Order.createDirect(generateOrderNumber(now), memberId, line, deliveryAddress, now);
+        Order saved = saveNew(order);
+        eventPublisher.publish(toCreatedEvent(saved));
+        return OrderCreateResponse.from(saved);
+    }
+
     OrderCreateResponse createIndividualGroup(Long memberId, Long individualGroupPurchaseId,
                                               List<IndividualGroupOrderCreateRequest.Item> items,
                                               DeliveryAddress deliveryAddress, LocalDateTime now) {
