@@ -128,7 +128,7 @@ class IndividualGroupPurchaseOrderReplicaIntegrationTest {
     @DisplayName("읽기 모델 반영이 실패하면 예외가 릴레이(발행한 쪽)까지 올라간다. 그래야 릴레이가 실패로 기록하고 다시 시도한다")
     void failurePropagatesToRelay() {
         OrderPaidEvent broken = new OrderPaidEvent(newOrderId(), "ORD", 1L, OrderType.INDIVIDUAL_GROUP, base + 2,
-                CREATED_AT, ADDRESS, null);
+                CREATED_AT, ADDRESS, null, false);
 
         assertThatThrownBy(() -> relay(broken)).isInstanceOf(NullPointerException.class);
     }
@@ -154,6 +154,6 @@ class IndividualGroupPurchaseOrderReplicaIntegrationTest {
     private OrderPaidEvent paid(Long orderId, Long purchaseId, OrderType orderType) {
         return new OrderPaidEvent(orderId, "ORD-" + orderId, 1L, orderType, purchaseId, CREATED_AT.plusMinutes(5), ADDRESS,
                 List.of(new OrderPaidEvent.Item(orderId * 10, 7L, 70L, 3L, "상품", null, 2, 25000L),
-                        new OrderPaidEvent.Item(orderId * 10 + 1, 8L, 80L, 4L, "상품", null, 1, 15000L)));
+                        new OrderPaidEvent.Item(orderId * 10 + 1, 8L, 80L, 4L, "상품", null, 1, 15000L)), false);
     }
 }

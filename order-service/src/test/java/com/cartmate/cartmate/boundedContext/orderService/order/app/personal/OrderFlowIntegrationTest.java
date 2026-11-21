@@ -1,5 +1,9 @@
 package com.cartmate.cartmate.boundedContext.orderService.order.app.personal;
 
+import static org.assertj.core.api.Assertions.tuple;
+
+import com.cartmate.cartmate.boundedContext.orderService.order.dto.personal.DirectOrderCreateRequest;
+
 import com.cartmate.cartmate.boundedContext.orderService.cart.app.groupindividual.IndividualGroupPurchaseFacade;
 import com.cartmate.cartmate.boundedContext.orderService.cart.app.personal.CartFacade;
 import com.cartmate.cartmate.boundedContext.orderService.cart.dto.groupindividual.IndividualGroupPurchaseCreateRequest;
@@ -81,6 +85,27 @@ class OrderFlowIntegrationTest {
         relayUntilPublished(jdbcTemplate, outboxRelay, "Order", created.orderId());
         assertThat(cartFacade.getCart(buyer).items()).extracting(CartItemResponse::inventoryId)
                 .containsExactlyInAnyOrder(2L, 1L);
+    }
+
+    @Test
+    @DisplayName("바로구매로 주문하고 결제하면 장바구니에 담아 둔 같은 상품은 그대로 남는다")
+    void directOrderKeepsCart() {
+        long buyer = nextMember();
+        cartFacade.addItem(buyer, 1L, 3);
+
+        OrderCreateResponse created = orderFacade.createDirect(buyer, new DirectOrderCreateRequest(1L, 1, ADDRESS));
+        assertThat(created.totalAmount()).isEqualTo(39000L);
+        assertThat(cartFacade.getCart(buyer).items())
+                .extracting(CartItemResponse::inventoryId, CartItemResponse::quantity)
+                .containsExactly(tuple(1L, 3));
+
+        orderFacade.applyPayment(created.orderId(), buyer, created.orderId(), LocalDateTime.now());
+        relayUntilPublished(jdbcTemplate, outboxRelay, "Order", created.orderId());
+
+        assertThat(orderFacade.getDetail(buyer, created.orderId()).status()).isEqualTo(OrderStatus.PAID);
+        assertThat(cartFacade.getCart(buyer).items())
+                .extracting(CartItemResponse::inventoryId, CartItemResponse::quantity)
+                .containsExactly(tuple(1L, 3));
     }
 
     @Test

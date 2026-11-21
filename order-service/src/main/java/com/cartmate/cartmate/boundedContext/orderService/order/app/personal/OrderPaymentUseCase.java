@@ -125,7 +125,8 @@ class OrderPaymentUseCase {
                                 item.getUnitPrice(),
                                 order.sellerDiscountOf(item),
                                 order.platformDiscountOf(item)))
-                        .toList()
+                        .toList(),
+                order.isDirectOrder()
         );
     }
 
