@@ -70,6 +70,10 @@ public class Order {
     @Column(name = "pending_individual_group_purchase_id")
     private Long pendingIndividualGroupPurchaseId;
 
+    // 바로구매 주문인지. 바로구매는 장바구니와 무관해서 결제 뒤 장바구니를 정리하지 않는다
+    @Column(name = "direct_order", nullable = false)
+    private boolean directOrder;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, columnDefinition = "varchar(20)")
     private OrderStatus status;
@@ -143,7 +147,8 @@ public class Order {
     private LocalDateTime updatedAt;
 
     private Order(String orderNumber, OrderType orderType, Long buyerMemberId, Long individualGroupPurchaseId,
-                  List<OrderLine> lines, DeliveryAddress deliveryAddress, LocalDateTime paymentDeadlineAt) {
+                  boolean directOrder, List<OrderLine> lines, DeliveryAddress deliveryAddress,
+                  LocalDateTime paymentDeadlineAt) {
         if (lines == null || lines.isEmpty()) {
             throw new ServiceException(OrderErrorCode.ORDER_NO_ITEMS);
         }
@@ -155,6 +160,7 @@ public class Order {
         this.buyerMemberId = buyerMemberId;
         this.individualGroupPurchaseId = individualGroupPurchaseId;
         this.pendingIndividualGroupPurchaseId = orderType == OrderType.INDIVIDUAL_GROUP ? individualGroupPurchaseId : null;
+        this.directOrder = directOrder;
         this.status = OrderStatus.PAYMENT_PENDING;
         this.paymentDeadlineAt = paymentDeadlineAt;
         this.deliveryAddress = deliveryAddress;
@@ -163,9 +169,10 @@ public class Order {
         this.totalAmount = items.stream().mapToLong(OrderItem::amount).sum();
     }
 
+    // 장바구니에서 고른 항목으로 만드는 개인 주문
     public static Order createPersonal(String orderNumber, Long buyerMemberId, List<OrderLine> lines,
                                        DeliveryAddress deliveryAddress, LocalDateTime now) {
-        return new Order(orderNumber, OrderType.PERSONAL, buyerMemberId, null,
+        return new Order(orderNumber, OrderType.PERSONAL, buyerMemberId, null, false,
                 lines, deliveryAddress, now.plus(PAYMENT_PERIOD));
     }
 
@@ -176,7 +183,7 @@ public class Order {
         if (saleDeadlineAt.isBefore(paymentDeadlineAt)) {
             paymentDeadlineAt = saleDeadlineAt;
         }
-        return new Order(orderNumber, OrderType.INDIVIDUAL_GROUP, buyerMemberId, individualGroupPurchaseId,
+        return new Order(orderNumber, OrderType.INDIVIDUAL_GROUP, buyerMemberId, individualGroupPurchaseId, false,
                 lines, deliveryAddress, paymentDeadlineAt);
     }
 

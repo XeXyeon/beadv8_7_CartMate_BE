@@ -16,7 +16,8 @@ public record OrderPaidEvent(
         Long individualGroupPurchaseId,
         LocalDateTime paidAt,
         DeliveryAddressInfo deliveryAddress,
-        List<Item> items
+        List<Item> items,
+        boolean directOrder   // 바로구매 주문이면 true. 장바구니는 바로구매 주문을 정리하지 않는다
 ) implements DomainEvent {
 
     @Override

@@ -269,7 +269,7 @@ class CartItemUseCaseTest {
         }
 
         private OrderPaidEvent paidEvent(OrderType orderType, OrderPaidEvent.Item... items) {
-            return new OrderPaidEvent(1L, "ORD-1", MEMBER_ID, orderType, null, LocalDateTime.now(), null, List.of(items));
+            return new OrderPaidEvent(1L, "ORD-1", MEMBER_ID, orderType, null, LocalDateTime.now(), null, List.of(items), false);
         }
     }
 
