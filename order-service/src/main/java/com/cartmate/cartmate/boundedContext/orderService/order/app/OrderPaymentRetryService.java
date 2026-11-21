@@ -47,8 +47,17 @@ public class OrderPaymentRetryService {
             maxRetries = 3, delay = 100, multiplier = 2, jitter = 50, maxDelay = 1000
     )
     public PaymentResult paySharedGroupOrder(Long memberId, Long sharedGroupOrderId, TeamDeliveryAddress address) {
+        return paySharedGroupOrder(memberId, sharedGroupOrderId, address, null);
+    }
+
+    @Retryable(
+            value = {OptimisticLockingFailureException.class, CannotAcquireLockException.class},
+            maxRetries = 3, delay = 100, multiplier = 2, jitter = 50, maxDelay = 1000
+    )
+    public PaymentResult paySharedGroupOrder(Long memberId, Long sharedGroupOrderId, TeamDeliveryAddress address,
+                                             Long memberCouponId) {
         try {
-            return sharedGroupOrderFacade.pay(memberId, sharedGroupOrderId, address);
+            return sharedGroupOrderFacade.pay(memberId, sharedGroupOrderId, address, memberCouponId);
         } catch (ServiceException e) {
             // 첫 결제의 재고 선점이 재고 부족: 차감 전이라 돈은 나가지 않았다. 공동 주문 취소는 따로(새 트랜잭션) 한다
             if (OrderErrorCode.ORDER_OUT_OF_STOCK.resultCode().equals(e.getRsData().getResultCode())) {

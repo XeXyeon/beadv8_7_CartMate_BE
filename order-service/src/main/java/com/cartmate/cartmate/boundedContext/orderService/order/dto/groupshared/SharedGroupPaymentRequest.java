@@ -5,6 +5,8 @@ import jakarta.validation.Valid;
 
 public record SharedGroupPaymentRequest(
         @Valid
-        TeamDeliveryAddress teamDeliveryAddress
+        TeamDeliveryAddress teamDeliveryAddress,
+        // 분담금에 쓸 내 쿠폰(플랫폼 쿠폰만). 없으면 null
+        Long memberCouponId
 ) {
 }

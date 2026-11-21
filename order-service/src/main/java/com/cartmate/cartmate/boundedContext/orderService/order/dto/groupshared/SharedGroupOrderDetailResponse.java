@@ -30,7 +30,11 @@ public record SharedGroupOrderDetailResponse(
         AddressResponse teamDeliveryAddress,
         List<ParticipantResponse> participants,
         List<ItemResponse> items,
-        LocalDateTime serverTime
+        LocalDateTime serverTime,
+        @Schema(description = "내 분담금에 쓴 쿠폰 할인. 결제 전이거나 쿠폰을 안 썼으면 0")
+        long myDiscountAmount,
+        @Schema(description = "내가 낼(낸) 금액 = 내 분담금 - 쿠폰 할인")
+        long myPayAmount
 ) {
 
     public static SharedGroupOrderDetailResponse of(
@@ -60,7 +64,9 @@ public record SharedGroupOrderDetailResponse(
                 AddressResponse.from(order.getTeamDeliveryAddress()),
                 participants,
                 items,
-                now
+                now,
+                me.discountOrZero(),
+                me.payAmount()
         );
     }
 

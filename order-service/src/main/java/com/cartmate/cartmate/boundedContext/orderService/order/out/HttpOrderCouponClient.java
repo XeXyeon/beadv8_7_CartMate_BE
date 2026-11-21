@@ -23,21 +23,23 @@ class HttpOrderCouponClient implements OrderCouponClient {
     private final InternalApiClient productServerApiClient;
 
     @Override
-    public List<CouponOption> options(Long memberId, Long orderId, CouponOrderTarget target) {
+    public List<CouponOption> options(String orderType, Long memberId, Long orderId, CouponOrderTarget target) {
         List<CouponOption> options = productServerApiClient.post(PATH + "/options",
-                new CouponOrderRequest(memberId, null, ORDER_TYPE, orderId, target), OPTIONS);
+                new CouponOrderRequest(memberId, null, orderType, orderId, target), OPTIONS);
         return options == null ? List.of() : options;
     }
 
     @Override
-    public CouponQuote quote(Long memberId, Long memberCouponId, Long orderId, CouponOrderTarget target) {
+    public CouponQuote quote(String orderType, Long memberId, Long memberCouponId, Long orderId,
+                             CouponOrderTarget target) {
         return productServerApiClient.post(PATH + "/quote",
-                new CouponOrderRequest(memberId, memberCouponId, ORDER_TYPE, orderId, target), QUOTE);
+                new CouponOrderRequest(memberId, memberCouponId, orderType, orderId, target), QUOTE);
     }
 
     @Override
-    public CouponQuote use(Long memberId, Long memberCouponId, Long orderId, CouponOrderTarget target) {
+    public CouponQuote use(String orderType, Long memberId, Long memberCouponId, Long orderId,
+                           CouponOrderTarget target) {
         return productServerApiClient.post(PATH + "/use",
-                new CouponOrderRequest(memberId, memberCouponId, ORDER_TYPE, orderId, target), QUOTE);
+                new CouponOrderRequest(memberId, memberCouponId, orderType, orderId, target), QUOTE);
     }
 }
