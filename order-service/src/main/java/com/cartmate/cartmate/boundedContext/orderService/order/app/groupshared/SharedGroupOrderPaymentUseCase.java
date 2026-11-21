@@ -126,12 +126,17 @@ class SharedGroupOrderPaymentUseCase {
                 .orElse(null);
     }
 
-    // 상품 서버에서 쿠폰을 이 참여자의 분담금에 사용 처리한다(트랜잭션 밖). 같은 주문에 다시 부르면 같은 결과다
-    CouponQuote useCoupon(Long sharedGroupOrderId, Long memberId, Long memberCouponId) {
+    // 쿠폰 대상 금액(내 분담금). 참여자 목록이 지연 로딩이라 트랜잭션 안에서 부른다
+    CouponOrderTarget couponTarget(Long sharedGroupOrderId, Long memberId) {
         SharedGroupOrder order = sharedGroupOrderRepository.findById(sharedGroupOrderId)
                 .orElseThrow(() -> new ServiceException(OrderErrorCode.ORDER_NOT_FOUND));
+        return couponTarget(order, memberId);
+    }
+
+    // 상품 서버에서 쿠폰을 이 참여자의 분담금에 사용 처리한다(트랜잭션 밖, DB를 읽지 않는다). 같은 주문에 다시 부르면 같은 결과다
+    CouponQuote useCoupon(Long sharedGroupOrderId, Long memberId, Long memberCouponId, CouponOrderTarget target) {
         return orderCouponClient.use(OrderCouponClient.SHARED_GROUP_ORDER_TYPE, memberId, memberCouponId,
-                sharedGroupOrderId, couponTarget(order, memberId));
+                sharedGroupOrderId, target);
     }
 
     // 쿠폰 대상 금액은 이 참여자의 분담금. 판매자별 금액은 비워 판매자 쿠폰은 쓸 수 없다

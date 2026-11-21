@@ -41,14 +41,15 @@ class SharedGroupOrderFacadeCouponTest {
     @Test
     @DisplayName("쿠폰을 기록하고 사용 처리한 뒤 그 쿠폰으로 결제한다")
     void recordsAndUsesCouponBeforePayment() {
-        given(paymentUseCase.useCoupon(ORDER_ID, MEMBER, COUPON)).willReturn(QUOTE);
+        given(paymentUseCase.useCoupon(eq(ORDER_ID), eq(MEMBER), eq(COUPON), any())).willReturn(QUOTE);
         given(paymentUseCase.pay(eq(ORDER_ID), eq(MEMBER), any(), eq(QUOTE), any())).willReturn(mock(PaymentResult.class));
 
         facade.pay(MEMBER, ORDER_ID, null, COUPON);
 
         var order = inOrder(paymentUseCase);
         order.verify(paymentUseCase).recordCoupon(ORDER_ID, MEMBER, COUPON);
-        order.verify(paymentUseCase).useCoupon(ORDER_ID, MEMBER, COUPON);
+        order.verify(paymentUseCase).couponTarget(ORDER_ID, MEMBER);
+        order.verify(paymentUseCase).useCoupon(eq(ORDER_ID), eq(MEMBER), eq(COUPON), any());
         order.verify(paymentUseCase).pay(eq(ORDER_ID), eq(MEMBER), any(), eq(QUOTE), any());
         then(paymentUseCase).should(never()).releaseCoupon(any(), any());
     }
@@ -57,7 +58,7 @@ class SharedGroupOrderFacadeCouponTest {
     @DisplayName("쿠폰 사용이 실패하면(거절·응답 없음) 결제하지 않고 쿠폰 복구를 요청한다")
     void couponUseFailureReleasesWithoutPayment() {
         InternalServerUnavailableException timeout = new InternalServerUnavailableException("PRODUCT", "상품", null);
-        given(paymentUseCase.useCoupon(ORDER_ID, MEMBER, COUPON)).willThrow(timeout);
+        given(paymentUseCase.useCoupon(eq(ORDER_ID), eq(MEMBER), eq(COUPON), any())).willThrow(timeout);
 
         assertThatThrownBy(() -> facade.pay(MEMBER, ORDER_ID, null, COUPON)).isSameAs(timeout);
         then(paymentUseCase).should().releaseCoupon(ORDER_ID, MEMBER);
@@ -68,7 +69,7 @@ class SharedGroupOrderFacadeCouponTest {
     @DisplayName("결제가 업무 거절로 끝나면 쿠폰 복구를 요청하고 원래 오류를 던진다")
     void paymentRejectedReleasesCoupon() {
         ServiceException insufficient = new ServiceException("400-INSUFFICIENT_BALANCE", "예치금이 부족합니다.");
-        given(paymentUseCase.useCoupon(ORDER_ID, MEMBER, COUPON)).willReturn(QUOTE);
+        given(paymentUseCase.useCoupon(eq(ORDER_ID), eq(MEMBER), eq(COUPON), any())).willReturn(QUOTE);
         given(paymentUseCase.pay(any(), any(), any(), any(), any())).willThrow(insufficient);
         org.mockito.BDDMockito.willThrow(new IllegalStateException("outbox 저장 실패"))
                 .given(paymentUseCase).releaseCoupon(ORDER_ID, MEMBER);
@@ -80,7 +81,7 @@ class SharedGroupOrderFacadeCouponTest {
     @Test
     @DisplayName("결제 결과를 모르거나(503) 팀 배송지만 빠졌으면(차감이 남음) 쿠폰 기록을 그대로 둔다")
     void unknownOrAddressMissingKeepsCoupon() {
-        given(paymentUseCase.useCoupon(ORDER_ID, MEMBER, COUPON)).willReturn(QUOTE);
+        given(paymentUseCase.useCoupon(eq(ORDER_ID), eq(MEMBER), eq(COUPON), any())).willReturn(QUOTE);
         given(paymentUseCase.pay(any(), any(), any(), any(), any()))
                 .willThrow(new InternalServerUnavailableException("PAYMENT", "결제", null))
                 .willThrow(new ServiceException(OrderErrorCode.ORDER_TEAM_ADDRESS_REQUIRED));
@@ -96,7 +97,7 @@ class SharedGroupOrderFacadeCouponTest {
     @DisplayName("요청에 쿠폰이 없어도 결과를 모르는 앞 시도가 기록한 쿠폰이 있으면 그 쿠폰으로 이어서 결제한다")
     void retryWithoutCouponUsesRecordedCoupon() {
         given(paymentUseCase.recordedCoupon(ORDER_ID, MEMBER)).willReturn(COUPON);
-        given(paymentUseCase.useCoupon(ORDER_ID, MEMBER, COUPON)).willReturn(QUOTE);
+        given(paymentUseCase.useCoupon(eq(ORDER_ID), eq(MEMBER), eq(COUPON), any())).willReturn(QUOTE);
         given(paymentUseCase.pay(eq(ORDER_ID), eq(MEMBER), any(), eq(QUOTE), any())).willReturn(mock(PaymentResult.class));
 
         facade.pay(MEMBER, ORDER_ID, null, null);

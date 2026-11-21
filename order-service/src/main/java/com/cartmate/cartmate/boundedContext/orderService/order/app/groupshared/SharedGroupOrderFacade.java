@@ -12,6 +12,7 @@ import com.cartmate.cartmate.boundedContext.orderService.order.exception.OrderEr
 import com.cartmate.cartmate.global.exception.ServiceException;
 import com.cartmate.cartmate.global.http.InternalApiClient.InternalServerUnavailableException;
 import com.cartmate.cartmate.shared.coupon.dto.CouponOption;
+import com.cartmate.cartmate.shared.coupon.dto.CouponOrderTarget;
 import com.cartmate.cartmate.shared.coupon.dto.CouponQuote;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -72,10 +73,12 @@ public class SharedGroupOrderFacade {
                 : transaction.execute(status -> sharedGroupOrderPaymentUseCase.recordedCoupon(sharedGroupOrderId, memberId));
         CouponQuote usedCoupon = null;
         if (couponId != null) {
-            transaction.executeWithoutResult(status ->
-                    sharedGroupOrderPaymentUseCase.recordCoupon(sharedGroupOrderId, memberId, couponId));
+            CouponOrderTarget target = transaction.execute(status -> {
+                sharedGroupOrderPaymentUseCase.recordCoupon(sharedGroupOrderId, memberId, couponId);
+                return sharedGroupOrderPaymentUseCase.couponTarget(sharedGroupOrderId, memberId);
+            });
             try {
-                usedCoupon = sharedGroupOrderPaymentUseCase.useCoupon(sharedGroupOrderId, memberId, couponId);
+                usedCoupon = sharedGroupOrderPaymentUseCase.useCoupon(sharedGroupOrderId, memberId, couponId, target);
             } catch (RuntimeException e) {
                 // 쿠폰을 못 썼거나 썼는지 모른다. 아직 차감 전이라 복구를 요청한다(쓰지 않았으면 복구는 아무 일도 하지 않는다)
                 releaseCoupon(sharedGroupOrderId, memberId);
