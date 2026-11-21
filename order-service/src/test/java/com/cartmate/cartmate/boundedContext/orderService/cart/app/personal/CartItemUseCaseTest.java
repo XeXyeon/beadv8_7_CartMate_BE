@@ -264,12 +264,30 @@ class CartItemUseCaseTest {
                     .containsExactly(tuple(2L, 2));
         }
 
+        @Test
+        @DisplayName("바로구매 주문이 결제되면 장바구니를 건드리지 않는다 (같은 상품이 담겨 있어도)")
+        void keepCartForDirectOrder() {
+            Cart cart = Cart.create(MEMBER_ID);
+            cart.addItem(100L, 1L, 3);
+
+            cartItemUseCase.removeOrderedItems(directPaidEvent(item(1L, 1)));
+
+            assertThat(cart.getItems())
+                    .extracting(CartItem::getInventoryId, CartItem::getQuantity)
+                    .containsExactly(tuple(1L, 3));
+            verifyNoInteractions(cartRepository);
+        }
+
         private OrderPaidEvent.Item item(Long inventoryId, int quantity) {
             return new OrderPaidEvent.Item(null, 100L, inventoryId, null, "상품", null, quantity, 10000L);
         }
 
         private OrderPaidEvent paidEvent(OrderType orderType, OrderPaidEvent.Item... items) {
             return new OrderPaidEvent(1L, "ORD-1", MEMBER_ID, orderType, null, LocalDateTime.now(), null, List.of(items), false);
+        }
+
+        private OrderPaidEvent directPaidEvent(OrderPaidEvent.Item... items) {
+            return new OrderPaidEvent(1L, "ORD-1", MEMBER_ID, OrderType.PERSONAL, null, LocalDateTime.now(), null, List.of(items), true);
         }
     }
 
