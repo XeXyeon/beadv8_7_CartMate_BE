@@ -10,6 +10,7 @@ import org.springframework.http.HttpStatus;
 public enum CouponErrorCode implements ErrorCode {
 
     COUPON_INVALID("COUPON_INVALID", "쿠폰 설정이 올바르지 않습니다.", HttpStatus.BAD_REQUEST),
+    COUPON_LOGIN_REQUIRED("COUPON_LOGIN_REQUIRED", "로그인이 필요합니다.", HttpStatus.UNAUTHORIZED),
     COUPON_NOT_FOUND("COUPON_NOT_FOUND", "쿠폰을 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
     COUPON_NOT_DOWNLOADABLE("COUPON_NOT_DOWNLOADABLE", "지금 받을 수 없는 쿠폰입니다.", HttpStatus.CONFLICT),
     COUPON_SOLD_OUT("COUPON_SOLD_OUT", "쿠폰이 모두 소진되었습니다.", HttpStatus.CONFLICT),
