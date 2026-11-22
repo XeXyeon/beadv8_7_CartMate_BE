@@ -48,6 +48,14 @@ spring:
     init:
       mode: always
       encoding: UTF-8   # 한글 데이터. Windows 기본 인코딩(MS949)으로 읽으면 깨진다
+  datasource:
+    hikari:
+      data-source-properties:
+        # 읽기 전용 트랜잭션(@Transactional(readOnly = true))마다 드라이버가 보내던
+        # SET SESSION TRANSACTION READ ONLY / READ WRITE 2문장을 보내지 않는다.
+        # 부하 측정 때 product DB가 받은 문장의 45%가 SET이었다(트랜잭션마다 약 3개).
+        # Hibernate의 읽기 전용 처리(변경 감지 생략)는 그대로고, MySQL 쪽 읽기 전용 최적화만 쓰지 않는다
+        readOnlyPropagatesToServer: false
   jpa:
     defer-datasource-initialization: true   # Hibernate(ddl-auto)가 테이블을 만든 뒤에 data.sql 실행
     # 트랜잭션이 끝나면 DB 커넥션을 바로 반납한다. 기본값(true)이면 요청이 끝날 때까지 커넥션을 쥐고 있어서,
