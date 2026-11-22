@@ -1,6 +1,7 @@
 package com.cartmate.cartmate.boundedContext.productService.post.out;
 
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostSnapshot;
+import com.cartmate.cartmate.boundedContext.productService.post.dto.SelectInventoryStock;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.SelectProductResponse;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.UpdateSalesPostRequest;
 import com.cartmate.cartmate.boundedContext.productService.code.ProductErrorCode;
@@ -178,6 +179,25 @@ public class SalesPostApiClient implements SalesPostProductClient {
                     })
                     .body(new ParameterizedTypeReference<>() {});
             return response == null ? List.of() : response.data();
+        } catch (ResourceAccessException e) {   // 타임아웃, 연결 실패
+            throw new ServiceException(ProductErrorCode.PRODUCT_CONNECT_FAILED);
+        }
+    }
+
+    @Override
+    public List<SelectInventoryStock> getStocks(Long postId) {
+        try {
+            InternalResponse<List<SelectInventoryStock>> response = restClient.get()
+                    .uri("/{postId}/stocks", postId)
+                    .retrieve()
+                    .onStatus(HttpStatusCode::is4xxClientError, (req, res) -> {
+                        throw new ServiceException(ProductErrorCode.PRODUCT_SELECT_INVALID);
+                    })
+                    .onStatus(HttpStatusCode::is5xxServerError, (req, res) -> {
+                        throw new ServiceException(ProductErrorCode.PRODUCT_SELECT_FAILED);
+                    })
+                    .body(new ParameterizedTypeReference<>() {});
+            return response == null || response.data() == null ? List.of() : response.data();
         } catch (ResourceAccessException e) {   // 타임아웃, 연결 실패
             throw new ServiceException(ProductErrorCode.PRODUCT_CONNECT_FAILED);
         }

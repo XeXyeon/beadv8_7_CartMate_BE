@@ -4,6 +4,7 @@ import com.cartmate.cartmate.boundedContext.productService.code.ProductErrorCode
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostProductStatus;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostSnapshot;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.CreateProductRequest;
+import com.cartmate.cartmate.boundedContext.productService.post.dto.SelectInventoryStock;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.SelectProductResponse;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.SyncProduct;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.UpdateSalesPostRequest;
@@ -48,6 +49,12 @@ public class LocalSalesPostProductClient implements SalesPostProductClient {
     @Override
     public List<SelectProductResponse> getProduct(Long postId) {
         return call(() -> SalesPostProductMapper.fromProductSelect(productFacade.selectProductsByPost(postId).getData()),
+                ProductErrorCode.PRODUCT_SELECT_INVALID, ProductErrorCode.PRODUCT_SELECT_FAILED);
+    }
+
+    @Override
+    public List<SelectInventoryStock> getStocks(Long postId) {
+        return call(() -> SalesPostProductMapper.fromProductStock(productFacade.selectStocksByPost(postId).getData()),
                 ProductErrorCode.PRODUCT_SELECT_INVALID, ProductErrorCode.PRODUCT_SELECT_FAILED);
     }
 
