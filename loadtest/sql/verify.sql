@@ -46,7 +46,13 @@ SELECT 'V10 지갑 잔액 != 마지막 거래 기록의 balance_after', COUNT(*)
 FROM wallet w
 WHERE EXISTS (SELECT 1 FROM wallet_transaction t WHERE t.wallet_id = w.id)
   AND w.balance <> (SELECT t.balance_after FROM wallet_transaction t WHERE t.wallet_id = w.id
-                    ORDER BY t.id DESC LIMIT 1);
+                    ORDER BY t.id DESC LIMIT 1)
+UNION ALL
+SELECT 'V11 결제 하나에 구매자 취소 환불이 2건 이상 (Kafka 중복)', COUNT(*)
+FROM (SELECT payment_id FROM payment_refund WHERE reason = 'BUYER_CANCEL'
+      GROUP BY payment_id HAVING COUNT(*) > 1) t
+UNION ALL
+SELECT 'V12 처리 실패로 남은 인박스 이벤트', COUNT(*) FROM inbox_event WHERE status = 'FAILED';
 
 -- 참고 수치 (위반 아님)
 SELECT s.purpose,
@@ -58,3 +64,9 @@ SELECT s.purpose,
 FROM lt_seed s
 LEFT JOIN payment p ON p.member_id = s.member_id
 GROUP BY s.purpose;
+
+-- Kafka 테스트 참고 수치
+SELECT (SELECT COUNT(*) FROM inbox_event) AS inbox_rows,
+       (SELECT COUNT(*) FROM inbox_event WHERE status = 'PROCESSED') AS inbox_processed,
+       (SELECT COUNT(*) FROM payment_refund WHERE reason = 'BUYER_CANCEL') AS buyer_cancel_refunds,
+       (SELECT COUNT(*) FROM payment WHERE status = 'CANCELED') AS fully_refunded_payments;

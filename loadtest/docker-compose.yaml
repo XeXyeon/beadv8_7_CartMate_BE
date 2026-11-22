@@ -68,3 +68,50 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+
+  # ===== Kafka 환불 이벤트 테스트 (README "Kafka 환불 테스트"). --profile kafka 일 때만 뜬다 =====
+  kafka:
+    image: apache/kafka:4.1.0              # 이미 받아 둔 이미지 (운영은 4.3.2, 단일 브로커 시험에는 차이 없음)
+    container_name: cartmate-lt-kafka
+    profiles: ["kafka"]
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,HOST://:29092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,HOST://localhost:29092   # 컨테이너끼리는 kafka:9092, 노트북 앱은 localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_HEAP_OPTS: -Xms384m -Xmx384m
+    volumes:
+      - ./kafka/out:/events:ro             # make-events.py가 만든 메시지 파일
+    ports:
+      - "29092:29092"
+    mem_limit: 640m
+
+  kafka-exporter:                          # 컨슈머 lag → Alloy → Cloud (운영 observability/k8s와 같은 이미지)
+    image: danielqsj/kafka-exporter:v1.11.0
+    container_name: cartmate-lt-kafka-exporter
+    profiles: ["kafka"]
+    command: ["--kafka.server=kafka:9092"]
+    restart: on-failure                    # Kafka가 뜨기 전에 시작하면 종료되므로 다시 시도
+    mem_limit: 48m
+
+  kafka-ui:                                # 캡처할 때만: docker compose --profile ui up -d kafka-ui
+    image: ghcr.io/kafbat/kafka-ui:v1.5.0
+    container_name: cartmate-lt-kafka-ui
+    profiles: ["ui"]
+    environment:
+      KAFKA_CLUSTERS_0_NAME: loadtest
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_READONLY: "true"
+      JAVA_OPTS: -Xmx256m
+    ports:
+      - "8089:8080"
+    mem_limit: 400m

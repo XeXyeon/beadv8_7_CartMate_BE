@@ -2,6 +2,10 @@
 #   먼저: docker compose -f loadtest/docker-compose.yaml up -d mysql redis  (README 2단계)
 #   jar  : ./gradlew :payment-service:bootJar
 # 연결 대상은 전부 loadtest 컨테이너 (공용 서버 아님). 프로필을 dev가 아닌 loadtest로 둬서 application-dev.yaml(공용 DB 설정)을 읽지 않는다
+param(
+    [switch]$Kafka,                 # Kafka 환불 테스트: 로컬 Kafka(localhost:29092)에서 취소 이벤트를 받는다
+    [int]$InboxBatchSize = 100      # 인박스 워커가 1초에 처리하는 최대 건수 (기본 100 = 운영 기본값)
+)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $jar = Get-ChildItem "$root/payment-service/build/libs" -Filter 'payment-service-*.jar' |
@@ -21,7 +25,9 @@ $env:REDIS_CACHE_PORT = '26379'
 $env:REDIS_CORE_PORT = '26379'
 $env:REDIS_DATABASE = '0'
 $env:REDIS_PASSWORD = ''
-$env:KAFKA_ENABLED = 'false'                           # 차감 · 되돌리기는 Kafka를 쓰지 않는다 (지갑은 SQL 시드)
+$env:KAFKA_ENABLED = if ($Kafka) { 'true' } else { 'false' }   # 차감 · 되돌리기는 Kafka를 쓰지 않는다 (지갑은 SQL 시드)
+$env:KAFKA_BOOTSTRAP_SERVERS = 'localhost:29092'
+$env:CUSTOM_INBOX_PROCESSOR_BATCH_SIZE = "$InboxBatchSize"
 $env:INTERNAL_API_KEY = 'loadtest-internal-key'        # k6 스크립트 기본값과 같음
 $env:SENTRY_DSN = ''                                   # 부하 중 오류를 Sentry로 보내지 않음 (무료 한도)
 
@@ -38,5 +44,5 @@ $env:SERVER_TOMCAT_MBEANREGISTRY_ENABLED = 'true'               # Tomcat 요청 
 # 지연 히스토그램 구간 (p95 · p99 계산용). 구간을 정해 둬서 시계열 수가 적다
 $env:MANAGEMENT_METRICS_DISTRIBUTION_SLO_HTTP_SERVER_REQUESTS = '25ms,50ms,100ms,200ms,300ms,500ms,1s,2s,5s'
 
-Write-Host "결제 서비스 실행: $($jar.Name) → http://localhost:18983 (멈추려면 Ctrl+C)"
+Write-Host "결제 서비스 실행: $($jar.Name) → http://localhost:18983, Kafka=$($env:KAFKA_ENABLED), 인박스 배치=$InboxBatchSize (멈추려면 Ctrl+C)"
 java -Xms256m -Xmx384m -XX:MaxMetaspaceSize=192m -Xss512k -jar $jar.FullName

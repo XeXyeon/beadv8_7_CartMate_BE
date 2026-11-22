@@ -117,15 +117,49 @@ Remove-Item Env:GC_TOKEN
 - Usage를 확인한다.
 - 멈춰 둔 컨테이너와 Kubernetes는 필요하면 다시 켠다.
 
+## Kafka 환불 테스트 (K1~K4)
+
+주문 서버 없이 **주문 취소 이벤트를 Kafka에 직접 넣어** 결제 서비스의 환불 처리(Kafka → 인박스 → 환불)를 본다. 추가 메모리는 Kafka 640MB와 exporter 48MB다(Docker 안).
+
+```powershell
+# 1. Kafka까지 띄우기 (토큰 입력은 위 3단계와 같다)
+docker compose -f loadtest/docker-compose.yaml --profile kafka up -d --wait mysql redis kafka
+docker compose -f loadtest/docker-compose.yaml --profile kafka up -d alloy kafka-exporter
+# 2. 토픽 (DLT도 파티션 수가 같아야 한다 — DLT는 같은 파티션 번호로 보낸다)
+foreach ($t in 'cartmate.order.order-canceled','cartmate.order.order-canceled-dlt') { docker exec cartmate-lt-kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic $t --partitions 3 --replication-factor 1 }
+# 3. 결제 서비스 (Kafka 켬). 인박스 배치를 바꿔 비교할 때 -InboxBatchSize 500
+./loadtest/run-payment.ps1 -Kafka
+# 4. 시나리오: 초기화 → 결제 준비 → 이벤트 파일 → Kafka에 넣기 → 인박스 적체 기록 → 검증까지 한 번에
+./loadtest/kafka/run-scenario.ps1 -Label K1 -Count 10
+./loadtest/kafka/run-scenario.ps1 -Label K2 -Count 5000
+./loadtest/kafka/run-scenario.ps1 -Label K3 -Count 500 -Mode dup
+./loadtest/kafka/run-scenario.ps1 -Label K4 -Count 1000 -Mode poison
+# Kafka UI(캡처용, 읽기 전용): docker compose -f loadtest/docker-compose.yaml --profile kafka --profile ui up -d kafka-ui → http://localhost:8089
+```
+
+- `kafka/make-events.py`: Outbox와 같은 봉투(EventEnvelope)로 메시지 파일을 만든다. 모드는 `normal`, `dup`(같은 eventId 3번 + 다른 eventId 1번), `poison`(깨진 JSON 10개)이다.
+- `kafka/watch-inbox.py`: 1초마다 `inbox_event` NEW · PROCESSED · FAILED와 환불 수를 잰다. 결과는 `logs/inbox-watch.log`에 남고, 대시보드 "인박스 적체" 패널이 이 로그를 그린다.
+  - Kafka lag은 금방 0이 되므로, 실제 적체는 이 값으로 본다.
+- `scripts/kafka-prepare.js`: 취소할 결제를 미리 만든다. 주문 ID 규칙은 make-events.py와 같다.
+- 끝나면 `docker compose -f loadtest/docker-compose.yaml --profile kafka --profile ui down`.
+
+## 발표 자료
+
+- 결과 요약 · 수치: [RESULTS.md](RESULTS.md)의 "발표 요약"
+- 대시보드 캡처(고해상도 PNG): `screenshots/01-payment-loadtest/`(결제 API), `screenshots/02-kafka-refund/`(Kafka 환불 · 220초 기다린 trace)
+  - Grafana 렌더링으로 받았다: `/render/d-solo/<대시보드>?panelId=N&from=..&to=..&width=1400&height=600`
+
 ## 파일
 
 | 파일 | 내용 |
 |---|---|
 | `docker-compose.yaml` | MySQL · Redis · Alloy (메모리 상한) |
 | `alloy/config.alloy` | 파일 로그 · OTLP trace · OTLP 메트릭 · MySQL · Redis 지표 → Grafana Cloud (`env="loadtest"`) |
-| `run-payment.ps1` | 결제 서비스를 시험 설정으로 실행 (로컬 DB · Kafka 끔 · 관측 연결 · 지연 히스토그램) |
+| `run-payment.ps1` | 결제 서비스를 시험 설정으로 실행 (로컬 DB · 관측 연결 · 지연 히스토그램). `-Kafka`, `-InboxBatchSize` |
+| `kafka/` | Kafka 환불 테스트 (이벤트 파일 생성 · 인박스 적체 기록 · 시나리오 실행) |
+| `screenshots/` | 발표용 대시보드 캡처 |
 | `sql/reset-seed.sql` | 결제 · 지갑 데이터 비우고 시험 지갑 1,035개 넣기 + 시작 잔액 기록(`lt_seed`) |
-| `sql/verify.sql` | 돈 불변식 10개 검사 |
+| `sql/verify.sql` | 돈 불변식 12개 검사 (V11 · V12는 Kafka 환불) |
 | `scripts/s1~s5*.js`, `scripts/lib/payment.js` | k6 시나리오 · 공통 호출 |
 | `grafana/payment-loadtest.json` | Cloud 대시보드 |
 | `results/` | k6 요약 JSON (gitignore) |
@@ -134,4 +168,4 @@ Remove-Item Env:GC_TOKEN
 
 - 토스 충전 승인(`/api/wallets/me/charges/confirm`)은 외부 토스 API를 부르므로 **부하 대상이 아니다**.
 - 노트북에서 잰 수치는 운영 성능이 아니다. 비교와 병목 위치를 찾는 데 쓰고, 결과에 환경(남은 메모리 등)을 같이 적는다.
-- Kafka를 켜고 환불 이벤트 처리량 · 소비 지연을 보는 2단계는 메모리가 1.3GB 더 필요하다(브로커 + Kafka UI). 이번 범위 밖이다.
+- 주문 → 결제 전체 흐름(앱 3개)은 노트북 메모리로는 어렵다. GitHub Actions 러너 같은 별도 환경에서 할 것.

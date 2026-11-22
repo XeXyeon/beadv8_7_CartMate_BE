@@ -10,6 +10,9 @@ TRUNCATE TABLE holding_settlement;
 TRUNCATE TABLE holding;
 TRUNCATE TABLE wallet_transaction;
 TRUNCATE TABLE wallet;
+TRUNCATE TABLE inbox_event;        -- Kafka 테스트: 받은 이벤트 · 처리 기록 · 보낸 이벤트
+TRUNCATE TABLE processed_event;
+TRUNCATE TABLE outbox_event;
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- 시작 잔액 기록 (verify.sql이 "시작 잔액 - 현재 잔액 = 결제 합계"를 확인할 때 쓴다. 앱 테이블이 아니다)
