@@ -1,6 +1,7 @@
 package com.cartmate.cartmate.boundedContext.productService.product.app;
 
 import com.cartmate.cartmate.boundedContext.productService.product.dto.CategoryResponse;
+import com.cartmate.cartmate.boundedContext.productService.product.dto.InventoryStock;
 import com.cartmate.cartmate.boundedContext.productService.product.dto.CompleteProductUpdateRequest;
 import com.cartmate.cartmate.boundedContext.productService.product.dto.ProductOptionTypeResponse;
 import com.cartmate.cartmate.boundedContext.productService.product.dto.SelectProductResponse;
@@ -190,6 +191,15 @@ public class ProductFacade {
                 "200-1",
                 "상품 조회에 성공했습니다.",
                 productQueryUseCase.selectProductsByPost(postId)
+        );
+    }
+
+    // 판매글의 재고 수량만 (판매글 상세가 남은 수량을 매번 새로 읽는다)
+    public RsData<List<InventoryStock>> selectStocksByPost(Long postId) {
+        return new RsData<>(
+                "200-1",
+                "재고 수량 조회에 성공했습니다.",
+                productQueryUseCase.selectStocksByPost(postId)
         );
     }
 

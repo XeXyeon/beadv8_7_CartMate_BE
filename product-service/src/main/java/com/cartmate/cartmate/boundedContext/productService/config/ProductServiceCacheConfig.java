@@ -15,8 +15,10 @@ import java.time.Duration;
 @Configuration
 public class ProductServiceCacheConfig {
 
-    // 판매글 상세의 선택 목록 · 재고: 몰릴 때만 막는 용도라 아주 짧게. 수정 · 삭제 뒤 최대 2초 예전 값이 보일 수 있다
-    static final Duration DETAIL_INVENTORY_TTL = Duration.ofSeconds(2);
+    // 판매글 상세의 선택 목록 · 재고 구성(수량 제외): 판매글 수정 때 지운다. 지우기와 엇갈려 수정 전 값이 다시 들어가거나
+    // 지우기를 놓쳐도(Redis 일시 장애 등) 가격 · 옵션 이름이 최대 1분만 예전 값으로 보이게 짧게 둔다.
+    // 다시 읽기는 판매글당 1분에 한 번이라 부담이 작다. 남은 수량은 캐시하지 않는다(SalesPostDetailInventoryLoader)
+    static final Duration DETAIL_INVENTORY_TTL = Duration.ofMinutes(1);
 
     @Bean
     public RedisCacheCustomizer productServiceCacheCustomizer() {

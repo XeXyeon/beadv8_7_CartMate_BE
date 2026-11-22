@@ -1,5 +1,6 @@
 package com.cartmate.cartmate.boundedContext.productService.product.app;
 
+import com.cartmate.cartmate.boundedContext.productService.product.dto.InventoryStock;
 import com.cartmate.cartmate.boundedContext.productService.product.dto.SelectInventory;
 import com.cartmate.cartmate.boundedContext.productService.product.dto.SelectProductImage;
 import com.cartmate.cartmate.boundedContext.productService.product.dto.SelectProductOption;
@@ -151,6 +152,11 @@ public class ProductQueryUseCase {
                 purchasable,
                 onSale
         );
+    }
+
+    // 판매글 상세의 남은 수량용: 재고 수량만 쿼리 1번으로 (재고 이름 · 가격 · 옵션은 selectProductsByPost)
+    public List<InventoryStock> selectStocksByPost(Long postId) {
+        return inventoryRepository.findStocksBySalesPostId(postId);
     }
 
     @Transactional(readOnly = true)

@@ -1,11 +1,17 @@
 package com.cartmate.cartmate.boundedContext.productService.product.out;
 
 import org.springframework.transaction.annotation.Transactional;
+import com.cartmate.cartmate.boundedContext.productService.product.domain.ProductStatus;
+import com.cartmate.cartmate.boundedContext.productService.product.dto.InventoryStock;
+import com.querydsl.core.types.Projections;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.querydsl.jpa.impl.JPAUpdateClause;
 import jakarta.persistence.EntityManager;
 
+import java.util.List;
+
 import static com.cartmate.cartmate.boundedContext.productService.product.domain.QInventory.inventory;
+import static com.cartmate.cartmate.boundedContext.productService.product.domain.QProduct.product;
 
 // 예전 @Query 메서드처럼 트랜잭션 밖에서 불러도 동작하게 한다(안에서 부르면 그 트랜잭션에 합류)
 @Transactional
@@ -16,6 +22,21 @@ public class InventoryQueryRepositoryImpl implements InventoryQueryRepository {
     public InventoryQueryRepositoryImpl(EntityManager entityManager) {
         this.entityManager = entityManager;
         this.queryFactory = new JPAQueryFactory(entityManager);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<InventoryStock> findStocksBySalesPostId(Long salesPostId) {
+        return queryFactory
+                .select(Projections.constructor(InventoryStock.class,
+                        inventory.id, inventory.stockQuantity, inventory.reservedQuantity))
+                .from(inventory)
+                .join(inventory.product, product)
+                .where(product.salesPostId.eq(salesPostId),
+                        product.status.ne(ProductStatus.DELETED),
+                        inventory.status.eq(ProductStatus.ACTIVE))
+                .orderBy(inventory.id.asc())
+                .fetch();
     }
 
     @Override
