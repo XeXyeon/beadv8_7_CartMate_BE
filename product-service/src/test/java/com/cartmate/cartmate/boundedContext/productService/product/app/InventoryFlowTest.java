@@ -15,6 +15,7 @@ import com.cartmate.cartmate.boundedContext.productService.product.dto.CreatePro
 import com.cartmate.cartmate.boundedContext.productService.product.dto.CreateProductImage;
 import com.cartmate.cartmate.boundedContext.productService.product.dto.CreateProductOption;
 import com.cartmate.cartmate.boundedContext.productService.product.dto.CreateProductRequest;
+import com.cartmate.cartmate.boundedContext.productService.product.dto.InventoryStock;
 import com.cartmate.cartmate.boundedContext.productService.product.dto.RestoreInventory;
 import com.cartmate.cartmate.boundedContext.productService.product.dto.RestoreProduct;
 import com.cartmate.cartmate.boundedContext.productService.product.dto.RestoreProductsRequest;
@@ -231,6 +232,25 @@ class InventoryFlowTest extends ProductServiceTestSupport {
                 .filteredOn(o -> o.getInventory().getId().equals(whiteId))
                 .extracting(ProductOption::getStatus)
                 .containsOnly(ProductStatus.ACTIVE);
+    }
+
+    @Test
+    @DisplayName("재고 수량 조회: 판매글의 판매 중인 재고만 재고 · 선점 수량을 돌려주고, 선점이 바로 반영되며 삭제된 재고는 빠진다")
+    void selectStocksByPostReturnsLiveQuantities() {
+        inventoryRepository.reserve(blackId, 4);
+
+        assertThat(productFacade.selectStocksByPost(postId).getData())
+                .extracting(InventoryStock::inventoryId, InventoryStock::stockQuantity, InventoryStock::reservedQuantity)
+                .containsExactly(
+                        tuple(blackId, 10, 4),
+                        tuple(whiteId, 5, 0));
+
+        update(BASE_PRICE, List.of(new UpdateInventory(blackId, null, 0L, 10)));   // 화이트를 뺀다 → DELETED
+
+        assertThat(productQueryUseCase.selectStocksByPost(postId))
+                .extracting(InventoryStock::inventoryId)
+                .containsExactly(blackId);
+        assertThat(productQueryUseCase.selectStocksByPost(postId + 1000)).isEmpty();   // 다른 판매글
     }
 
     private void register(List<CreateInventory> inventories) {

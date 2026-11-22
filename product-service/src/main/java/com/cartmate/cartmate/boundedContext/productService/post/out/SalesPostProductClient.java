@@ -3,6 +3,7 @@ package com.cartmate.cartmate.boundedContext.productService.post.out;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostProductStatus;
 import com.cartmate.cartmate.boundedContext.productService.post.domain.SalesPostSnapshot;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.CreateProductRequest;
+import com.cartmate.cartmate.boundedContext.productService.post.dto.SelectInventoryStock;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.SelectProductResponse;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.SyncProduct;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.UpdateSalesPostRequest;
@@ -29,6 +30,9 @@ public interface SalesPostProductClient {
 
     // 판매글의 상품(사진 · 옵션 · 재고 포함)
     List<SelectProductResponse> getProduct(Long postId);
+
+    // 판매글의 판매 중인 재고 수량만 (상세의 남은 수량. 매번 새로 읽는다)
+    List<SelectInventoryStock> getStocks(Long postId);
 
     // 상품을 저장하고 저장된 상품을 돌려준다. 판매글은 이걸로 복제본을 만든다
     List<SyncProduct> registerProducts(CreateProductRequest request, List<MultipartFile> images);

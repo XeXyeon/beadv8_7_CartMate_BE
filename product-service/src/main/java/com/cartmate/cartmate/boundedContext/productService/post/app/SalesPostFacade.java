@@ -38,6 +38,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -150,7 +151,7 @@ public class SalesPostFacade {
         SelectSalesPostResponse detail = salesPostSelectUseCase.selectSalesPostDetail(postId);
 
         Map<Long, SalesPostDetailInventories.ProductInventories> inventoriesByProduct =
-                salesPostDetailInventoryLoader.load(postId).byProductId();
+                detailInventories(postId).byProductId();
         detail.getProductList().forEach(product -> {
             SalesPostDetailInventories.ProductInventories found = inventoriesByProduct.get(product.getId());
             if (found != null) {
@@ -160,6 +161,20 @@ public class SalesPostFacade {
         markWished(detail, memberId);
 
         return new RsData<>("200-2", "판매글 상세조회에 성공했습니다.", detail);
+    }
+
+    // 재고 구성(캐시) + 남은 수량(매번 쿼리 1번). 캐시의 재고 ID들이 지금 판매 중인 재고와 다르면
+    // 판매글 수정 뒤 지우지 못한 예전 캐시이므로 지우고 다시 읽는다
+    private SalesPostDetailInventories detailInventories(Long postId) {
+        Map<Long, Integer> availableByInventoryId = salesPostApiClient.getStocks(postId).stream()
+                .collect(Collectors.toMap(SelectInventoryStock::inventoryId, SelectInventoryStock::availableQuantity));
+
+        SalesPostDetailInventories inventories = salesPostDetailInventoryLoader.load(postId);
+        if (!inventories.inventoryIds().equals(availableByInventoryId.keySet())) {
+            salesPostDetailInventoryLoader.evict(postId);
+            inventories = salesPostDetailInventoryLoader.load(postId);
+        }
+        return inventories.withStocks(availableByInventoryId);
     }
 
     // product가 상품 삭제를 마치면(ProductsDeletedByPostEvent) 복제본을 지우고 판매글 삭제를 완료한다.

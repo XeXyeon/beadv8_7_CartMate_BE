@@ -1,6 +1,7 @@
 package com.cartmate.cartmate.boundedContext.productService.product.in;
 
 import com.cartmate.cartmate.boundedContext.productService.product.dto.CategoryResponse;
+import com.cartmate.cartmate.boundedContext.productService.product.dto.InventoryStock;
 import com.cartmate.cartmate.boundedContext.productService.product.dto.CompleteProductUpdateRequest;
 import com.cartmate.cartmate.boundedContext.productService.product.dto.ProductOptionTypeResponse;
 import com.cartmate.cartmate.boundedContext.productService.product.dto.SelectProductResponse;
@@ -89,6 +90,13 @@ public class ProductController {
     @GetMapping("/{postId}")
     public ResponseEntity<RsData<List<SelectProductResponse>>> selectProductsByPost(@PathVariable Long postId) {
         return ResponseEntity.ok(productFacade.selectProductsByPost(postId));
+    }
+
+    // 판매글의 재고 수량만 (판매글 상세의 남은 수량. 서버 분리 시 판매글이 HTTP로 부른다)
+    @GetMapping("/{postId}/stocks")
+    @Operation(operationId = "selectStocksByPost", summary = "판매글의 재고 수량 (내부 호출)")
+    public ResponseEntity<RsData<List<InventoryStock>>> selectStocksByPost(@PathVariable Long postId) {
+        return ResponseEntity.ok(productFacade.selectStocksByPost(postId));
     }
 
     // 카테고리 전체 (상품 등록 화면의 카테고리 선택 목록). 고정 경로라 /{postId}보다 먼저 매칭된다

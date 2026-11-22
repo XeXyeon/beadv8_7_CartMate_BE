@@ -13,6 +13,7 @@ import com.cartmate.cartmate.boundedContext.productService.post.dto.RestoreProdu
 import com.cartmate.cartmate.boundedContext.productService.post.dto.RestoreProductImage;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.RestoreProductsRequest;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.SelectInventory;
+import com.cartmate.cartmate.boundedContext.productService.post.dto.SelectInventoryStock;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.SelectProductImage;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.SelectProductOption;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.SelectProductResponse;
@@ -248,6 +249,13 @@ final class SalesPostProductMapper {
                         i.getId(), i.getSkuName(), i.getAppliedPrice(), i.getAdditionalPrice(),
                         i.getStockQuantity(), i.getReservedQuantity(),
                         map(i.getOptionList(), SalesPostProductMapper::fromProductOption))));
+    }
+
+    static List<SelectInventoryStock> fromProductStock(
+            List<com.cartmate.cartmate.boundedContext.productService.product.dto.InventoryStock> stocks) {
+        List<SelectInventoryStock> result = map(stocks,
+                s -> new SelectInventoryStock(s.inventoryId(), s.stockQuantity(), s.reservedQuantity()));
+        return result == null ? List.of() : result;
     }
 
     private static SelectProductOption fromProductOption(

@@ -31,6 +31,7 @@ public class SalesPostSyncProductUseCase {
     private final SalesPostProductRepository salesPostProductRepository;
     private final SalesPostProductImageRepository salesPostProductImageRepository;
     private final SalesPostProductOptionRepository salesPostProductOptionRepository;
+    private final SalesPostDetailInventoryLoader salesPostDetailInventoryLoader;
 
     // product의 등록 · 수정 · 복구 응답으로 복제본을 저장한다(같은 ID면 덮어씀).
     // 부르는 쪽의 마무리 트랜잭션에 합쳐져서, 실패하면 그 작업(등록 · 수정 · 복구)도 실패한다
@@ -76,6 +77,8 @@ public class SalesPostSyncProductUseCase {
             }
         });
         domainEventPublisher.publish(new SalesPostChangedEvent(salesPost.getId()));
+        // 상품이 이미 바뀐 값을 커밋한 뒤라, 다음 상세 조회가 바뀐 재고 구성 · 가격 · 상품옵션을 다시 읽는다
+        salesPostDetailInventoryLoader.evict(salesPost.getId());
     }
 
     // 같은 ID의 사진 복제본이 있으면 값을 맞추고(빠진 사진은 DELETED로 온다), 없으면 새로 만든다

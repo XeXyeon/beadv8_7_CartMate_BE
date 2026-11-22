@@ -7,6 +7,9 @@ import com.cartmate.cartmate.boundedContext.productService.post.dto.CreateProduc
 import com.cartmate.cartmate.boundedContext.productService.post.dto.CreateSalesPostProduct;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.CreateSalesPostProductImage;
 import com.cartmate.cartmate.boundedContext.productService.post.dto.CreateSalesPostRequest;
+import com.cartmate.cartmate.boundedContext.productService.post.dto.SelectInventoryStock;
+import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostApiClient;
+import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductClient;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductImageRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductOptionRepository;
 import com.cartmate.cartmate.boundedContext.productService.post.out.SalesPostProductRepository;
@@ -42,6 +45,7 @@ import java.util.stream.IntStream;
 
 import static com.cartmate.cartmate.support.SeedOptions.*;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 /**
  * 판매글 상세 교착상태 재현.
@@ -81,6 +85,9 @@ class ProductInternalServerDeadlockTest {
     }
 
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build();
+
+    @Autowired
+    SalesPostProductClient salesPostProductClient;
 
     @Autowired
     SalesPostFacade salesPostFacade;
@@ -147,8 +154,20 @@ class ProductInternalServerDeadlockTest {
         Long postId = postIds.getFirst();
 
         assertThat(send(INTERNAL_PORT, "/api/products/" + postId).statusCode()).isEqualTo(200);
+        assertThat(send(INTERNAL_PORT, "/api/products/" + postId + "/stocks").statusCode()).isEqualTo(200);
         assertThat(send(INTERNAL_PORT, "/api/sales-posts/detail/" + postId).statusCode()).isEqualTo(404);
         assertThat(send(INTERNAL_PORT, "/api/products/../sales-posts/detail/" + postId).statusCode()).isEqualTo(404);
+    }
+
+    @Test
+    @DisplayName("HTTP 구현: 재고 수량을 상품 API(/{postId}/stocks)로 받아 온다")
+    void httpClientReadsStocks() {
+        assertThat(salesPostProductClient).isInstanceOf(SalesPostApiClient.class);
+
+        assertThat(salesPostProductClient.getStocks(postIds.getFirst()))
+                .extracting(SelectInventoryStock::stockQuantity, SelectInventoryStock::reservedQuantity,
+                        SelectInventoryStock::availableQuantity)
+                .containsExactly(tuple(3, 0, 3));
     }
 
     @Test
